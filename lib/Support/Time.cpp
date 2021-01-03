@@ -36,6 +36,7 @@ using namespace klee;
 // === Point ===
 
 // operators
+const time::Span time::Span::null = time::Span(Duration::zero());
 time::Point& time::Point::operator+=(const time::Span &span) { point += span.duration; return *this; }
 time::Point& time::Point::operator-=(const time::Span &span) { point -= span.duration; return *this; }
 

@@ -16,6 +16,8 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <chrono>
 
 namespace klee {
 
@@ -29,6 +31,25 @@ namespace klee {
 
     /// Return the delta since the timer was created
     time::Span delta() const;
+  };
+
+
+  /*
+   * Like a wall timer but a bit more functional
+   * and comvenient
+   */
+  class SimpleTimer {
+      typedef std::chrono::steady_clock clock;
+  public:
+      SimpleTimer() { set(); }
+      /// Sets a starting point
+      void set();
+      /// Returns a "now - start" in seconds
+      double get();
+      /// Returns a "now - start" in seconds with \param precision decimals
+      std::string getFixed(unsigned precision);
+  private:
+      std::chrono::time_point<clock> store;
   };
 
 

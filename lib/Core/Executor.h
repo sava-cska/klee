@@ -354,6 +354,7 @@ private:
                    llvm::Function *f,
                    std::vector< ref<Expr> > &arguments);
                    
+public:
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
   void executeMemoryOperation(ExecutionState &state,
@@ -362,6 +363,7 @@ private:
                               ref<Expr> value /* def if write*/,
                               KInstruction *target /* def if read*/);
 
+private:
   ObjectPair lazyInstantiate(ExecutionState &state,
                              bool isLocal,
                              const MemoryObject *mo);
@@ -419,6 +421,13 @@ private:
     return state.stack.back().locals[target->dest];
   }
 
+public:
+  const Cell& getDestCell(const ExecutionState &state,
+                          const KInstruction *target) {
+    return state.stack.back().locals[target->dest];
+  }
+
+private:
   void bindLocal(KInstruction *target, 
                  ExecutionState &state, 
                  ref<Expr> value);
@@ -617,6 +626,14 @@ public:
 
   /// Returns the errno location in memory of the state
   int *getErrnoLocation(const ExecutionState &state) const;
+
+  TimingSolver * getSolver();
+
+  time::Span getMaxSolvTime();
+
+  KInstruction *getKInst(llvm::Instruction * ints);
+
+  KBlock *getKBlock(llvm::BasicBlock & bb);
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };

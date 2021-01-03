@@ -121,6 +121,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     constraints(state.constraints),
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
+    executionPath(state.executionPath),
     coveredLines(state.coveredLines),
     symbolics(state.symbolics),
     arrayNames(state.arrayNames),
@@ -433,4 +434,27 @@ bool ExecutionState::inBasicBlockRange(unsigned index, bool check) {
     } else {
         return true;
     }
+}
+
+bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSolver * solver)
+{
+  ref<Expr> simplified = ConstraintManager::simplifyExpr(constraints, e);
+  if( simplified->getWidth() == Expr::Bool)
+  {
+    if(simplified->isFalse())
+      return false;
+    if(simplified->isTrue())
+      return true;
+  }
+  if(solver) {
+    bool mayBe;
+    solver->setTimeout(timeout);
+    bool success = solver->mayBeTrue(constraints, simplified, mayBe, queryMetaData);
+    solver->setTimeout(time::Span());
+    if(success && !mayBe) {
+      return false;
+    }
+  }
+  addConstraint(simplified);
+  return true;
 }

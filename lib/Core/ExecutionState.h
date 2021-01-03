@@ -18,6 +18,7 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Module/KInstIterator.h"
 #include "klee/Solver/Solver.h"
+#include "TimingSolver.h"
 #include "klee/System/Time.h"
 
 #include "llvm/IR/Function.h"
@@ -203,6 +204,9 @@ public:
   /// taken to reach/create this state
   TreeOStream symPathOS;
 
+  /// @brief History of state branching including switches
+  std::string executionPath;
+
   /// @brief Set containing which lines in which files are covered by this state
   std::map<const std::string *, std::set<std::uint32_t>> coveredLines;
 
@@ -276,6 +280,9 @@ public:
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
   void addConstraint(ref<Expr> e);
+  bool tryAddConstraint(ref<Expr> e, 
+                        time::Span timeout = time::Span::null, 
+                        TimingSolver * solver = nullptr);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;

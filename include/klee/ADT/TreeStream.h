@@ -70,6 +70,8 @@ namespace klee {
     TreeOStream &operator<<(const std::string &s);
 
     void flush();
+
+    TreeOStream copy() const;
   };
 }
 

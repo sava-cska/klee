@@ -139,6 +139,10 @@ ArrayCache *ObjectState::getArrayCache() const {
   return object->parent->getArrayCache();
 }
 
+const Array *ObjectState::getArray() const {
+  return updates.root;
+}
+
 /***/
 
 const UpdateList &ObjectState::getUpdates() const {

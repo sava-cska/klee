@@ -24,6 +24,7 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
+#include "Composer.h"
 
 #include "klee/ADT/KTest.h"
 #include "klee/ADT/RNG.h"
@@ -194,6 +195,11 @@ cl::opt<bool>
                                   "querying the solver (default=true)"),
                          cl::cat(SolvingCat));
 
+cl::opt<bool>
+    UseSolverInComposition("check-sat-compose",
+                        cl::init(false),
+                        cl::desc("Checks constraits feasibility during composition"),
+                        cl::cat(SolvingCat));
 
 /*** External call policy options ***/
 
@@ -346,6 +352,12 @@ cl::opt<unsigned> MaxDepth(
     cl::init(0),
     cl::cat(TerminationCat));
 
+cl::opt<uint64_t> MaxRec( 
+    "max-rec-depth",
+    cl::desc("defines a maximum depth of recursive calls"),
+    cl::init(0),
+    cl::cat(TerminationCat));
+
 cl::opt<unsigned> MaxMemory("max-memory",
                             cl::desc("Refuse to fork when above this amount of "
                                      "memory (in MB) (see -max-memory-inhibit) and terminate "
@@ -453,6 +465,12 @@ cl::opt<bool> DebugCheckForImpliedValues(
     cl::desc("Debug the implied value optimization"),
     cl::cat(DebugCat));
 
+cl::opt<bool> DebugPrintResult(
+    "debug-print-states",
+    cl::desc("Printing constraints for resulting states after compositional execution"),
+    cl::init(false),
+    cl::cat(DebugCat));
+
 } // namespace
 
 // XXX hack
@@ -477,6 +495,7 @@ const char *Executor::TerminateReasonNames[] = {
   [ Unhandled ] = "xxx",
 };
 
+Executor *Composer::executor = nullptr;
 
 Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
@@ -487,6 +506,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
       ivcEnabled(false), debugLogBuffer(debugBufferString) {
 
+  Composer::executor = this;
 
   const time::Span maxTime{MaxTime};
   if (maxTime) timers.add(
@@ -1115,6 +1135,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (res==Solver::True) {
     if (!isInternal) {
       if (pathWriter) {
+        current.executionPath += "1";
         current.pathOS << "1";
       }
     }
@@ -1123,6 +1144,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   } else if (res==Solver::False) {
     if (!isInternal) {
       if (pathWriter) {
+        current.executionPath += "0";
         current.pathOS << "0";
       }
     }
@@ -1179,15 +1201,15 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
       // is used for both falseState and trueState.
       falseState->pathOS = pathWriter->open(current.pathOS);
       if (!isInternal) {
-        trueState->pathOS << "1";
-        falseState->pathOS << "0";
+        trueState->pathOS << "1";  trueState->executionPath += "1";
+        falseState->pathOS << "0"; falseState->executionPath += "0";
       }
     }
     if (symPathWriter) {
       falseState->symPathOS = symPathWriter->open(current.symPathOS);
       if (!isInternal) {
-        trueState->symPathOS << "1";
-        falseState->symPathOS << "0";
+        trueState->symPathOS << "1";  trueState->executionPath += "1";
+        falseState->symPathOS << "0"; falseState->executionPath += "0";
       }
     }
 
@@ -2634,6 +2656,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 #else
       unsigned index = si->findCaseValue(ci).getSuccessorIndex();
 #endif
+      state.executionPath += std::to_string(index);
       transferToBasicBlock(si->getSuccessor(index), si->getParent(), state);
     } else {
       // Handle possible different branch targets
@@ -2647,11 +2670,15 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
       std::map<ref<Expr>, BasicBlock *> expressionOrder;
 
+      std::map<BasicBlock *, unsigned> caseNumber;
+
       // Iterate through all non-default cases and order them by expressions
+      unsigned cn = 0;
       for (auto i : si->cases()) {
         ref<Expr> value = evalConstant(i.getCaseValue());
 
         BasicBlock *caseSuccessor = i.getCaseSuccessor();
+        caseNumber.insert(std::make_pair(caseSuccessor, cn++));
         expressionOrder.insert(std::make_pair(value, caseSuccessor));
       }
 
@@ -2733,8 +2760,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
                                                ie = bbOrder.end();
            it != ie; ++it) {
         ExecutionState *es = *bit;
-        if (es)
+        if (es) {
+          es->executionPath += caseNumber[*it];
           transferToBasicBlock(*it, bb, *es);
+        }
         ++bit;
       }
     }
@@ -5519,6 +5548,33 @@ int *Executor::getErrnoLocation(const ExecutionState &state) const {
 #endif
 }
 
+TimingSolver *Executor::getSolver() {
+  return solver;
+}
+
+time::Span Executor::getMaxSolvTime() {
+  return coreSolverTimeout;
+}
+
+KInstruction *Executor::getKInst(llvm::Instruction *inst)
+{
+  llvm::Function *caller = inst->getFunction();
+  KFunction *ki = kmodule->functionMap[caller];
+  assert(ki && ki->kInstructions.find(inst) != ki->kInstructions.end());
+  return ki->kInstructions[inst];
+}
+
+KBlock *Executor::getKBlock(llvm::BasicBlock & bb)
+{
+  llvm::Function *F  = bb.getParent();
+  assert(F && this->kmodule->functionMap.find(F) != this->kmodule->functionMap.end());
+  klee::KFunction *KF = this->kmodule->functionMap[F];
+  assert(KF->kBlocks.find(&bb) != KF->kBlocks.end());
+  klee::KBlock *KB = KF->kBlocks[&bb];
+  assert(KB);
+  return KB;
+}
+
 
 void Executor::dumpPTree() {
   if (!::dumpPTree) return;
@@ -5585,3 +5641,317 @@ Interpreter *Interpreter::create(LLVMContext &ctx, const InterpreterOptions &opt
                                  InterpreterHandler *ih) {
   return new Executor(ctx, opts, ih);
 }
+
+//-----Composer-----//
+typedef std::pair<ref<const MemoryObject>, const Array *> symb;
+
+ExecutionState* Composer::compose() const
+{
+    if(!S1) {
+      assert(S2);
+      return new ExecutionState(*S2);
+    } else if(!S2) {
+      return new ExecutionState(*S1);
+    }
+    assert( !S1->addressSpace.objects.empty() ||
+            !S2->addressSpace.objects.empty());
+
+    // handling a case of empty state
+    const ExecutionState *nonempty;
+    if(!S1->addressSpace.objects.empty() || S1->stack.empty()) {
+      // S1 is an empty state
+      return new ExecutionState(*S2);
+    }
+    if(!S2->addressSpace.objects.empty() || S2->stack.empty()) {
+      // S2 is an empty state
+      return new ExecutionState(*S1);
+    }
+
+    auto state = new ExecutionState(*S1);
+
+
+    state->ptreeNode = nullptr;
+
+    state->prevPC = S2->prevPC;
+
+    state->pc = S2->pc;
+
+    state->incomingBBIndex = S2->incomingBBIndex;
+
+    state->pathOS = S2->pathOS.copy(); //TreeStream.cpp
+
+    state->symPathOS = S2->symPathOS.copy();
+
+    state->currentKBlock = S2->currentKBlock;
+
+
+    state->queryMetaData.queryCost =  S2->queryMetaData.queryCost + S1->queryMetaData.queryCost;
+
+    state->depth = S1->depth + S2->depth;
+
+    state->coveredNew = S1->coveredNew || S2->coveredNew;
+
+    state->forkDisabled = S1->forkDisabled || S2->forkDisabled;
+
+    state->steppedInstructions = S1->steppedInstructions + S2->steppedInstructions;
+
+    state->executionPath = S1->executionPath + S2->executionPath;
+
+
+    //state->arrayNames = P1->arrayNames; by default
+    auto &names = S2->arrayNames;
+    state->arrayNames.insert(names.begin(), names.end());
+
+    //state->openMergestack = P1->openMergeStack
+    auto &OMcur = state->openMergeStack;
+    auto &OMoth = S2->openMergeStack;
+    OMcur.insert( OMcur.end(), OMoth.begin(), OMoth.end() );
+
+    //state->instsSinceCovNew
+    if(S2->coveredNew) {
+        state->instsSinceCovNew = S2->instsSinceCovNew;
+    } else if(S1->coveredNew) {
+        state->instsSinceCovNew = S2->steppedInstructions + S1->instsSinceCovNew;
+    } else {
+        state->instsSinceCovNew = 0;
+    }
+
+    //state->coveredLines = P1->coveredLines; by default
+    for(const auto & file: S2->coveredLines)
+    {
+        auto acceptor = state->coveredLines.find(file.first);
+        if(acceptor != state->coveredLines.end()) {
+            const auto &p1set = file.second;
+            acceptor->second.insert(p1set.begin(), p1set.end());
+        } else {
+            state->coveredLines[file.first] = file.second;
+        }
+    }
+
+    // CONSTRAINTS //
+    if(!addComposedConstraints(*state,
+            executor->getMaxSolvTime(),
+            executor->getSolver())) 
+    {
+      delete state;
+      return nullptr;
+    }
+
+    // STACK //
+    state->stack.clear();
+    
+    auto cit1 = S1->stack.begin(), eit1 = S1->stack.end();
+    auto cit2 = S2->stack.begin(), eit2 = S2->stack.end();
+    while(cit1 != eit1)
+    {
+        assert(cit2 != eit2);
+        if(cit1->kf == cit2->kf) {
+          state->stack.emplace_back(*cit2);
+          StackFrame       & newFrame = state->stack.back();
+          const StackFrame & oldFrame = *cit1;
+          assert(newFrame.kf->numRegisters == oldFrame.kf->numRegisters);
+          for(unsigned i = 0; i < newFrame.kf->numRegisters; i++)
+          {
+              ref<Expr> &val = newFrame.locals[i].value;
+              if(!val.isNull()) { 
+                  val = rebuild(val);
+              } else {
+                  val = oldFrame.locals[i].value;
+              }
+          }
+          cit1++; cit2++;
+        } else {
+          assert(cit1 == eit1--);
+          break;
+        }
+    }
+
+    // ADDRESS SPACE //
+    //state->addressSpace = P1->addressSpace
+    {
+        for(auto it  = S2->addressSpace.objects.begin();
+                 it != S2->addressSpace.objects.end();
+                 ++it)
+        {
+            const ObjectState *thisOS{ it->second.get() };
+            const MemoryObject *MO{ it->first };
+            if(thisOS->readOnly) {
+                state->addressSpace.bindObject(MO, new ObjectState(*thisOS));
+                continue;
+            }
+            assert( MO->size != 0 && thisOS->size != 0 &&
+                    "actually that's not ok");
+            
+            ref<Expr> LI = MO->lazyInstantiatedSource;
+            ref<Expr> valS2   = thisOS->read(0, 8*thisOS->size);
+            ref<Expr> valInS1 = rebuild(valS2);
+
+            ObjectPair buffer;
+            bool success = false;
+            if(!LI.isNull()) { // is LI
+                LI = rebuild(LI);
+                // executeMemoryOperation ?
+                LI = ConstraintManager::simplifyExpr(state->constraints, LI);
+                ConstantExpr *ce = dynamic_cast<ConstantExpr*>(LI.get());
+                if( ce && S1->addressSpace.resolveOne(ref<Expr>(ce), buffer)) {
+                    assert(buffer.first && buffer.second);
+                    ObjectState *realState = 
+                      state->addressSpace.getWriteable(buffer.first, buffer.second);
+                    assert(realState);
+                    realState->write(0, valInS1);
+                    continue;
+                }
+            }
+
+            // compose a real object
+            const llvm::Value *allocSite = it->first->allocSite;
+            if(!allocSite) {
+              continue;
+            }
+            
+            if(isa<Instruction>(allocSite) && !AllocaInst::classof(allocSite)) {
+                const Instruction *inst = cast<Instruction>(allocSite);
+                const KInstruction *ki  = executor->getKInst(const_cast<Instruction*>(inst));
+                const ref<Expr> prevVal = executor->getDestCell(*S1, ki).value;
+                ObjectState *copyOS = new ObjectState(MO, thisOS->getArray());
+                copyOS->write(0, prevVal);
+                copyOS->write(0, valInS1);
+                state->addressSpace.bindObject(MO, copyOS);
+            } else {
+                // ref<ConstantExpr> realMOAddress = ConstantExpr::create(MO->address, Context::get().getPointerWidth());
+                ref<ConstantExpr> realMOAddress = Expr::createPointer(MO->address);
+                bool foundMO = state->addressSpace.resolveOne(realMOAddress, buffer);
+                if(foundMO) {
+                    executor->executeMemoryOperation( *state, Executor::Write,
+                                                      realMOAddress, valInS1, 
+                                                      nullptr);
+                } else {
+                    // terminateStateOneError ?
+                    ObjectState *copyOS = new ObjectState(*thisOS);
+                    assert(MO->size == copyOS->size);
+                    state->addressSpace.bindObject(MO, copyOS);
+                }
+            }
+        }
+    }
+
+
+    // SYMBOLICS //
+    // state->symbolics = S1->symbolics
+    for(const symb & symbolic: S2->symbolics)
+    {
+        int c = std::count_if(state->symbolics.begin(), state->symbolics.end(),
+                              [&symbolic]  (const symb& obj) {
+                                  return obj.second == symbolic.second;     
+                              } );
+        if(c == 0) {
+            state->symbolics.push_back(symbolic);
+        }
+    }
+
+
+    assert(state);
+    return state;
+}
+
+
+//-----ComposeVisitor-----//
+const MemoryObject *getMO(const ExecutionState * S1, const ReadExpr & re)
+{
+  const Array *arr = re.updates.root;
+
+  //TODO: rewrite with map
+  assert(std::count_if( S1->symbolics.begin(), S1->symbolics.end(),
+                        [arr](const symb& obj){ return obj.second == arr; } ) <= 1
+                        && "multiple objects for an array");
+  auto smbPair = std::find_if(S1->symbolics.begin(),
+                              S1->symbolics.end(),
+                              [arr](const symb& obj){ return obj.second == arr; });
+  /// TODO: is it ok?
+  if(smbPair == S1->symbolics.end()) {
+    return nullptr;
+  }
+  return smbPair->first.get();
+}
+
+const ObjectState *ComposeVisitor::getOS(const ExecutionState * state, const MemoryObject * MO)
+{
+    assert(MO && state);
+    ref<Expr> LI = MO->lazyInstantiatedSource;
+    const ObjectState *ret = nullptr;
+
+    // try to fint the Object in state
+    if(LI.isNull()) { // not LI
+        ret = state->addressSpace.findObject(MO);
+    } else { // is LI
+        LI = visit(LI);
+        LI = ConstraintManager::simplifyExpr(state->constraints, LI);
+        ObjectPair buffer;
+        // can find a corresponding object
+        auto ce = dynamic_cast<ConstantExpr*>(LI.get());
+        if( ce && state->addressSpace.resolveOne(ref<Expr>(ce), buffer)) {
+            assert(buffer.first != MO);
+            ret = buffer.second;
+        } else {
+            ret = state->addressSpace.findObject(MO);
+        }
+    }
+    return ret;
+}
+
+ref<Expr> ComposeVisitor::shareUpdates(ObjectState & OS, const ReadExpr & re)
+{
+  /*const ref<UpdateNode> prevHead {
+        UpdateList::commonTail(re.updates, OS.getRawUpdates() )};
+  assert(prevHead.get() == nullptr);*/
+  std::stack < const UpdateNode* > forward;
+
+  for(auto  it = re.updates.head;
+            it.get() != nullptr;
+            it = it->next)
+  {
+      forward.push( it.get() );
+  }
+  
+  while( !forward.empty() )
+  {
+      const UpdateNode* UNode = forward.top();
+      forward.pop();
+      ref<Expr> newIndex = visit(UNode->index);
+      ref<Expr> newValue = visit(UNode->value);
+      OS.write(newIndex, newValue);
+  }
+  ref<Expr> index = visit(re.index);
+  return OS.read(index, re.getWidth());
+}
+
+ref<Expr> ComposeVisitor::processRead(const ReadExpr & re)
+{
+    const ExecutionState *S1 = caller->S1;
+    const MemoryObject *object = getMO(S1, re);
+    if(!object) {
+      return new ReadExpr(re);
+    }
+    ObjectState OS{object, re.updates.root};
+    const llvm::Value *allocSite = object->allocSite;
+
+    if(isa<Instruction>(allocSite) && !AllocaInst::classof(allocSite)) {
+        const Instruction *inst = cast<Instruction>(allocSite);
+        const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
+        ref<Expr> prevVal = caller->executor->getDestCell(*S1, ki).value;
+        if(prevVal.isNull()) {
+          return ref<Expr>( new ReadExpr(re));
+        }
+        OS.write(0, prevVal);
+    } else {
+        const ObjectState *OSptr = getOS(S1, object);
+        if(!OSptr) {
+            return ref<Expr>( new ReadExpr(re) );
+        }
+        assert(OSptr->size == OS.size);
+        OS.write(0, OSptr->read(0, 8*OSptr->size));
+    }
+
+    return shareUpdates(OS, re);
+}
+//~~~~~ComposeVisitor~~~~~//

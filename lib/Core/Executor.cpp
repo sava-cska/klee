@@ -5645,31 +5645,11 @@ Interpreter *Interpreter::create(LLVMContext &ctx, const InterpreterOptions &opt
 //-----Composer-----//
 typedef std::pair<ref<const MemoryObject>, const Array *> symb;
 
-ExecutionState* Composer::compose() const
+void Composer::compose(ExecutionState *state, bool & possible) const
 {
-    if(!S1) {
-      assert(S2);
-      return new ExecutionState(*S2);
-    } else if(!S2) {
-      return new ExecutionState(*S1);
-    }
-    assert( !S1->addressSpace.objects.empty() ||
-            !S2->addressSpace.objects.empty());
-
-    // handling a case of empty state
-    const ExecutionState *nonempty;
-    if(!S1->addressSpace.objects.empty() || S1->stack.empty()) {
-      // S1 is an empty state
-      return new ExecutionState(*S2);
-    }
-    if(!S2->addressSpace.objects.empty() || S2->stack.empty()) {
-      // S2 is an empty state
-      return new ExecutionState(*S1);
-    }
-
-    auto state = new ExecutionState(*S1);
-
-
+    assert( S1 && S2 && state &&
+            !S1->isEmpty() && !S2->isEmpty());
+            
     state->ptreeNode = nullptr;
 
     state->prevPC = S2->prevPC;
@@ -5685,18 +5665,17 @@ ExecutionState* Composer::compose() const
     state->currentKBlock = S2->currentKBlock;
 
 
-    state->queryMetaData.queryCost =  S2->queryMetaData.queryCost + S1->queryMetaData.queryCost;
+    state->queryMetaData.queryCost =  state->queryMetaData.queryCost + S2->queryMetaData.queryCost;
 
-    state->depth = S1->depth + S2->depth;
+    state->depth = state->depth + S2->depth;
 
-    state->coveredNew = S1->coveredNew || S2->coveredNew;
+    state->coveredNew = state->coveredNew || S2->coveredNew;
 
-    state->forkDisabled = S1->forkDisabled || S2->forkDisabled;
+    state->forkDisabled = state->forkDisabled || S2->forkDisabled;
 
-    state->steppedInstructions = S1->steppedInstructions + S2->steppedInstructions;
+    state->steppedInstructions = state->steppedInstructions + S2->steppedInstructions;
 
-    state->executionPath = S1->executionPath + S2->executionPath;
-
+    state->executionPath = state->executionPath + S2->executionPath;
 
     //state->arrayNames = P1->arrayNames; by default
     auto &names = S2->arrayNames;
@@ -5733,8 +5712,8 @@ ExecutionState* Composer::compose() const
             executor->getMaxSolvTime(),
             executor->getSolver())) 
     {
-      delete state;
-      return nullptr;
+      possible = false;
+      return;
     }
 
     // STACK //
@@ -5840,18 +5819,27 @@ ExecutionState* Composer::compose() const
     // state->symbolics = S1->symbolics
     for(const symb & symbolic: S2->symbolics)
     {
-        int c = std::count_if(state->symbolics.begin(), state->symbolics.end(),
-                              [&symbolic]  (const symb& obj) {
-                                  return obj.second == symbolic.second;     
-                              } );
-        if(c == 0) {
-            state->symbolics.push_back(symbolic);
-        }
+        // int c = std::count_if(state->symbolics.begin(), state->symbolics.end(),
+        //                       [&symbolic]  (const symb& obj) {
+        //                           return obj.second == symbolic.second;     
+        //                       } );
+        // if(c == 0) {
+        //     state->symbolics.push_back(symbolic);
+        // }
+        state->symbolics.erase(
+            std::remove_if(
+                state->symbolics.begin(),
+                state->symbolics.end(),
+                [&symbolic] (const symb& obj) { return obj.second == symbolic.second; }
+            ),
+            state->symbolics.end()
+        );
+        state->symbolics.push_back(symbolic);
     }
 
 
     assert(state);
-    return state;
+    possible = true;
 }
 
 

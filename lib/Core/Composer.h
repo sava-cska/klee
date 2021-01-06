@@ -20,11 +20,14 @@ namespace klee {
         friend class klee::ComposeVisitor;
 
         Composer(const ExecutionState *S1, const ExecutionState *S2) :
-                S1(S1), S2(S2) {}
+                S1(S1), S2(S2) 
+        {
+            assert(S1 && S2);
+        }
         ~Composer() = default;
 
-        /// @brief returns a composition of \S1 and \S2
-        ExecutionState *compose() const;
+        /// @brief returns a composition of \state and \S2 in context \S1
+        void compose(ExecutionState *state, bool & possible) const;
 
         /// @brief adds composed constraints from S2 to acceptor and checks sat
         bool addComposedConstraints(ExecutionState & acceptor,
@@ -38,6 +41,9 @@ namespace klee {
 
         static ExecutionState *compose( const ExecutionState *, 
                                         const ExecutionState *);
+
+        static bool update( ExecutionState * S1,
+                            const ExecutionState * S2);
 
         static ref<Expr> rebuild(const ref<Expr>, 
                                  const ExecutionState *);

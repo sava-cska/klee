@@ -65,8 +65,47 @@ ExecutionState *Composer::compose(
         const ExecutionState *S1,
         const ExecutionState *S2 )
 {
-    Composer composer(S1, S2);
-    return composer.compose();
+    assert(S1 || S2);
+    if(!S1) {
+        return new ExecutionState(*S2);
+    } else if(!S2) {
+        return new ExecutionState(*S1);
+    }
+    if(S1->isEmpty()) {
+        return new ExecutionState(*S2);
+    } else if(S2->isEmpty()) { 
+        return new ExecutionState(*S1);
+    }
+
+    bool possible = true;
+    ExecutionState *state = new ExecutionState(*S1);
+    const Composer composer(S1, S2);
+    composer.compose(state, possible);
+    if(!possible) {
+        delete state;
+        return nullptr;
+    }
+    return state;
+}
+
+bool Composer::update(
+        ExecutionState *S1,
+        const ExecutionState *S2 )
+{
+    assert(S1);
+    if(!S2 || S2->isEmpty()) {
+        // \S1 is not changed
+        return true;
+    }
+    assert(!S1->isEmpty() && "trying to update an empty state");
+
+    bool possible = true;
+    const ExecutionState *context = new ExecutionState(*S1);
+    const Composer composer(context, S2);
+    composer.compose(S1, possible);
+    S1->ptreeNode = context->ptreeNode;
+    delete context;
+    return possible;
 }
 
 ref<Expr> Composer::rebuild(const ref<Expr> expr, 

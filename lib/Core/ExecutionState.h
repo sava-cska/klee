@@ -291,6 +291,7 @@ public:
   void setID() { id = nextID++; };
   void setBlockIndexes(KBlock *kb);
   bool inBasicBlockRange(unsigned index, bool isoMode);
+  bool isEmpty() const;
 };
 
 struct ExecutionStateIDCompare {

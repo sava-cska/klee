@@ -177,7 +177,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
   }
 }
 
-int AddressSpace::checkPointerInObject(ExecutionState &state,
+int AddressSpace::checkPointerInObject(const ExecutionState &state,
                                        TimingSolver *solver, ref<Expr> p,
                                        const ObjectPair &op, ResolutionList &rl,
                                        unsigned maxResolutions) const {
@@ -213,7 +213,7 @@ int AddressSpace::checkPointerInObject(ExecutionState &state,
   return 2;
 }
 
-bool AddressSpace::resolve(ExecutionState &state, TimingSolver *solver,
+bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
                            ref<Expr> p, ResolutionList &rl,
                            unsigned maxResolutions, time::Span timeout) const {
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(p)) {

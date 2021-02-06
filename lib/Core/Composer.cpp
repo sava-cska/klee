@@ -10,6 +10,8 @@
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Expr/Expr.h"
 #include "ExecutionState.h"
+#include "AddressSpace.h"
+#include "Executor.h"
 #include "Composer.h"
 
 #include <stack>
@@ -28,6 +30,44 @@ ExprVisitor::Action ComposeVisitor::visitRead(const ReadExpr & read)
 }
 //~~~~~~~~~ComposeVisitor~~~~~~~~~//
 
+
+//---------LImap---------//
+LImap::LImap(   const ExecutionState *S1,
+                const ExecutionState *S2,
+                TimingSolver *solver)
+{
+    assert(solver);
+    for (const auto & op : S2->addressSpace.objects) {
+        const auto & object = op.first;
+        if(object->isLazyInstantiated()) {
+            ref<Expr> LI = object->lazyInstantiatedSource;
+            LI = Composer::rebuild(LI, S1);
+            ResolutionList rl;
+            S1->addressSpace.resolve(*S1, solver, LI, rl);
+            source[object] = rl;
+        }
+    }
+    for(auto & op : source) {
+        iterator[op.first] = op.second.begin();
+    }
+}
+
+bool LImap::nextExact() 
+{
+    assert(iterator.size() == source.size());
+    if(source.empty()) return false;
+    auto component = iterator.rbegin();     // both \iterator and \source have 
+    auto componentList = source.rbegin();   // same order of elements
+    for(; component != iterator.rend(); ++component, ++componentList) {
+        if(++component->second != componentList->second.end()) {
+            return true;
+        }
+        component->second = componentList->second.begin();
+    }
+    // all components of iterator are back elements
+    return false;
+}
+//~~~~~~~~~LImap~~~~~~~~~//
 
 
 //---------Composer---------//
@@ -61,58 +101,47 @@ bool Composer::addComposedConstraints(ExecutionState & result,
     return true;
 }
 
-ExecutionState *Composer::compose(
+void Composer::compose(
         const ExecutionState *S1,
-        const ExecutionState *S2 )
+        const ExecutionState *S2,
+        std::vector<ExecutionState*> &result )
 {
     assert(S1 || S2);
+    result.clear();
     if(!S1) {
-        return new ExecutionState(*S2);
+        result.push_back(new ExecutionState(*S2));
     } else if(!S2) {
-        return new ExecutionState(*S1);
+        result.push_back(new ExecutionState(*S1));
     }
     if(S1->isEmpty()) {
-        return new ExecutionState(*S2);
+        result.push_back(new ExecutionState(*S2));
     } else if(S2->isEmpty()) { 
-        return new ExecutionState(*S1);
+        result.push_back(new ExecutionState(*S1));
     }
+    if(!result.empty()) return;
 
+    TimingSolver *solver = executor->getSolver();
+    assert(solver);
+    LImap liMap(S1, S2, solver);
+    const Composer composer(S1, S2, liMap.getExact());
+    
     bool possible = true;
-    ExecutionState *state = new ExecutionState(*S1);
-    const Composer composer(S1, S2);
-    composer.compose(state, possible);
-    if(!possible) {
-        delete state;
-        return nullptr;
-    }
-    return state;
-}
-
-bool Composer::update(
-        ExecutionState *S1,
-        const ExecutionState *S2 )
-{
-    assert(S1);
-    if(!S2 || S2->isEmpty()) {
-        // \S1 is not changed
-        return true;
-    }
-    assert(!S1->isEmpty() && "trying to update an empty state");
-
-    bool possible = true;
-    const ExecutionState *context = new ExecutionState(*S1);
-    PTreeNode *ptn = S1->ptreeNode;
-    const Composer composer(context, S2);
-    composer.compose(S1, possible);
-    S1->ptreeNode = ptn;
-    delete context;
-    return possible;
+    do { // updates iterator inside liMap
+        ExecutionState *state = new ExecutionState(*S1);
+        composer.compose(state, possible);
+        if(!possible) {
+            delete state;
+            continue;
+        }
+        state->setID();
+        result.push_back(state);
+    } while(liMap.nextExact());
 }
 
 ref<Expr> Composer::rebuild(const ref<Expr> expr, 
                             const ExecutionState *S1)
 {
-    Composer composer(S1, nullptr);
+    Composer composer(S1, nullptr, nullptr);
     return composer.rebuild(expr);
 }
 //~~~~~~~~~Composer~~~~~~~~~//

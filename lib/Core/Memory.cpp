@@ -117,7 +117,7 @@ ObjectState::ObjectState(const ObjectState &os)
     updates(os.updates),
     size(os.size),
     readOnly(false) {
-  assert(!os.readOnly && "no need to copy read only object?");
+  //assert(!os.readOnly && "no need to copy read only object?");
   if (os.knownSymbolics) {
     knownSymbolics = new ref<Expr>[size];
     for (unsigned i=0; i<size; i++)

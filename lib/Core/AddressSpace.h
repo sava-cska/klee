@@ -50,7 +50,7 @@ namespace klee {
     /// is non-zero and it was reached, or a query timed out), 0 iff
     /// the resolution is complete (`p` can only point to the given
     /// memory object), and 2 otherwise.
-    int checkPointerInObject(ExecutionState &state, TimingSolver *solver,
+    int checkPointerInObject(const ExecutionState &state, TimingSolver *solver,
                              ref<Expr> p, const ObjectPair &op,
                              ResolutionList &rl, unsigned maxResolutions) const;
 
@@ -94,7 +94,7 @@ namespace klee {
     ///
     /// \return true iff the resolution is incomplete (`maxResolutions`
     /// is non-zero and it was reached, or a query timed out).
-    bool resolve(ExecutionState &state,
+    bool resolve(const ExecutionState &state,
                  TimingSolver *solver,
                  ref<Expr> p,
                  ResolutionList &rl, 

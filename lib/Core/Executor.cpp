@@ -5664,6 +5664,10 @@ void Composer::compose(ExecutionState *state, bool & possible) const
 
     state->currentKBlock = S2->currentKBlock;
 
+    state->minBlockBound = S2->minBlockBound;
+
+    state->maxBlockBound = S2->maxBlockBound;
+
 
     state->queryMetaData.queryCost =  state->queryMetaData.queryCost + S2->queryMetaData.queryCost;
 
@@ -5676,6 +5680,8 @@ void Composer::compose(ExecutionState *state, bool & possible) const
     state->steppedInstructions = state->steppedInstructions + S2->steppedInstructions;
 
     state->executionPath = state->executionPath + S2->executionPath;
+
+    state->level.insert(S2->level.begin(), S2->level.end());
 
     //state->arrayNames = P1->arrayNames; by default
     auto &names = S2->arrayNames;
@@ -5717,32 +5723,16 @@ void Composer::compose(ExecutionState *state, bool & possible) const
     }
 
     // STACK //
-    state->stack.clear();
-    
-    auto cit1 = S1->stack.begin(), eit1 = S1->stack.end();
-    auto cit2 = S2->stack.begin(), eit2 = S2->stack.end();
-    while(cit1 != eit1)
+    auto & stateFrame = state->stack.back();
+    auto & newFrame = S2->stack.back();
+    assert(stateFrame.kf == newFrame.kf &&
+          "can not compose states from different functions");
+    for(unsigned i = 0; i < newFrame.kf->numRegisters; i++)
     {
-        assert(cit2 != eit2);
-        if(cit1->kf == cit2->kf) {
-          state->stack.emplace_back(*cit2);
-          StackFrame       & newFrame = state->stack.back();
-          const StackFrame & oldFrame = *cit1;
-          assert(newFrame.kf->numRegisters == oldFrame.kf->numRegisters);
-          for(unsigned i = 0; i < newFrame.kf->numRegisters; i++)
-          {
-              ref<Expr> &val = newFrame.locals[i].value;
-              if(!val.isNull()) { 
-                  val = rebuild(val);
-              } else {
-                  val = oldFrame.locals[i].value;
-              }
-          }
-          cit1++; cit2++;
-        } else {
-          assert(cit1 == eit1--);
-          break;
-        }
+        ref<Expr> newVal = newFrame.locals[i].value;
+        if(!newVal.isNull()) { 
+            stateFrame.locals[i].value = rebuild(newVal);
+        } 
     }
 
     // ADDRESS SPACE //
@@ -5772,7 +5762,7 @@ void Composer::compose(ExecutionState *state, bool & possible) const
                 // executeMemoryOperation ?
                 LI = ConstraintManager::simplifyExpr(state->constraints, LI);
                 ConstantExpr *ce = dynamic_cast<ConstantExpr*>(LI.get());
-                if( ce && S1->addressSpace.resolveOne(ref<Expr>(ce), buffer)) {
+                if( ce && state->addressSpace.resolveOne(ref<ConstantExpr>(ce), buffer)) {
                     assert(buffer.first && buffer.second);
                     ObjectState *realState = 
                       state->addressSpace.getWriteable(buffer.first, buffer.second);
@@ -5793,7 +5783,8 @@ void Composer::compose(ExecutionState *state, bool & possible) const
                 const KInstruction *ki  = executor->getKInst(const_cast<Instruction*>(inst));
                 const ref<Expr> prevVal = executor->getDestCell(*S1, ki).value;
                 ObjectState *copyOS = new ObjectState(MO, thisOS->getArray());
-                copyOS->write(0, prevVal);
+                if(!prevVal.isNull())
+                  copyOS->write(0, prevVal);
                 copyOS->write(0, valInS1);
                 state->addressSpace.bindObject(MO, copyOS);
             } else {
@@ -5915,11 +5906,10 @@ ref<Expr> ComposeVisitor::shareUpdates(ObjectState & OS, const ReadExpr & re)
 
 ref<Expr> ComposeVisitor::processRead(const ReadExpr & re)
 {
-    const ExecutionState *S1 = caller->S1;
+    const ExecutionState *S1 = caller->S1, *S2 = caller->S2;
     const MemoryObject *object = getMO(S1, re);
-    if(!object) {
-      return new ReadExpr(re);
-    }
+    if(!object && S2) object = getMO(S2, re);
+    if(!object) return new ReadExpr(re);
     ObjectState OS{object, re.updates.root};
     const llvm::Value *allocSite = object->allocSite;
 

@@ -101,9 +101,10 @@ bool Composer::update(
 
     bool possible = true;
     const ExecutionState *context = new ExecutionState(*S1);
+    PTreeNode *ptn = S1->ptreeNode;
     const Composer composer(context, S2);
     composer.compose(S1, possible);
-    S1->ptreeNode = context->ptreeNode;
+    S1->ptreeNode = ptn;
     delete context;
     return possible;
 }

@@ -438,7 +438,7 @@ bool ExecutionState::inBasicBlockRange(unsigned index, bool check) {
 
 bool ExecutionState::isEmpty() const
 {
-  return stack.empty() || addressSpace.objects.empty();
+  return stack.empty();
 }
 
 bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSolver * solver)

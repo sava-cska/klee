@@ -4918,11 +4918,11 @@ ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> ad
 const Array * Executor::makeArray(ExecutionState &state,
                                   const uint64_t size,
                                   const std::string &name) {
-    unsigned id = 0;
-    std::string uniqueName = name;
-    while (!state.arrayNames.insert(uniqueName).second) {
-      uniqueName = name + "_" + llvm::utostr(++id);
-    }
+    static uint64_t id = 0;
+    std::string uniqueName = name + "#" + std::to_string(id++);
+    // while (!state.arrayNames.insert(uniqueName).second) {
+    //   uniqueName = name + "_" + llvm::utostr(++id);
+    // }
     const Array *array = arrayCache.CreateArray(uniqueName, size);
 
     return array;
@@ -4937,6 +4937,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
     const Array *array = makeArray(state, mo->size, name);
+    const_cast<Array*>(array)->binding = mo;
     bindObjectInState(state, mo, isAlloca, array);
     state.addSymbolic(mo, array);
 
@@ -5146,6 +5147,7 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
                            value, /*allocationAlignment=*/8);
     memory->deallocate(mo);
     const Array *array = makeArray(state, size, name);
+    const_cast<Array*>(array)->binding = mo;
     state.addSymbolic(mo, array);
     ObjectState *os = new ObjectState(mo, array);
     ref<Expr> result = os->read(0, width);

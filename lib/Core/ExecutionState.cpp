@@ -71,6 +71,16 @@ StackFrame::~StackFrame() {
   delete[] locals;
 }
 
+void StackFrame::print() const
+{
+  for(int i = 0; i < kf->numRegisters; i++) {
+    if(!locals[i].value.isNull()) {
+      llvm::errs() << i << ":  " << locals[i].value << "\n";
+    }
+  }
+  llvm::errs() << "\n";
+}
+
 /***/
 
 ExecutionState::ExecutionState(KFunction *kf) :

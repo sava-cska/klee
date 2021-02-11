@@ -102,12 +102,12 @@ class Executor : public Interpreter {
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
-  typedef std::map<llvm::BasicBlock*, std::set<const ExecutionState*> > FunctionCFA;
+  typedef std::map<const llvm::BasicBlock*, std::set<const ExecutionState*> > FunctionCFA;
 
   struct ExecutionResult {
-    std::map<llvm::Function *, FunctionCFA> cfaStates;
-    std::map<llvm::Function *, FunctionCFA> cfaPausedStates;
-    std::map<llvm::Function *, FunctionCFA> cfaErroneousStates;
+    std::map<const llvm::Function *, FunctionCFA> cfaStates;
+    std::map<const llvm::Function *, FunctionCFA> cfaPausedStates;
+    std::map<const llvm::Function *, FunctionCFA> cfaErroneousStates;
   };
 
   enum MemoryOperation {
@@ -140,21 +140,35 @@ private:
   static const char *TerminateReasonNames[];
 
   std::unique_ptr<KModule> kmodule;
+
   InterpreterHandler *interpreterHandler;
+
   Searcher *searcher;
 
   ExternalDispatcher *externalDispatcher;
+
   TimingSolver *solver;
+
   MemoryManager *memory;
+
   std::set<ExecutionState*, ExecutionStateIDCompare> states;
   std::set<ExecutionState*, ExecutionStateIDCompare> exitStates;
   std::set<ExecutionState*, ExecutionStateIDCompare> completedStates;
   std::set<ExecutionState*, ExecutionStateIDCompare> pausedStates;
   std::set<ExecutionState*, ExecutionStateIDCompare> erroneousStates;
+  
+  ExecutionResult cfaIsolatedResult;
+
+  std::set<ExecutionState*> finalStates;
+
   StatsTracker *statsTracker;
+
   TreeStreamWriter *pathWriter, *symPathWriter;
+
   SpecialFunctionHandler *specialFunctionHandler;
+
   TimerGroup timers;
+
   std::unique_ptr<PTree> processTree;
 
   /// Used to track states that have been added during the current
@@ -218,6 +232,9 @@ private:
   /// false, it is buggy (it needs to validate its writes).
   bool ivcEnabled;
 
+  /// used to make choice between transferToBasicBlock and composition
+  bool prefereComposition = false;
+
   /// The maximum time to allow for a single core solver query.
   /// (e.g. for a single STP query)
   time::Span coreSolverTimeout;
@@ -277,8 +294,11 @@ private:
   void updateStates(ExecutionState *current);
   void updateAndPauseStates(ExecutionState *current);
   void transferToBasicBlock(llvm::BasicBlock *dst,
-			    llvm::BasicBlock *src,
-			    ExecutionState &state);
+			                      llvm::BasicBlock *src,
+			                      ExecutionState &state);
+  void meetBasicBlock(llvm::BasicBlock *dst,
+			                llvm::BasicBlock *src,
+			                ExecutionState &state);
 
   void callExternalFunction(ExecutionState &state,
                             KInstruction *target,
@@ -634,6 +654,8 @@ public:
   KInstruction *getKInst(llvm::Instruction * ints);
 
   KBlock *getKBlock(llvm::BasicBlock & bb);
+
+  const std::set<const ExecutionState*> getBasicStates(const llvm::BasicBlock & bb);
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };

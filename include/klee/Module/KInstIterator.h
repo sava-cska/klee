@@ -35,6 +35,8 @@ namespace klee {
     operator KInstruction*() const { return it ? *it : 0;}
     operator bool() const { return it != 0; }
 
+    bool isNull() const { return !it || !*it; }
+
     KInstruction *operator ->() const { return *it; }
   };
 } // End klee namespace

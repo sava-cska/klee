@@ -1283,6 +1283,9 @@ const Cell& Executor::eval(KInstruction *ki, unsigned index,
 
 const Cell& Executor::symbolicEval(KInstruction *ki, unsigned index,
                            ExecutionState &state) {
+  if(!IsolationMode) {
+    return eval(ki, index, state);
+  }
   assert(index < ki->inst->getNumOperands());
   int vnumber = ki->operands[index];
 
@@ -1849,7 +1852,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
     if (InvokeInst *ii = dyn_cast<InvokeInst>(i)) {
       if (f->getName() != std::string("__cxa_throw") &&
           f->getName() != std::string("__cxa_rethrow")) {
-        transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
+        meetBasicBlock(ii->getNormalDest(), i->getParent(), state);
       }
     }
   } else {
@@ -1868,7 +1871,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
     KFunction *kf = kmodule->functionMap[f];
 
     state.pushFrame(state.prevPC, kf);
-    transferToBasicBlock(&*kf->function->begin(), state.currentKBlock->basicBlock, state);
+    meetBasicBlock(&*kf->function->begin(), state.currentKBlock->basicBlock, state);
 
     if (statsTracker)
       statsTracker->framePushed(state, &state.stack[state.stack.size() - 2]);
@@ -2040,6 +2043,34 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
     PHINode *first = static_cast<PHINode*>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
   }
+}
+
+void Executor::meetBasicBlock(BasicBlock *dst, BasicBlock *src,
+                              ExecutionState &state) 
+{
+  assert(dst != src);
+  if(!prefereComposition) 
+  {
+    transferToBasicBlock(dst, src, state);
+    return;
+  } 
+  
+  const auto bbStates = getBasicStates(*dst);
+  if(bbStates.empty()) {
+    terminateStateEarly(state, "No valid states for a BasicBlock");
+    return;
+  }
+  std::vector<ExecutionState*> compositionResults;
+  for(const auto basicState : bbStates) {
+    compositionResults.clear();
+    Composer::compose(&state, basicState, compositionResults);
+    addedStates.insert(addedStates.end(), compositionResults.begin(), compositionResults.end());
+    for(auto & composed : compositionResults) {
+      processTree->attach(state.ptreeNode, composed, &state);
+    }
+  }
+  terminateStateEarly(state, "State finished");
+  updateStates(nullptr);
 }
 
 void Executor::executeTargetedTerminator(ExecutionState &state, KInstruction *ki, KBlock *target) {
@@ -2447,6 +2478,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     if (state.stack.size() <= 1) {
       assert(!caller && "caller set on initial stack frame");
+      finalStates.insert(new ExecutionState(state));
       terminateStateOnExit(state);
     } else {
       state.popFrame();
@@ -2455,7 +2487,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         statsTracker->framePopped(state);
 
       if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-        transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
+        meetBasicBlock(ii->getNormalDest(), caller->getParent(), state);
       } else {
         state.currentKBlock = kmodule->functionMap[caller->getParent()->getParent()]->kBlocks[caller->getParent()];
         state.pc = kcaller;
@@ -2541,7 +2573,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::Br: {
     BranchInst *bi = cast<BranchInst>(i);
     if (bi->isUnconditional()) {
-      transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
+      meetBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
     } else {
       // FIXME: Find a way that we don't have this hidden dependency.
       assert(bi->getCondition() == bi->getOperand(0) &&
@@ -2559,9 +2591,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         statsTracker->markBranchVisited(branches.first, branches.second);
 
       if (branches.first)
-        transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), *branches.first);
+        meetBasicBlock(bi->getSuccessor(0), bi->getParent(), *branches.first);
       if (branches.second)
-        transferToBasicBlock(bi->getSuccessor(1), bi->getParent(), *branches.second);
+        meetBasicBlock(bi->getSuccessor(1), bi->getParent(), *branches.second);
     }
     break;
   }
@@ -2574,7 +2606,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     // concrete address
     if (const auto CE = dyn_cast<ConstantExpr>(address.get())) {
       const auto bb_address = (BasicBlock *) CE->getZExtValue(Context::get().getPointerWidth());
-      transferToBasicBlock(bb_address, bi->getParent(), state);
+      meetBasicBlock(bb_address, bi->getParent(), state);
       break;
     }
 
@@ -2634,7 +2666,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     assert(targets.size() == branches.size());
     for (std::vector<ExecutionState *>::size_type k = 0; k < branches.size(); ++k) {
       if (branches[k]) {
-        transferToBasicBlock(targets[k], bi->getParent(), *branches[k]);
+        meetBasicBlock(targets[k], bi->getParent(), *branches[k]);
       }
     }
 
@@ -2657,7 +2689,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       unsigned index = si->findCaseValue(ci).getSuccessorIndex();
 #endif
       state.executionPath += std::to_string(index);
-      transferToBasicBlock(si->getSuccessor(index), si->getParent(), state);
+      meetBasicBlock(si->getSuccessor(index), si->getParent(), state);
     } else {
       // Handle possible different branch targets
 
@@ -2762,7 +2794,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         ExecutionState *es = *bit;
         if (es) {
           es->executionPath += caseNumber[*it];
-          transferToBasicBlock(*it, bb, *es);
+          meetBasicBlock(*it, bb, *es);
         }
         ++bit;
       }
@@ -4017,6 +4049,9 @@ void Executor::executeKBlock(KBlock *kb, ExecutionState &initialState, bool isoM
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
 
+  states.clear();
+  addedStates.clear();
+  removedStates.clear();
   states.insert(&initialState);
 
   searcher = constructUserSearcher(*this);
@@ -4028,6 +4063,17 @@ void Executor::executeKBlock(KBlock *kb, ExecutionState &initialState, bool isoM
   while (!states.empty() && !haltExecution) {
     ExecutionState &state = searcher->selectState();
     KInstruction *ki = state.pc;
+    if (ki == terminator) {
+      //updateStates(&state);
+      //completedStates.insert(states.begin(), states.end());
+      //states.clear();
+      if(states.find(&state) != states.end()) {
+        states.erase(&state);
+      }
+      terminateStateOnTerminator(state);
+      continue;
+    }
+    assert(state.currentKBlock == kb);
     stepInstruction(state);
     if (isoMode && ki->inst->getOpcode() == Instruction::PHI) {
       prepareSymbolicValue(state, ki);
@@ -4038,12 +4084,7 @@ void Executor::executeKBlock(KBlock *kb, ExecutionState &initialState, bool isoM
     if (::dumpStates) dumpStates();
     if (::dumpPTree) dumpPTree();
 
-    if (ki == terminator || state.currentKBlock != kb) {
-      updateStates(&state);
-      completedStates.insert(states.begin(), states.end());
-      states.clear();
-    } else
-      updateAndPauseStates(&state);
+    updateAndPauseStates(&state);
 
     if (!checkMemoryUsage()) {
       // update searchers when states were terminated early due to memory pressure
@@ -4167,7 +4208,11 @@ void Executor::terminateStateOnTerminator(ExecutionState &state) {
   if (!ExcludeSolver && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
-  completedStates.insert(&state);
+  // auto toAdd = new ExecutionState(state);
+  // toAdd->pc = toAdd->prevPC;
+  // assert(!toAdd->pc.isNull());
+  // completedStates.insert(toAdd);
+  completedStates.insert(new ExecutionState(state));
   terminateState(state);
 }
 
@@ -5049,7 +5094,8 @@ ExecutionState* Executor::formState(Function *f,
     formArgMemory(*state, argv, argvMO, NumPtrBytes, envc, envp, argc);
   }
 
-  initializeGlobals(*state);
+  if(!prefereComposition)
+    initializeGlobals(*state);
   return state;
 }
 
@@ -5155,7 +5201,8 @@ void Executor::runFunctionAsMain(Function *f,
     statsTracker->framePushed(*state, 0);
 
   processTree = std::make_unique<PTree>(state);
-  bindModuleConstants();
+  if(!prefereComposition)
+    bindModuleConstants();
   run(*state);
   processTree = nullptr;
 
@@ -5174,7 +5221,7 @@ Executor::ExecutionResult Executor::getCFA(Function *fn, ExecutionState &state) 
   std::set<Function *> executedFunction;
   functionFonRun.push(fn);
   executedFunction.insert(fn);
-  ExecutionResult result;
+  ExecutionResult &result = cfaIsolatedResult;
   while (!functionFonRun.empty()) {
     Function *f = functionFonRun.front();
     FunctionCFA &cfa = result.cfaStates[f];
@@ -5236,7 +5283,7 @@ Executor::ExecutionResult Executor::getCumulativeCFA(Function *fn, ExecutionStat
   ExecutionState *initialState = state.withStackFrame(kf)->withKBlock(kb);
   prepareSymbolicArgs(*initialState, kf);
   statesFonRun.push_back(initialState);
-  ExecutionResult result;
+  ExecutionResult &result = cfaIsolatedResult;
   auto start = high_resolution_clock::now();
   while (!statesFonRun.empty()) {
     ExecutionState *currState = statesFonRun.back();
@@ -5284,19 +5331,6 @@ void Executor::runFunctionAsIsolatedBlocks(Function *mainFn) {
   ExecutionResult res = getCFA(mainFn, *state);
 }
 
-void Executor::runMainAsBlockSequence(Function *mainFn,
-               int argc,
-               char **argv,
-               char **envp) {
-  ExecutionState *state = formState(mainFn, argc, argv, envp);
-  state->popFrame();
-  bindModuleConstants();
-  ExecutionResult res = getCumulativeCFA(mainFn, *state, MaxBound);
-  // hack to clear memory objects
-  delete memory;
-  memory = new MemoryManager(NULL);
-  clearGlobal();
-}
 
 void Executor::runAllFunctionsAsBlockSequence(llvm::Function *mainFn,
                                               int argc,
@@ -5312,6 +5346,53 @@ void Executor::runAllFunctionsAsBlockSequence(llvm::Function *mainFn,
   delete memory;
   memory = new MemoryManager(NULL);
   clearGlobal();
+}
+
+void Executor::runMainAsBlockSequence(Function *mainFn,
+               int argc,
+               char **argv,
+               char **envp) {
+  ExecutionState *state = formState(mainFn, argc, argv, envp);
+  //ExecutionState *initState = new ExecutionState(*state);
+  state->popFrame();
+  bindModuleConstants();
+  for (auto &kfp : kmodule->functions) {
+    getCFA(kfp->function, *state);
+  }
+  // ExecutionState *initState = formState(mainFn, argc, argv, envp);
+  // bindModuleConstants();
+
+  // for (auto &kfp : kmodule->functions) {
+  //   runFunctionAsIsolatedBlocks(kfp->function);
+  // }
+
+  // clear states //
+  states.clear();
+  addedStates.clear();
+  removedStates.clear();
+
+  // run klee with composition //
+  prefereComposition = true;
+  IsolationMode = false;
+  SimpleTimer T;
+  const llvm::BasicBlock &bb = *mainFn->begin();
+  auto startStates = getBasicStates(bb);
+  assert(startStates.size() == 1);
+  //ExecutionState *initState = new ExecutionState(**startStates.begin());
+  //initState->setID();
+  runFunctionAsMain(mainFn, argc, argv, envp/*, initState*/);
+
+  // output //
+  llvm::errs() << "GENERATED: " << finalStates.size() << "\n";
+  llvm::errs() << "TRAVERSAL: " << T.getFixed(4) << "\n\n"; 
+  unsigned cnt = 0;
+  for (auto & state : finalStates)
+  {
+    llvm::errs() << state->executionPath << "\n";
+    llvm::errs() << "\nExecutionState " << ++cnt << "\n";
+    llvm::errs() << state->constraints;
+  }
+
 }
 
 unsigned Executor::getPathStreamID(const ExecutionState &state) {
@@ -5573,6 +5654,18 @@ KBlock *Executor::getKBlock(llvm::BasicBlock & bb)
   klee::KBlock *KB = KF->kBlocks[&bb];
   assert(KB);
   return KB;
+}
+
+const std::set<const ExecutionState*> Executor::getBasicStates(const llvm::BasicBlock & bb)
+{
+    const llvm::Function *fun = bb.getParent();
+    const auto & finished = cfaIsolatedResult.cfaStates[fun].find(&bb);
+    const auto & paused = cfaIsolatedResult.cfaPausedStates[fun].find(&bb);
+    std::set<const ExecutionState*> states;
+    std::set_union( finished->second.begin(), finished->second.end(),
+                    paused->second.begin(), paused->second.end(),
+                    std::inserter(states, states.begin()));
+    return states;
 }
 
 

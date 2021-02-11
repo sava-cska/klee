@@ -66,6 +66,7 @@ struct StackFrame {
   StackFrame(KInstIterator caller, KFunction *kf);
   StackFrame(const StackFrame &s);
   ~StackFrame();
+  void print() const;
 };
 
 /// Contains information related to unwinding (Itanium ABI/2-Phase unwinding)

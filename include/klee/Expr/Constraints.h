@@ -11,6 +11,7 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr/Expr.h"
+#include <string>
 
 namespace klee {
 
@@ -75,6 +76,25 @@ private:
 
   ConstraintSet &constraints;
 };
+
+
+#define divider(n) std::string(n, '-') + "\n"
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const ConstraintSet &constraints)
+{
+    if(!constraints.empty())
+    {
+        os << "\n" << divider(30);
+        for(const auto &expr: constraints)
+        {
+            os << divider(30);
+            os << expr << "\n";
+            os << divider(30);
+        }
+        os << divider(30);
+    }
+    return os;
+}
 
 } // namespace klee
 

@@ -428,9 +428,9 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
   }
 }
 
-void ExecutionState::addConstraint(ref<Expr> e) {
+void ExecutionState::addConstraint(ref<Expr> e, bool *sat) {
   ConstraintManager c(constraints);
-  c.addConstraint(e);
+  c.addConstraint(e, sat);
 }
 
 void ExecutionState::setBlockIndexes(KBlock *kb) {
@@ -466,10 +466,16 @@ bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSol
     solver->setTimeout(timeout);
     bool success = solver->mayBeTrue(constraints, simplified, mayBe, queryMetaData);
     solver->setTimeout(time::Span());
-    if(success && !mayBe) {
-      return false;
+    if(success) {
+      if(!mayBe)
+        return false;
+      addConstraint(simplified);
+      return true;
     }
   }
-  addConstraint(simplified);
+  // no solver or no success
+  bool mayBe = true;
+  addConstraint(simplified, &mayBe);
+  if(!mayBe) return false;
   return true;
 }

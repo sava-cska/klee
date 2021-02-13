@@ -280,7 +280,7 @@ public:
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
-  void addConstraint(ref<Expr> e);
+  void addConstraint(ref<Expr> e, bool *sat = 0);
   bool tryAddConstraint(ref<Expr> e, 
                         time::Span timeout = time::Span::null, 
                         TimingSolver * solver = nullptr);

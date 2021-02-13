@@ -1852,7 +1852,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
     if (InvokeInst *ii = dyn_cast<InvokeInst>(i)) {
       if (f->getName() != std::string("__cxa_throw") &&
           f->getName() != std::string("__cxa_rethrow")) {
-        meetBasicBlock(ii->getNormalDest(), i->getParent(), state);
+        transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
       }
     }
   } else {
@@ -1871,7 +1871,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
     KFunction *kf = kmodule->functionMap[f];
 
     state.pushFrame(state.prevPC, kf);
-    meetBasicBlock(&*kf->function->begin(), state.currentKBlock->basicBlock, state);
+    transferToBasicBlock(&*kf->function->begin(), state.currentKBlock->basicBlock, state);
 
     if (statsTracker)
       statsTracker->framePushed(state, &state.stack[state.stack.size() - 2]);

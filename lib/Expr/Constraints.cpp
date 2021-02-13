@@ -70,7 +70,7 @@ public:
   }
 };
 
-bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
+bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, bool *sat) {
   ConstraintSet old;
   bool changed = false;
 
@@ -79,7 +79,7 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
     ref<Expr> e = visitor.visit(ce);
 
     if (e!=ce) {
-      addConstraintInternal(e); // enable further reductions
+      addConstraintInternal(e, sat); // enable further reductions
       changed = true;
     } else {
       constraints.push_back(ce);
@@ -115,20 +115,22 @@ ref<Expr> ConstraintManager::simplifyExpr(const ConstraintSet &constraints,
   return ExprReplaceVisitor2(equalities).visit(e);
 }
 
-void ConstraintManager::addConstraintInternal(const ref<Expr> &e) {
+void ConstraintManager::addConstraintInternal(const ref<Expr> &e, bool *sat) {
   // rewrite any known equalities and split Ands into different conjuncts
 
   switch (e->getKind()) {
   case Expr::Constant:
-    assert(cast<ConstantExpr>(e)->isTrue() &&
-           "attempt to add invalid (false) constraint");
+    if(!cast<ConstantExpr>(e)->isTrue()) {
+      if(sat) *sat = false;
+      else assert(false && "attempt to add invalid (false) constraint");
+    }
     break;
 
     // split to enable finer grained independence and other optimizations
   case Expr::And: {
     BinaryExpr *be = cast<BinaryExpr>(e);
-    addConstraintInternal(be->left);
-    addConstraintInternal(be->right);
+    addConstraintInternal(be->left, sat);
+    addConstraintInternal(be->right, sat);
     break;
   }
 
@@ -142,7 +144,7 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e) {
       BinaryExpr *be = cast<BinaryExpr>(e);
       if (isa<ConstantExpr>(be->left)) {
 	ExprReplaceVisitor visitor(be->right, be->left);
-	rewriteConstraints(visitor);
+	rewriteConstraints(visitor, sat);
       }
     }
     constraints.push_back(e);
@@ -155,9 +157,9 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e) {
   }
 }
 
-void ConstraintManager::addConstraint(const ref<Expr> &e) {
+void ConstraintManager::addConstraint(const ref<Expr> &e, bool *sat) {
   ref<Expr> simplified = simplifyExpr(constraints, e);
-  addConstraintInternal(simplified);
+  addConstraintInternal(simplified, sat);
 }
 
 ConstraintManager::ConstraintManager(ConstraintSet &_constraints)

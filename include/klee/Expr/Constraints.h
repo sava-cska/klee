@@ -63,16 +63,16 @@ public:
 
   /// Add constraint to the referenced constraint set
   /// \param constraint
-  void addConstraint(const ref<Expr> &constraint);
+  void addConstraint(const ref<Expr> &constraint, bool *sat = 0);
 
 private:
   /// Rewrite set of constraints using the visitor
   /// \param visitor constraint rewriter
   /// \return true iff any constraint has been changed
-  bool rewriteConstraints(ExprVisitor &visitor);
+  bool rewriteConstraints(ExprVisitor &visitor, bool *sat = 0);
 
   /// Add constraint to the set of constraints
-  void addConstraintInternal(const ref<Expr> &constraint);
+  void addConstraintInternal(const ref<Expr> &constraint, bool *sat = 0);
 
   ConstraintSet &constraints;
 };

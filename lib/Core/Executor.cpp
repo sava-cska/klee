@@ -602,7 +602,6 @@ Executor::~Executor() {
 
 /***/
 
-
 void Executor::addCompletedResult(ExecutionState &state) {
   results[state.getInitPCBlock()].completedStates[state.getPrevPCBlock()].insert(&state);
 }
@@ -3299,6 +3298,21 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
+void Executor::filterStates(ExecutionState *current) {
+  if (!current->prevPC->inst->isTerminator() && addedStates.size() > 0) {
+    results[current->getInitPCBlock()].redundantStates[
+        current->getPrevPCBlock()].insert(addedStates.begin(), addedStates.end());
+    for (std::vector<ExecutionState *>::iterator it = addedStates.begin(),
+         ie = addedStates.end(); it != ie; ++it) {
+      std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3 =
+        seedMap.find(*it);
+      if (it3 != seedMap.end())
+        seedMap.erase(it3);
+    }
+    addedStates.clear();
+  }
+}
+
 void Executor::updateStates(ExecutionState *current) {
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
@@ -3606,7 +3620,6 @@ void Executor::boundedExecuteStep(ExecutionState &state, unsigned bound) {
   KInstruction *prevKI = state.prevPC;
 
   if (prevKI->inst->isTerminator()) {
-    addCompletedResult(state);
     addHistoryResult(state);
     if (state.multilevel.count(state.getPCBlock()) > bound) {
       pauseState(state);
@@ -3917,7 +3930,6 @@ void Executor::terminateStateOnTerminator(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
-  addCompletedResult(state);
   addHistoryResult(state);
   terminateState(state);
 }

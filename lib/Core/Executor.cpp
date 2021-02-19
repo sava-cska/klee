@@ -3726,9 +3726,9 @@ void Executor::calculateTargetedStates(BasicBlock *initialBlock,
 
         for (auto &kbp : kf->blocks) {
           KBlock *target = kbp.get();
-          if (kf->backwardDistance[target].count(kb) != 0 &&
-              (sfNum > 0 || kf->backwardDistance[target][kb] > 0) &&
-              kf->backwardDistance[target][kb] < minDistance) {
+          if (kf->getBackwardDistance(target).find(kb) != kf->getBackwardDistance(target).end() &&
+              (sfNum > 0 || kf->getBackwardDistance(target)[kb] > 0) &&
+              kf->getBackwardDistance(target)[kb] < minDistance) {
             if (history[target->basicBlock].size() != 0) {
               std::vector<BasicBlock*> diff;
               if (!newCov)
@@ -3741,7 +3741,7 @@ void Executor::calculateTargetedStates(BasicBlock *initialBlock,
             } else
               newCov = true;
             nearestBlock = target;
-            minDistance = kf->backwardDistance[target][kb];
+            minDistance = kf->getBackwardDistance(target)[kb];
           }
         }
         if (nearestBlock) {

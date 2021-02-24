@@ -3616,18 +3616,19 @@ void Executor::executeStep(ExecutionState &state) {
   }
 }
 
-void Executor::boundedExecuteStep(ExecutionState &state, unsigned bound) {
+bool Executor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
   KInstruction *prevKI = state.prevPC;
 
   if (prevKI->inst->isTerminator()) {
     addHistoryResult(state);
     if (state.multilevel.count(state.getPCBlock()) > bound) {
       pauseState(state);
-      return;
+      return false;
     }
   }
 
   executeStep(state);
+  return true;
 }
 
 void Executor::boundedRun(ExecutionState &initialState, unsigned bound) {
@@ -3647,7 +3648,7 @@ void Executor::boundedRun(ExecutionState &initialState, unsigned bound) {
   // main interpreter loop
   while (!states.empty() && !haltExecution) {
     ExecutionState &state = searcher->selectState();
-    boundedExecuteStep(state, bound);
+    tryBoundedExecuteStep(state, bound);
   }
 
   delete searcher;
@@ -3704,6 +3705,49 @@ void Executor::targetedRun(ExecutionState &initialState, KBlock *target) {
   haltExecution = false;
 }
 
+KBlock* Executor::calculateTarget(ExecutionState &state) {
+  BasicBlock *initialBlock = state.getInitPCBlock();
+  VisitedBlock &history = results[initialBlock].history;
+  BasicBlock *bb = state.getPCBlock();
+  KFunction *kf = kmodule->functionMap[bb->getParent()];
+  KBlock *kb = kf->blockMap[bb];
+  KBlock *nearestBlock = nullptr;
+  unsigned int minDistance = -1;
+  unsigned int sfNum = 0;
+  bool newCov = false;
+  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe; sfi++, sfNum++) {
+    kf = sfi->kf;
+
+    for (auto &kbd : kf->getDistance(kb)) {
+      KBlock *target = kbd.first;
+      unsigned distance = kbd.second;
+      if ((sfNum >0 || distance > 0) && distance < minDistance) {
+        if (history[target->basicBlock].size() != 0) {
+          std::vector<BasicBlock*> diff;
+          if (!newCov)
+            std::set_difference(state.level.begin(), state.level.end(),
+                                history[target->basicBlock].begin(), history[target->basicBlock].end(),
+                                std::inserter(diff, diff.begin()));
+          if (diff.empty()) {
+            continue;
+          }
+        } else
+          newCov = true;
+        nearestBlock = target;
+        minDistance = distance;
+      }
+    }
+
+    if (nearestBlock) {
+      return nearestBlock;
+    }
+
+    if (sfi->caller) {
+      kb = sfi->caller->parent;
+    }
+  }
+  return nearestBlock;
+}
 
 void Executor::calculateTargetedStates(BasicBlock *initialBlock,
                                        ExecutedBlock &pausedStates,
@@ -3760,7 +3804,6 @@ void Executor::guidedRun(ExecutionState &initialState) {
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
 
-  BasicBlock *initialBlock = initialState.getInitPCBlock();
   states.insert(&initialState);
 
   if (usingSeeds) {
@@ -3777,21 +3820,15 @@ void Executor::guidedRun(ExecutionState &initialState) {
       ExecutionState &state = searcher->selectState();
       if (state.target)
         executeStep(state);
-      else
-        boundedExecuteStep(state, MaxCycles - 1);
+      else if (!tryBoundedExecuteStep(state, MaxCycles - 1)) {
+        KBlock *target = calculateTarget(state);
+        if (target) {
+          state.target = target;
+          unpauseState(state);
+        }
+      }
     }
 
-    ExecutedBlock &pausedStates = results[initialBlock].pausedStates;
-    std::map<KBlock*, std::vector<ExecutionState*>> targetedStates;
-    calculateTargetedStates(initialBlock, pausedStates, targetedStates);
-
-    for (auto &blockstate : targetedStates) {
-      KBlock *bb = blockstate.first;
-      std::vector<ExecutionState *> &ess = blockstate.second;
-      for (auto &es : ess)
-        es->target = bb;
-      unpauseStates(ess);
-    }
     if (searcher->empty())
       haltExecution = true;
   }
@@ -3901,6 +3938,16 @@ void Executor::pauseState(ExecutionState &state) {
   results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
   states.erase(&state);
   searcher->update(nullptr, {}, {&state});
+}
+
+void Executor::unpauseState(ExecutionState &state) {
+  ExecutedBlock &pausedStates = results[state.getInitPCBlock()].pausedStates;
+
+  pausedStates[state.getPCBlock()].erase(&state);
+  if (pausedStates[state.getPCBlock()].empty())
+    pausedStates.erase(state.getPCBlock());
+  this->states.insert(&state);
+  searcher->update(nullptr, { &state }, {});
 }
 
 void Executor::unpauseStates(std::vector<ExecutionState *> &states) {

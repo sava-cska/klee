@@ -145,3 +145,22 @@ ref<Expr> Composer::rebuild(const ref<Expr> expr,
     return composer.rebuild(expr);
 }
 //~~~~~~~~~Composer~~~~~~~~~//
+
+
+const MemoryObject *klee::extractObject(const ref<Expr> expr)
+{
+    if(expr.isNull()) return nullptr;
+    if(isa<ReadExpr>(expr.get())) {
+        const ReadExpr *read = cast<const ReadExpr>(expr.get());
+        return read->updates.root->binding;
+    }
+    if(isa<ConcatExpr>(expr.get())) {
+        const ConcatExpr *conc = cast<const ConcatExpr>(expr.get());
+        const auto leftRet = extractObject(conc->getLeft());
+        const auto rightRet = extractObject(conc->getRight());
+        assert(leftRet == rightRet && "can just return 0 otherwise");
+        return leftRet;
+    }
+    return nullptr;
+}
+

@@ -442,6 +442,12 @@ private:
   }
 
 public:
+  const Cell& getArgumentCell(const ExecutionState &state,
+                              const KFunction *kf,
+                              unsigned index) {
+    return state.stack.back().locals[kf->getArgRegister(index)];
+  }
+
   const Cell& getDestCell(const ExecutionState &state,
                           const KInstruction *target) {
     return state.stack.back().locals[target->dest];
@@ -654,6 +660,8 @@ public:
   KInstruction *getKInst(llvm::Instruction * ints);
 
   KBlock *getKBlock(llvm::BasicBlock & bb);
+
+  const KFunction *getKFunction(const llvm::Function *f) const;
 
   const std::set<const ExecutionState*> getBasicStates(const llvm::BasicBlock & bb);
 

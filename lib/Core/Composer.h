@@ -19,6 +19,9 @@
 namespace klee {
     class ComposeVisitor;
 
+    const MemoryObject *extractObject(const ref<Expr> read);
+
+
     // each (LI object from S2) -> (possible object from S1)
     typedef std::map<const MemoryObject*, ResolutionList::iterator > ExactLImap;
     // each (LI object from S2) -> set<possible objects from S1>

@@ -1134,8 +1134,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   // search ones. If that makes sense.
   if (res==Solver::True) {
     if (!isInternal) {
+      current.executionPath += "1";
       if (pathWriter) {
-        current.executionPath += "1";
         current.pathOS << "1";
       }
     }
@@ -1143,8 +1143,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     return StatePair(&current, 0);
   } else if (res==Solver::False) {
     if (!isInternal) {
+      current.executionPath += "0";
       if (pathWriter) {
-        current.executionPath += "0";
         current.pathOS << "0";
       }
     }
@@ -1196,20 +1196,22 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
     processTree->attach(current.ptreeNode, trueState, falseState);
 
+    trueState->executionPath += "1";
+    falseState->executionPath += "0";
     if (pathWriter) {
       // Need to update the pathOS.id field of falseState, otherwise the same id
       // is used for both falseState and trueState.
       falseState->pathOS = pathWriter->open(current.pathOS);
       if (!isInternal) {
-        trueState->pathOS << "1";  trueState->executionPath += "1";
-        falseState->pathOS << "0"; falseState->executionPath += "0";
+        trueState->pathOS << "1";
+        falseState->pathOS << "0";
       }
     }
     if (symPathWriter) {
       falseState->symPathOS = symPathWriter->open(current.symPathOS);
       if (!isInternal) {
-        trueState->symPathOS << "1";  trueState->executionPath += "1";
-        falseState->symPathOS << "0"; falseState->executionPath += "0";
+        trueState->symPathOS << "1";
+        falseState->symPathOS << "0";
       }
     }
 
@@ -2487,7 +2489,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         statsTracker->framePopped(state);
 
       if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-        meetBasicBlock(ii->getNormalDest(), caller->getParent(), state);
+        transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
       } else {
         state.currentKBlock = kmodule->functionMap[caller->getParent()->getParent()]->kBlocks[caller->getParent()];
         state.pc = kcaller;
@@ -2793,7 +2795,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
            it != ie; ++it) {
         ExecutionState *es = *bit;
         if (es) {
-          es->executionPath += caseNumber[*it];
+          es->executionPath += std::to_string(caseNumber[*it]);
           meetBasicBlock(*it, bb, *es);
         }
         ++bit;
@@ -5390,11 +5392,10 @@ void Executor::runMainAsBlockSequence(Function *mainFn,
   unsigned cnt = 0;
   for (auto & state : finalStates)
   {
-    llvm::errs() << state->executionPath << "\n";
     llvm::errs() << "\nExecutionState " << ++cnt << "\n";
+    llvm::errs() << "ExecutionPath  " << state->executionPath << "\n";
     llvm::errs() << state->constraints;
   }
-
 }
 
 unsigned Executor::getPathStreamID(const ExecutionState &state) {
@@ -5658,6 +5659,12 @@ KBlock *Executor::getKBlock(llvm::BasicBlock & bb)
   return KB;
 }
 
+const KFunction *Executor::getKFunction(const llvm::Function *f) const
+{
+  const auto kfIt = kmodule->functionMap.find(const_cast<Function*>(f));
+  return (kfIt == kmodule->functionMap.end()) ? nullptr : kfIt->second;
+}
+
 const std::set<const ExecutionState*> Executor::getBasicStates(const llvm::BasicBlock & bb)
 {
     const llvm::Function *fun = bb.getParent();
@@ -5810,13 +5817,6 @@ void Composer::compose(ExecutionState *state, bool & possible) const
     }
 
     // CONSTRAINTS //
-    if(!addComposedConstraints(*state,
-            executor->getMaxSolvTime(),
-            executor->getSolver())) 
-    {
-      possible = false;
-      return;
-    }
     for(auto &liObj : *curLImap) {
       /// TODO: add save rebuilded LI inside LImap constructor
       /// TODO: store an object in LI instead of an Expr
@@ -5828,6 +5828,13 @@ void Composer::compose(ExecutionState *state, bool & possible) const
         return;
       }
     }
+    if(!addComposedConstraints(*state,
+            executor->getMaxSolvTime(),
+            executor->getSolver())) 
+    {
+      possible = false;
+      return;
+    }
 
     // STACK //
     auto & stateFrame = state->stack.back();
@@ -5838,71 +5845,83 @@ void Composer::compose(ExecutionState *state, bool & possible) const
     {
         ref<Expr> newVal = newFrame.locals[i].value;
         if(!newVal.isNull()) { 
-            stateFrame.locals[i].value = rebuild(newVal);
-        } 
+            newVal = rebuild(newVal);
+            if(!stateFrame.locals[i].value.isNull()) {
+              if(!state->tryAddConstraint(EqExpr::create(stateFrame.locals[i].value, newVal))) {
+                possible = false;
+                return;
+              }
+              continue;
+            }
+            stateFrame.locals[i].value = newVal;
+        }
     }
 
-    assert(curLImap);
     // ADDRESS SPACE //
     //state->addressSpace = P1->addressSpace
+    for(auto it  = S2->addressSpace.objects.begin();
+              it != S2->addressSpace.objects.end();
+              ++it)
     {
-        for(auto it  = S2->addressSpace.objects.begin();
-                 it != S2->addressSpace.objects.end();
-                 ++it)
-        {
-            const ObjectState *thisOS{ it->second.get() };
-            const MemoryObject *MO{ it->first };
-            assert(thisOS->size == MO->size &&
-                   MO->size != 0 && 
-                   thisOS->size != 0 &&
-                    "corrupted object in addressSpace");
-            if(thisOS->readOnly) {
-                state->addressSpace.bindObject(MO, new ObjectState(*thisOS));
-                continue;
-            }
-            
-            ref<Expr> valInS2 = thisOS->read(0, 8*thisOS->size);
-            ref<Expr> valInS1 = rebuild(valInS2);
-
-            if(MO->isLazyInstantiated()) { // is LI
-                const auto it = curLImap->find(MO);
-                assert(it != curLImap->end() && "LI not found in LImap");
-                const ObjectPair &op = *it->second;
-                ObjectState *realState = 
-                  state->addressSpace.getWriteable(op.first, op.second);
-                assert(realState);
-                realState->write(0, valInS1);
-                continue;
-            }
-            // compose a real object
-            const llvm::Value *allocSite = it->first->allocSite;
-            if(!allocSite) continue;
-            
-            if(isa<Instruction>(allocSite) && !AllocaInst::classof(allocSite)) {
-                const Instruction *inst = cast<Instruction>(allocSite);
-                const KInstruction *ki  = executor->getKInst(const_cast<Instruction*>(inst));
-                const ref<Expr> prevVal = executor->getDestCell(*S1, ki).value;
-                ObjectState *copyOS = new ObjectState(MO, thisOS->getArray());
-                if(!prevVal.isNull())
-                  copyOS->write(0, prevVal);
-                copyOS->write(0, valInS1);
-                state->addressSpace.bindObject(MO, copyOS);
-            } else {
-                // ref<ConstantExpr> realMOAddress = ConstantExpr::create(MO->address, Context::get().getPointerWidth());
-                ObjectPair buffer;
-                ref<ConstantExpr> realMOAddress = Expr::createPointer(MO->address);
-                bool foundMO = state->addressSpace.resolveOne(realMOAddress, buffer);
-                if(foundMO) {
-                    executor->executeMemoryOperation( *state, Executor::Write,
-                                                      realMOAddress, valInS1, 
-                                                      nullptr);
-                } else {
-                    // terminateStateOneError ?
-                    ObjectState *copyOS = new ObjectState(*thisOS);
-                    state->addressSpace.bindObject(MO, copyOS);
-                }
-            }
+        const ObjectState *thisOS{ it->second.get() };
+        const MemoryObject *MO{ it->first };
+        assert( thisOS->size == MO->size &&
+                MO->size != 0 && 
+                thisOS->size != 0 &&
+                "corrupted object in addressSpace");
+        if(thisOS->readOnly) {
+            state->addressSpace.bindObject(MO, new ObjectState(*thisOS));
+            continue;
         }
+        
+        ref<Expr> valInS2 = thisOS->read(0, 8*thisOS->size);
+        ref<Expr> valInS1 = rebuild(valInS2);
+
+        if(MO->isLazyInstantiated()) { // is LI
+            const auto it = curLImap->find(MO);
+            assert(it != curLImap->end() && "LI not found in LImap");
+            const ObjectPair &op = *it->second;
+            ObjectState *realState = 
+              state->addressSpace.getWriteable(op.first, op.second);
+            assert(realState);
+            /// TODO: manage that
+            if(valInS1->getWidth() / 8 <= realState->size) {
+              realState->write(0, valInS1);
+            }
+            continue;
+        }
+
+        // compose a real object
+        ObjectState *newOS = new ObjectState(MO);
+        newOS->write(0, valInS1);
+        state->addressSpace.bindObject(MO, newOS);
+
+        /*const llvm::Value *allocSite = it->first->allocSite;
+        if(!allocSite) continue;
+        if(isa<Instruction>(allocSite) && !AllocaInst::classof(allocSite)) {
+            const Instruction *inst = cast<Instruction>(allocSite);
+            const KInstruction *ki  = executor->getKInst(const_cast<Instruction*>(inst));
+            const ref<Expr> prevVal = executor->getDestCell(*S1, ki).value;
+            ObjectState *copyOS = new ObjectState(MO, thisOS->getArray());
+            if(!prevVal.isNull())
+              copyOS->write(0, prevVal);
+            copyOS->write(0, valInS1);
+            state->addressSpace.bindObject(MO, copyOS);
+        }*/ /*else {
+            // ref<ConstantExpr> realMOAddress = ConstantExpr::create(MO->address, Context::get().getPointerWidth());
+            ObjectPair buffer;
+            ref<ConstantExpr> realMOAddress = Expr::createPointer(MO->address);
+            bool foundMO = state->addressSpace.resolveOne(realMOAddress, buffer);
+            if(foundMO) {
+                executor->executeMemoryOperation( *state, Executor::Write,
+                                                  realMOAddress, valInS1, 
+                                                  nullptr);
+            } else {
+                // terminateStateOneError ?
+                ObjectState *copyOS = new ObjectState(*thisOS);
+                state->addressSpace.bindObject(MO, copyOS);
+            }
+        }*/
     }
 
 
@@ -5928,58 +5947,13 @@ void Composer::compose(ExecutionState *state, bool & possible) const
 
 
 //-----ComposeVisitor-----//
-const MemoryObject *getMO(const ExecutionState * S1, const ReadExpr & re)
-{
-  const Array *arr = re.updates.root;
-
-  //TODO: rewrite with map
-  assert(std::count_if( S1->symbolics.begin(), S1->symbolics.end(),
-                        [arr](const symb& obj){ return obj.second == arr; } ) <= 1
-                        && "multiple objects for an array");
-  auto smbPair = std::find_if(S1->symbolics.begin(),
-                              S1->symbolics.end(),
-                              [arr](const symb& obj){ return obj.second == arr; });
-  /// TODO: is it ok?
-  if(smbPair == S1->symbolics.end()) {
-    return nullptr;
-  }
-  return smbPair->first.get();
-}
-
-/*const ObjectState *ComposeVisitor::getOS(const ExecutionState * state, const MemoryObject * MO)
-{
-    assert(MO && state);
-    ref<Expr> LI = MO->lazyInstantiatedSource;
-    const ObjectState *ret = nullptr;
-
-    // try to fint the Object in state
-    if(LI.isNull()) { // not LI
-        ret = state->addressSpace.findObject(MO);
-    } else { // is LI
-        LI = visit(LI);
-        LI = ConstraintManager::simplifyExpr(state->constraints, LI);
-        ObjectPair buffer;
-        // can find a corresponding object
-        auto ce = dynamic_cast<ConstantExpr*>(LI.get());
-        if( ce && state->addressSpace.resolveOne(ref<Expr>(ce), buffer)) {
-            assert(buffer.first != MO);
-            ret = buffer.second;
-        } else {
-            ret = state->addressSpace.findObject(MO);
-        }
-    }
-    return ret;
-}*/
 
 ref<Expr> ComposeVisitor::shareUpdates(ObjectState & OS, const ReadExpr & re)
 {
-  /*const ref<UpdateNode> prevHead {
-        UpdateList::commonTail(re.updates, OS.getRawUpdates() )};
-  assert(prevHead.get() == nullptr);*/
-  std::stack < const UpdateNode* > forward;
+  std::stack < const UpdateNode* > forward{};
 
   for(auto  it = re.updates.head;
-            it.get() != nullptr;
+            !it.isNull();
             it = it->next)
   {
       forward.push( it.get() );
@@ -6001,29 +5975,46 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr & re)
 {
     const ExecutionState *S1 = caller->S1;
     assert(S1);
-    const MemoryObject *object = getMO(S1, re);
+    const MemoryObject *object = re.updates.root->binding;
     if(!object) return new ReadExpr(re);
     ObjectState OS{object, re.updates.root};
+    if(object->isLazyInstantiated()) {
+      auto liMap = caller->curLImap;
+      if(liMap) {
+        const auto it = liMap->find(object);
+        if(it == liMap->end()) return new ReadExpr(re);
+        const auto &op = it->second;
+        /// TODO: it's enough to read and write only certain bytes
+        OS.write(0, op->second->read(0, 8*OS.size));
+        if(!re.updates.head.isNull())
+          return shareUpdates(OS, re);
+        return OS.read(visit(re.index), re.getWidth());
+      }
+      // there's no such LI in this state
+      return new ReadExpr(re);
+    }
     const llvm::Value *allocSite = object->allocSite;
+    if(!allocSite) return new ReadExpr(re);
 
-    if(isa<Instruction>(allocSite) && !AllocaInst::classof(allocSite)) {
-        const Instruction *inst = cast<Instruction>(allocSite);
-        const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
-        ref<Expr> prevVal = caller->executor->getDestCell(*S1, ki).value;
-        if(prevVal.isNull()) {
-          return ref<Expr>( new ReadExpr(re));
-        }
-        OS.write(0, prevVal);
+    ref<Expr> prevVal;
+    if(isa<Argument>(allocSite)) {
+      const Argument *arg = cast<Argument>(allocSite);
+      const Function *f   = arg->getParent();
+      const KFunction *kf = caller->executor->getKFunction(f);
+      const unsigned argN = arg->getArgNo();
+      prevVal = caller->executor->getArgumentCell(*S1, kf, argN).value;
+    } else if(isa<Instruction>(allocSite)) {
+      const Instruction *inst = cast<Instruction>(allocSite);
+      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
+      prevVal = caller->executor->getDestCell(*S1, ki).value;
     } else {
-        //const ObjectState *OSptr = getOS(S1, object);
-        const ObjectState *OSptr = S1->addressSpace.findObject(object);
-        if(!OSptr) {
-            return ref<Expr>( new ReadExpr(re) );
-        }
-        assert(OSptr->size == OS.size);
-        OS.write(0, OSptr->read(0, 8*OSptr->size));
+      return new ReadExpr(re);
     }
 
+    if(prevVal.isNull() /*|| prevVal->isFalse()*/) {
+      return ref<Expr>( new ReadExpr(re));
+    }
+    OS.write(0, prevVal);
     return shareUpdates(OS, re);
 }
 //~~~~~ComposeVisitor~~~~~//

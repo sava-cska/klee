@@ -69,7 +69,7 @@ namespace klee {
 
     ~KBlock();
 
-    unsigned getArgRegister(unsigned index) { return index; }
+    unsigned getArgRegister(unsigned index) const { return index; }
     void handleKInstruction(std::map<llvm::Instruction*, unsigned> &registerMap,
                             llvm::Instruction *inst, KModule *km, KInstruction *ki);
     virtual KBlockType getKBlockType() { return KBlockType::Base; };
@@ -110,7 +110,7 @@ namespace klee {
 
     ~KFunction();
 
-    unsigned getArgRegister(unsigned index) { return index; }
+    unsigned getArgRegister(unsigned index) const { return index; }
   };
 
 

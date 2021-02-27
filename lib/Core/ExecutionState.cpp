@@ -479,3 +479,106 @@ bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSol
   if(!mayBe) return false;
   return true;
 }
+
+void ExecutionState::printCompareList(const ExecutionState &fst, const ExecutionState &snd, 
+                                      llvm::raw_ostream &os)
+{
+  os << divider(50) << divider(50) << divider(50);
+  os << "STACK\n";
+  if(fst.stack.back().kf != snd.stack.back().kf) {
+    os << "Functions mismatched\n\n";
+  }
+  auto & fstFrame = fst.stack.back();
+  auto & sndFrame = snd.stack.back();
+  for (int i = 0; i < fstFrame.kf->numRegisters; i++) {
+    if(!fstFrame.locals[i].value.isNull() || !sndFrame.locals[i].value.isNull()) {
+      os << "reg " << i << ":\n";
+      os << "state 1\n";
+      if(!fstFrame.locals[i].value.isNull())
+        os << fstFrame.locals[i].value << "\n";
+      else
+        os << "NONE\n";
+      os << "state 2\n";
+      if(!sndFrame.locals[i].value.isNull())
+        os << sndFrame.locals[i].value << "\n";
+      else
+        os << "NONE\n";
+      os << "\n" << divider(40);
+    }
+  }
+  os << divider(40) << divider(40);
+
+
+  os << "CONSTRAINTS\n";
+  os << "state 1 constraints\n" << fst.constraints << "\n" << divider(40);
+  os << "state 2 constraints\n" << fst.constraints << "\n" << divider(40);
+
+
+  os << "OBJECTS\n";
+  std::set<const MemoryObject*> common;
+  std::set<const MemoryObject*> onlyFirst;
+  std::set<const MemoryObject*> onlySecond;
+  for(const auto & obj : fst.addressSpace.objects) {
+    const ObjectState *os = snd.addressSpace.findObject(obj.first);
+    if(os) common.insert(obj.first);
+    else   onlyFirst.insert(obj.first);
+  }
+  for(const auto & obj : snd.addressSpace.objects) {
+    if(common.find(obj.first) == common.end()) 
+      onlySecond.insert(obj.first);
+  }
+  os << "Common objects : \n";
+  for(auto & obj : common) {
+    const ObjectState * objState1 = fst.addressSpace.findObject(obj);
+    const ObjectState * objState2 = snd.addressSpace.findObject(obj);
+    assert(objState1 && objState2);
+    os << obj->name << "\n";
+    os << "state 1\n" << objState1->read(0, 8*objState1->size) << "\n";
+    os << "state 2\n" << objState2->read(0, 8*objState2->size) << "\n";
+    os << "\n";
+  }
+  os << "Only in state 1 : \n";
+  for(auto & obj : onlyFirst) {
+    const ObjectState * objState1 = fst.addressSpace.findObject(obj);
+    assert(objState1);
+    os << obj->name << "\n";
+    os << objState1->read(0, 8*objState1->size) << "\n";
+    os << "\n";
+  }
+  os << "Only in state 2 : \n";
+  for(auto & obj : onlySecond) {
+    const ObjectState * objState2 = snd.addressSpace.findObject(obj);
+    assert(objState2);
+    os << obj->name << "\n";
+    os << objState2->read(0, 8*objState2->size) << "\n";
+    os << "\n";
+  }
+}
+
+void ExecutionState::print(llvm::raw_ostream &os) const
+{
+  os << divider(50) << divider(50) << divider(50);
+  os << "STACK\n";
+  auto & frame = this->stack.back();
+  for (int i = 0; i < frame.kf->numRegisters; i++) {
+    if(!frame.locals[i].value.isNull()) {
+      os << "reg " << i << ":\n";
+      os << frame.locals[i].value << "\n";
+      os << "\n" << divider(40);
+    }
+  }
+  os << divider(40) << divider(40);
+
+
+  os << "CONSTRAINTS\n";
+  os << this->constraints;
+
+
+  os << "OBJECTS\n";
+  for(auto & obj : this->addressSpace.objects) {
+    const ObjectState * objState = obj.second.get();
+    os << obj.first->name << "\n";
+    os << objState->read(0, 8*objState->size) << "\n";
+    os << "\n";
+  }
+}

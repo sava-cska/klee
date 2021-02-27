@@ -5360,9 +5360,10 @@ void Executor::runMainAsBlockSequence(Function *mainFn,
   //ExecutionState *initState = new ExecutionState(*state);
   state->popFrame();
   bindModuleConstants();
-  for (auto &kfp : kmodule->functions) {
-    getCFA(kfp->function, *state);
-  }
+  getCFA(mainFn, *state);
+  // for (auto &kfp : kmodule->functions) {
+  //   getCFA(kfp->function, *state);
+  // }
   // ExecutionState *initState = formState(mainFn, argc, argv, envp);
   // bindModuleConstants();
 
@@ -5395,6 +5396,7 @@ void Executor::runMainAsBlockSequence(Function *mainFn,
     llvm::errs() << "\nExecutionState " << ++cnt << "\n";
     llvm::errs() << "ExecutionPath  " << state->executionPath << "\n";
     llvm::errs() << state->constraints;
+    // state->print(llvm::errs());
   }
 }
 

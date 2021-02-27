@@ -293,6 +293,9 @@ public:
   void setBlockIndexes(KBlock *kb);
   bool inBasicBlockRange(unsigned index, bool isoMode);
   bool isEmpty() const;
+  // for debugging
+  static void printCompareList(const ExecutionState &, const ExecutionState &, llvm::raw_ostream &);
+  void print(llvm::raw_ostream & os) const;
 };
 
 struct ExecutionStateIDCompare {

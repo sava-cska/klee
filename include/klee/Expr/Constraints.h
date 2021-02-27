@@ -77,8 +77,9 @@ private:
   ConstraintSet &constraints;
 };
 
-
+#ifndef divider
 #define divider(n) std::string(n, '-') + "\n"
+#endif
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const ConstraintSet &constraints)
 {

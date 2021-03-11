@@ -166,16 +166,10 @@ ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
   return newState;
 }
 
-ExecutionState *ExecutionState::withStackFrame(KFunction *kf) {
-  ExecutionState *newState = new ExecutionState(*this);
-  newState->setID();
-  newState->pushFrame(nullptr, kf);
-  return newState;
-}
-
 ExecutionState *ExecutionState::withKBlock(KBlock *kb) {
   ExecutionState *newState = new ExecutionState(*this);
   newState->setID();
+  newState->pushFrame(nullptr, kb->parent);
   newState->initPC = kb->instructions;
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;

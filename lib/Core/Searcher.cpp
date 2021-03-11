@@ -497,15 +497,18 @@ void WeightedRandomSearcher::printName(llvm::raw_ostream &os) {
 #define IS_OUR_NODE_VALID(n)                                                   \
   (((n).getPointer() != nullptr) && (((n).getInt() & idBitMask) != 0))
 
-RandomPathSearcher::RandomPathSearcher(PTree &processTree, RNG &rng)
-  : processTree{processTree},
+RandomPathSearcher::RandomPathSearcher(PForest &processForest, RNG &rng)
+  : processForest{processForest},
     theRNG{rng},
-    idBitMask{processTree.getNextId()} {};
+    idBitMask{processForest.getNextId()} {};
 
 ExecutionState &RandomPathSearcher::selectState() {
-  unsigned flips=0, bits=0;
-  assert(processTree.root.getInt() & idBitMask && "Root should belong to the searcher");
-  PTreeNode *n = processTree.root.getPointer();
+  unsigned flips=0, bits=0, range=theRNG.getInt32();
+  PTreeNodePtr *root = nullptr;
+  while (!root || !IS_OUR_NODE_VALID(*root))
+    root = &processForest.trees[range++ % processForest.trees.size() + 1]->root;
+  assert(root->getInt() & idBitMask && "Root should belong to the searcher");
+  PTreeNode *n = root->getPointer();
   while (!n->state) {
     if (!IS_OUR_NODE_VALID(n->left)) {
       assert(IS_OUR_NODE_VALID(n->right) && "Both left and right nodes invalid");
@@ -534,11 +537,12 @@ void RandomPathSearcher::update(ExecutionState *current,
   // insert states
   for (auto &es : addedStates) {
     PTreeNode *pnode = es->ptreeNode, *parent = pnode->parent;
+    PTreeNodePtr &root = processForest.trees[pnode->getTreeID()]->root;
     PTreeNodePtr *childPtr;
 
     childPtr = parent ? ((parent->left.getPointer() == pnode) ? &parent->left
                                                               : &parent->right)
-                      : &processTree.root;
+                      : &root;
     while (pnode && !IS_OUR_NODE_VALID(*childPtr)) {
       childPtr->setInt(childPtr->getInt() | idBitMask);
       pnode = parent;
@@ -548,20 +552,21 @@ void RandomPathSearcher::update(ExecutionState *current,
       childPtr = parent
                      ? ((parent->left.getPointer() == pnode) ? &parent->left
                                                              : &parent->right)
-                     : &processTree.root;
+                     : &root;
     }
   }
 
   // remove states
   for (auto &es : removedStates) {
     PTreeNode *pnode = es->ptreeNode, *parent = pnode->parent;
+    PTreeNodePtr &root = processForest.trees[pnode->getTreeID()]->root;
 
     while (pnode && !IS_OUR_NODE_VALID(pnode->left) &&
            !IS_OUR_NODE_VALID(pnode->right)) {
       auto childPtr =
           parent ? ((parent->left.getPointer() == pnode) ? &parent->left
                                                          : &parent->right)
-                 : &processTree.root;
+                 : &root;
       assert(IS_OUR_NODE_VALID(*childPtr) && "Removing pTree child not ours");
       childPtr->setInt(childPtr->getInt() & ~idBitMask);
       pnode = parent;
@@ -572,7 +577,10 @@ void RandomPathSearcher::update(ExecutionState *current,
 }
 
 bool RandomPathSearcher::empty() {
-  return !IS_OUR_NODE_VALID(processTree.root);
+  bool res = true;
+  for (auto ntree : processForest.trees)
+    res = res && !IS_OUR_NODE_VALID(ntree.second->root);
+  return res;
 }
 
 void RandomPathSearcher::printName(llvm::raw_ostream &os) {
@@ -726,7 +734,7 @@ void IterativeDeepeningTimeSearcher::update(ExecutionState *current,
         pausedStates.erase(it);
         alt.erase(std::remove(alt.begin(), alt.end(), state), alt.end());
       }
-    }    
+    }
     baseSearcher->update(current, addedStates, alt);
   } else {
     baseSearcher->update(current, addedStates, removedStates);

@@ -74,7 +74,7 @@ namespace klee {
   class MemoryManager;
   class MemoryObject;
   class ObjectState;
-  class PTree;
+  class PForest;
   class Searcher;
   class SeedInfo;
   class SpecialFunctionHandler;
@@ -155,7 +155,7 @@ private:
   TreeStreamWriter *pathWriter, *symPathWriter;
   SpecialFunctionHandler *specialFunctionHandler;
   TimerGroup timers;
-  std::unique_ptr<PTree> processTree;
+  std::unique_ptr<PForest> processForest;
 
   /// Used to track states that have been added during the current
   /// instructions step. 
@@ -260,11 +260,13 @@ private:
   void targetedRun(ExecutionState &initialState, KBlock *target);
   void guidedRun(ExecutionState &initialState);
   void boundedRun(ExecutionState &initialState, unsigned bound);
+  void coveredRun(ExecutionState &initialState);
 
   void seed(ExecutionState &initialState);
   void run(ExecutionState &initialState);
-  void runWithTarget(ExecutionState &state, KFunction *kf, KBlock *target);
-  void runGuided(ExecutionState &state, KFunction *kf);
+  void runWithTarget(ExecutionState &state, KBlock *target);
+  void runGuided(ExecutionState &state);
+  void runCovered(ExecutionState &state);
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
@@ -279,6 +281,7 @@ private:
   void allocateGlobalObjects(ExecutionState &state);
   void initializeGlobalAliases();
   void initializeGlobalObjects(ExecutionState &state);
+  void initializeRoot(ExecutionState &state, KBlock *kb);
 
   void stepInstruction(ExecutionState &state);
   void updateStates(ExecutionState *current);
@@ -533,7 +536,7 @@ private:
 
   /// Only for debug purposes; enable via debugger or klee-control
   void dumpStates();
-  void dumpPTree();
+  void dumpPTForest();
 
 public:
   Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
@@ -627,6 +630,7 @@ public:
   const Array * makeArray(ExecutionState &state, const uint64_t size, const std::string &name);
   void executeStep(ExecutionState &state);
   bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
+  void coveredExecuteStep(ExecutionState &state, ExecutionState &initialState);
   KBlock* calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,
                                ExecutedBlock &pausedStates,

@@ -19,6 +19,7 @@ klee_add_component(kleeCore
   ImpliedValue.cpp
   Memory.cpp
   MemoryManager.cpp
+  PForest.cpp
   PTree.cpp
   Searcher.cpp
   SeedInfo.cpp

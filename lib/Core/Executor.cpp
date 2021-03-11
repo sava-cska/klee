@@ -17,7 +17,7 @@
 #include "ImpliedValue.h"
 #include "Memory.h"
 #include "MemoryManager.h"
-#include "PTree.h"
+#include "PForest.h"
 #include "Searcher.h"
 #include "SeedInfo.h"
 #include "SpecialFunctionHandler.h"
@@ -132,7 +132,6 @@ cl::opt<bool> UseGEPExpr(
     cl::init(true),
     cl::desc("Kind of execution mode"),
     cl::cat(ExecCat));
-
 
 } // namespace klee
 
@@ -444,8 +443,8 @@ cl::opt<bool> DebugCheckForImpliedValues(
 } // namespace
 
 // XXX hack
-extern "C" unsigned dumpStates, dumpPTree;
-unsigned dumpStates = 0, dumpPTree = 0;
+extern "C" unsigned dumpStates, dumpPTForest;
+unsigned dumpStates = 0, dumpPTForest = 0;
 
 const char *Executor::TerminateReasonNames[] = {
   [ Abort ] = "abort",
@@ -883,6 +882,14 @@ void Executor::initializeGlobalObjects(ExecutionState &state) {
   }
 }
 
+void Executor::initializeRoot(ExecutionState &state, KBlock *kb) {
+  ExecutionState *root = state.withKBlock(kb);
+  prepareSymbolicArgs(*root, kb->parent);
+  if (statsTracker)
+    statsTracker->framePushed(*root, 0);
+  processForest->addRoot(root);
+  addedStates.push_back(root);
+}
 
 bool Executor::branchingPermitted(const ExecutionState &state) const {
   if ((MaxMemoryInhibit && atMemoryLimit) ||
@@ -931,7 +938,7 @@ void Executor::branch(ExecutionState &state,
       ExecutionState *ns = es->branch();
       addedStates.push_back(ns);
       result.push_back(ns);
-      processTree->attach(es->ptreeNode, ns, es);
+      processForest->attach(es->ptreeNode, ns, es);
     }
   }
 
@@ -1171,7 +1178,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
       }
     }
 
-    processTree->attach(current.ptreeNode, falseState, trueState);
+    processForest->attach(current.ptreeNode, falseState, trueState);
 
     if (pathWriter) {
       // Need to update the pathOS.id field of falseState, otherwise the same id
@@ -3334,7 +3341,7 @@ void Executor::updateStates(ExecutionState *current) {
       seedMap.erase(it3);
     if (results[es->getInitPCBlock()].pausedStates.count(es->getPCBlock()) == 0 ||
         results[es->getInitPCBlock()].pausedStates[es->getPCBlock()].count(es) == 0) {
-      processTree->remove(es->ptreeNode);
+      processForest->remove(es->ptreeNode);
       delete es;
     }
   }
@@ -3500,7 +3507,7 @@ void Executor::seed(ExecutionState &initialState) {
     executeInstruction(state, ki);
     timers.invoke();
     if (::dumpStates) dumpStates();
-    if (::dumpPTree) dumpPTree();
+    if (::dumpPTForest) dumpPTForest();
     updateStates(&state);
 
     if ((stats::instructions % 1000) == 0) {
@@ -3563,7 +3570,7 @@ void Executor::run(ExecutionState &initialState) {
   haltExecution = false;
 }
 
-void Executor::runWithTarget(ExecutionState &state, KFunction *kf, KBlock *target) {
+void Executor::runWithTarget(ExecutionState &state, KBlock *target) {
   if (pathWriter)
     state.pathOS = pathWriter->open();
   if (symPathWriter)
@@ -3572,15 +3579,16 @@ void Executor::runWithTarget(ExecutionState &state, KFunction *kf, KBlock *targe
   if (statsTracker)
     statsTracker->framePushed(state, 0);
 
-  processTree = std::make_unique<PTree>(&state);
+  processForest = std::make_unique<PForest>();
+  processForest->addRoot(&state);
   targetedRun(state, target);
-  processTree = nullptr;
+  processForest = nullptr;
 
   if (statsTracker)
     statsTracker->done();
 }
 
-void Executor::runGuided(ExecutionState &state, KFunction *kf) {
+void Executor::runGuided(ExecutionState &state) {
   if (pathWriter)
     state.pathOS = pathWriter->open();
   if (symPathWriter)
@@ -3589,9 +3597,28 @@ void Executor::runGuided(ExecutionState &state, KFunction *kf) {
  if (statsTracker)
    statsTracker->framePushed(state, 0);
 
-  processTree = std::make_unique<PTree>(&state);
+  processForest = std::make_unique<PForest>();
+  processForest->addRoot(&state);
   guidedRun(state);
-  processTree = nullptr;
+  processForest = nullptr;
+
+  if (statsTracker)
+    statsTracker->done();
+}
+
+void Executor::runCovered(ExecutionState &state) {
+  if (pathWriter)
+    state.pathOS = pathWriter->open();
+  if (symPathWriter)
+    state.symPathOS = symPathWriter->open();
+
+ if (statsTracker)
+   statsTracker->framePushed(state, 0);
+
+  processForest = std::make_unique<PForest>();
+  processForest->addRoot(&state);
+  coveredRun(state);
+  processForest = nullptr;
 
   if (statsTracker)
     statsTracker->done();
@@ -3606,7 +3633,7 @@ void Executor::executeStep(ExecutionState &state) {
 
   timers.invoke();
   if (::dumpStates) dumpStates();
-  if (::dumpPTree) dumpPTree();
+  if (::dumpPTForest) dumpPTForest();
 
   updateStates(&state);
 
@@ -3629,6 +3656,36 @@ bool Executor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
 
   executeStep(state);
   return true;
+}
+
+void Executor::coveredExecuteStep(ExecutionState &state, ExecutionState &initialState) {
+  KInstruction *prevKI = state.prevPC;
+  KFunction *pcKF = kmodule->functionMap[state.getPCBlock()->getParent()];
+  KBlock *pcKB = pcKF->blockMap[state.getPCBlock()];
+
+  if (prevKI->inst->isTerminator() || isa<CallInst>(prevKI->inst) || isa<InvokeInst>(prevKI->inst)) {
+    addCompletedResult(state);
+    pauseState(state);
+    if (results.find(state.getPCBlock()) == results.end()) {
+      results[state.getPCBlock()];
+      initializeRoot(initialState, pcKB);
+    }
+    if (isa<CallInst>(prevKI->inst) || isa<InvokeInst>(prevKI->inst)) {
+      for (succ_iterator it = succ_begin(state.getPrevPCBlock()), ie = succ_end(state.getPrevPCBlock()); it != ie; ++it) {
+        BasicBlock *bb = *it;
+        KFunction *kf = kmodule->functionMap[bb->getParent()];
+        KBlock *kb = kf->blockMap[bb];
+        if (results.find(bb) == results.end()) {
+          results[bb];
+          initializeRoot(initialState, kb);
+        }
+      }
+    }
+    updateStates(nullptr);
+    return;
+  }
+
+  executeStep(state);
 }
 
 void Executor::boundedRun(ExecutionState &initialState, unsigned bound) {
@@ -3840,6 +3897,37 @@ void Executor::guidedRun(ExecutionState &initialState) {
   haltExecution = false;
 }
 
+void Executor::coveredRun(ExecutionState &state) {
+  ExecutionState *initialState = state.copy();
+  initialState->stack.clear();
+
+  // Delay init till now so that ticks don't accrue during optimization and such.
+  timers.reset();
+
+  states.insert(&state);
+
+  if (usingSeeds) {
+    seed(state);
+  }
+
+  searcher = constructUserSearcher(*this);
+
+  std::vector<ExecutionState *> newStates(states.begin(), states.end());
+  searcher->update(0, newStates, std::vector<ExecutionState *>());
+
+  // main interpreter loop
+  while (!states.empty() && !haltExecution) {
+    ExecutionState &es = searcher->selectState();
+    coveredExecuteStep(es, *initialState);
+  }
+
+  delete searcher;
+  searcher = nullptr;
+
+  doDumpStates();
+  haltExecution = false;
+}
+
 std::string Executor::getAddressInfo(ExecutionState &state, 
                                      ref<Expr> address) const {
   std::string Str;
@@ -3921,7 +4009,7 @@ void Executor::terminateState(ExecutionState &state) {
     if (it3 != seedMap.end())
       seedMap.erase(it3);
     addedStates.erase(ita);
-    processTree->remove(state.ptreeNode);
+    processForest->remove(state.ptreeNode);
   }
 }
 
@@ -4907,10 +4995,11 @@ void Executor::runFunctionAsMain(Function *f,
   if (statsTracker)
     statsTracker->framePushed(*state, 0);
 
-  processTree = std::make_unique<PTree>(state);
+  processForest = std::make_unique<PForest>();
+  processForest->addRoot(state);
   bindModuleConstants();
   run(*state);
-  processTree = nullptr;
+  processForest = nullptr;
 
   // hack to clear memory objects
   delete memory;
@@ -4927,12 +5016,12 @@ void Executor::runFunctionGuided(Function *fn,
                                           char **argv,
                                           char **envp) {
   ExecutionState *state = formState(fn, argc, argv, envp);
-  state->popFrame();
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[fn];
+  state->stack.clear();
   ExecutionState *initialState = state->withKFunction(kf);
   prepareSymbolicArgs(*initialState, kf);
-  runGuided(*initialState, kf);
+  runGuided(*initialState);
   // hack to clear memory objects
   delete memory;
   memory = new MemoryManager(NULL);
@@ -4946,7 +5035,8 @@ void Executor::runMainAsGuided(Function *mainFn,
   ExecutionState *state = formState(mainFn, argc, argv, envp);
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[mainFn];
-  runGuided(*state, kf);
+  runCovered(*state);
+//  runGuided(*state);
   // hack to clear memory objects
   delete memory;
   memory = new MemoryManager(NULL);
@@ -4962,7 +5052,7 @@ void Executor::runMainWithTarget(Function *mainFn,
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[mainFn];
   KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
-  runWithTarget(*state, kf, kb);
+  runWithTarget(*state, kb);
   // hack to clear memory objects
   delete memory;
   memory = new MemoryManager(NULL);
@@ -5204,17 +5294,17 @@ int *Executor::getErrnoLocation(const ExecutionState &state) const {
 }
 
 
-void Executor::dumpPTree() {
-  if (!::dumpPTree) return;
+void Executor::dumpPTForest() {
+  if (!::dumpPTForest) return;
 
   char name[32];
-  snprintf(name, sizeof(name),"ptree%08d.dot", (int) stats::instructions);
+  snprintf(name, sizeof(name),"pforest%08d.dot", (int) stats::instructions);
   auto os = interpreterHandler->openOutputFile(name);
   if (os) {
-    processTree->dump(*os);
+    processForest->dump(*os);
   }
 
-  ::dumpPTree = 0;
+  ::dumpPTForest = 0;
 }
 
 void Executor::dumpStates() {

@@ -270,7 +270,6 @@ public:
 
   ExecutionState *branch();
   ExecutionState *withKFunction(KFunction *kf);
-  ExecutionState *withStackFrame(KFunction *kf);
   ExecutionState *withKBlock(KBlock *kb);
   ExecutionState *empty();
   ExecutionState *copy();

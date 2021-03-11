@@ -11,7 +11,7 @@
 #define KLEE_SEARCHER_H
 
 #include "ExecutionState.h"
-#include "PTree.h"
+#include "PForest.h"
 #include "klee/ADT/RNG.h"
 #include "klee/System/Time.h"
 
@@ -224,7 +224,7 @@ namespace klee {
   ///
   /// The ownership bits are maintained in the update method.
   class RandomPathSearcher final : public Searcher {
-    PTree &processTree;
+    PForest &processForest;
     RNG &theRNG;
 
     // Unique bitmask of this searcher
@@ -233,7 +233,7 @@ namespace klee {
   public:
     /// \param processTree The process tree.
     /// \param RNG A random number generator.
-    RandomPathSearcher(PTree &processTree, RNG &rng);
+    RandomPathSearcher(PForest &processForest, RNG &rng);
     ~RandomPathSearcher() override = default;
 
     ExecutionState &selectState() override;

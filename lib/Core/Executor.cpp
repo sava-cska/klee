@@ -3729,7 +3729,7 @@ void Executor::targetedRun(ExecutionState &initialState, KBlock *target) {
   // main interpreter loop
   KInstruction *terminator = target != nullptr ? target->instructions[target->numInstructions - 1] : nullptr;
   while (!states.empty() && !haltExecution) {
-    if (!searcher->empty() && !haltExecution) {
+    while (!searcher->empty() && !haltExecution) {
       ExecutionState &state = searcher->selectState();
 
       KInstruction *ki = state.pc;

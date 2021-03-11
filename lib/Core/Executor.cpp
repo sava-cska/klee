@@ -3995,7 +3995,8 @@ void Executor::terminateState(ExecutionState &state) {
       return;
   }
 
-  interpreterHandler->incPathsExplored();
+  if (state.pathCompleted)
+    interpreterHandler->incPathsExplored();
 
   std::vector<ExecutionState *>::iterator ita =
       std::find(addedStates.begin(), addedStates.end(), &state);
@@ -4051,8 +4052,8 @@ void Executor::unpauseStates(std::vector<ExecutionState *> &states) {
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
-  if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state)))
+  if (state.pathCompleted && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+      (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
   addCompletedResult(state);
   addHistoryResult(state);
@@ -4164,7 +4165,8 @@ void Executor::terminateStateOnError(ExecutionState &state,
       suffix = suffix_buf.c_str();
     }
 
-    interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
+    if (state.pathCompleted)
+      interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
   }
 
   addErroneousResult(state);
@@ -5033,6 +5035,7 @@ void Executor::runMainAsGuided(Function *mainFn,
                                       char **argv,
                                       char **envp) {
   ExecutionState *state = formState(mainFn, argc, argv, envp);
+  state->pathCompleted = false;
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[mainFn];
   runCovered(*state);

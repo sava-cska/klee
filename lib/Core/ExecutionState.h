@@ -251,6 +251,9 @@ public:
   /// @brief The target basic block that the state must achieve
   KBlock *target;
 
+  /// @brief Readiness state to process a test case
+  bool pathCompleted;
+
 public:
   #ifdef KLEE_UNITTEST
   // provide this function only in the context of unittests

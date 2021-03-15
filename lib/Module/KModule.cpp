@@ -362,11 +362,11 @@ static void splitByCall(Function *function) {
     while (it != ie) {
       if (isa<CallInst>(it)) {
         Instruction *callInst = &*it++;
-        Instruction *afterCallInst = &*it;
-        if (afterCallInst->isTerminator() && !isa<InvokeInst>(afterCallInst))
-          continue;
+        Instruction *afterCallInst = &*it++;
         if (callInst != firstInst)
           fbb = fbb->splitBasicBlock(callInst);
+        if (afterCallInst->isTerminator() && !isa<InvokeInst>(afterCallInst))
+          continue;
         fbb = fbb->splitBasicBlock(afterCallInst);
         it = fbb->begin();
         ie = fbb->end();

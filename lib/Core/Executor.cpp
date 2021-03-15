@@ -888,7 +888,7 @@ void Executor::initializeRoot(ExecutionState &state, KBlock *kb) {
   if (statsTracker)
     statsTracker->framePushed(*root, 0);
   processForest->addRoot(root);
-  addedStates.push_back(root);
+  states.insert(root);
 }
 
 bool Executor::branchingPermitted(const ExecutionState &state) const {
@@ -3339,8 +3339,7 @@ void Executor::updateStates(ExecutionState *current) {
       seedMap.find(es);
     if (it3 != seedMap.end())
       seedMap.erase(it3);
-    if (results[es->getInitPCBlock()].pausedStates.count(es->getPCBlock()) == 0 ||
-        results[es->getInitPCBlock()].pausedStates[es->getPCBlock()].count(es) == 0) {
+    if (es->pathCompleted) {
       processForest->remove(es->ptreeNode);
       delete es;
     }
@@ -3659,28 +3658,21 @@ bool Executor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
 }
 
 void Executor::coveredExecuteStep(ExecutionState &state, ExecutionState &initialState) {
+  KInstruction *ki = state.pc;
   KInstruction *prevKI = state.prevPC;
-  KFunction *pcKF = kmodule->functionMap[state.getPCBlock()->getParent()];
-  KBlock *pcKB = pcKF->blockMap[state.getPCBlock()];
 
-  if (prevKI->inst->isTerminator() || isa<CallInst>(prevKI->inst) || isa<InvokeInst>(prevKI->inst)) {
+  if (prevKI->inst->isTerminator() && prevKI != ki &&
+      (state.getPCBlock()->hasNPredecessorsOrMore(2) || ki->isCallOrInvokeInst())) {
     addCompletedResult(state);
-    pauseState(state);
-    if (results.find(state.getPCBlock()) == results.end()) {
-      results[state.getPCBlock()];
-      initializeRoot(initialState, pcKB);
-    }
-    if (isa<CallInst>(prevKI->inst) || isa<InvokeInst>(prevKI->inst)) {
-      for (succ_iterator it = succ_begin(state.getPrevPCBlock()), ie = succ_end(state.getPrevPCBlock()); it != ie; ++it) {
-        BasicBlock *bb = *it;
-        KFunction *kf = kmodule->functionMap[bb->getParent()];
-        KBlock *kb = kf->blockMap[bb];
-        if (results.find(bb) == results.end()) {
-          results[bb];
-          initializeRoot(initialState, kb);
-        }
-      }
-    }
+    silentRemove(state);
+    updateStates(nullptr);
+    return;
+  }
+  if (state.redundant || ki->isCallOrInvokeInst()) {
+    if (state.redundant)
+      pauseRedundantState(state);
+    else
+      pauseState(state);
     updateStates(nullptr);
     return;
   }
@@ -3882,6 +3874,7 @@ void Executor::guidedRun(ExecutionState &initialState) {
         if (target) {
           state.target = target;
           unpauseState(state);
+          updateStates(nullptr);
         }
       }
     }
@@ -3905,6 +3898,17 @@ void Executor::coveredRun(ExecutionState &state) {
   timers.reset();
 
   states.insert(&state);
+
+  Function *kmsf = kmodule->module->getFunction(llvm::StringRef("klee_make_symbolic"));
+  for (auto &kf : kmodule->functions) {
+    for (auto &kb : kf->blocks) {
+      if (kb->basicBlock->hasNPredecessorsOrMore(2) ||
+          (kb->getKBlockType() == KBlockType::Call && ((KCallBlock*)kb.get())->calledFunction != kmsf) ||
+          (kb->basicBlock->getSinglePredecessor() &&
+           kf->blockMap[kb->basicBlock->getSinglePredecessor()]->getKBlockType() == KBlockType::Call))
+        initializeRoot(*initialState, kb.get());
+    }
+  }
 
   if (usingSeeds) {
     seed(state);
@@ -4010,23 +4014,38 @@ void Executor::terminateState(ExecutionState &state) {
     if (it3 != seedMap.end())
       seedMap.erase(it3);
     addedStates.erase(ita);
-    processForest->remove(state.ptreeNode);
+    if (state.pathCompleted) {
+      processForest->remove(state.ptreeNode);
+    }
   }
 }
 
 void Executor::terminateStateEarly(ExecutionState &state, 
                                    const Twine &message) {
-  if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state)))
+  if (!state.isolated)
+    state.pathCompleted = true;
+  if (state.pathCompleted && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+      (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, (message + "\n").str().c_str(),
                                         "early");
   terminateState(state);
 }
 
+void Executor::silentRemove(ExecutionState &state) {
+  state.pathCompleted = false;
+  removedStates.push_back(&state);
+}
+
 void Executor::pauseState(ExecutionState &state) {
+  state.pathCompleted = false;
   results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
-  states.erase(&state);
-  searcher->update(nullptr, {}, {&state});
+  removedStates.push_back(&state);
+}
+
+void Executor::pauseRedundantState(ExecutionState &state) {
+  state.pathCompleted = false;
+  results[state.getInitPCBlock()].redundantStates[state.getPCBlock()].insert(&state);
+  removedStates.push_back(&state);
 }
 
 void Executor::unpauseState(ExecutionState &state) {
@@ -4035,8 +4054,7 @@ void Executor::unpauseState(ExecutionState &state) {
   pausedStates[state.getPCBlock()].erase(&state);
   if (pausedStates[state.getPCBlock()].empty())
     pausedStates.erase(state.getPCBlock());
-  this->states.insert(&state);
-  searcher->update(nullptr, { &state }, {});
+  addedStates.push_back(&state);
 }
 
 void Executor::unpauseStates(std::vector<ExecutionState *> &states) {
@@ -4052,6 +4070,8 @@ void Executor::unpauseStates(std::vector<ExecutionState *> &states) {
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
+  if (!state.isolated)
+    state.pathCompleted = true;
   if (state.pathCompleted && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
@@ -4064,7 +4084,6 @@ void Executor::terminateStateOnTerminator(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
-  addHistoryResult(state);
   terminateState(state);
 }
 
@@ -4165,6 +4184,8 @@ void Executor::terminateStateOnError(ExecutionState &state,
       suffix = suffix_buf.c_str();
     }
 
+    if (!state.isolated)
+      state.pathCompleted = true;
     if (state.pathCompleted)
       interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
   }
@@ -4538,7 +4559,7 @@ void Executor::resolveExact(ExecutionState &state,
   }
 
   if (unbound) {
-    if (UseGEPExpr && isa<GEPExpr>(p)) {
+    if (isa<ReadExpr>(p) || isa<ConcatExpr>(p) || (UseGEPExpr && isa<GEPExpr>(p))) {
       terminateStateEarly(*unbound, "insufficient information: symbolic size of object in isolationMode.");
     } else {
       terminateStateOnError(*unbound, "memory error: invalid pointer: " + name,
@@ -4565,6 +4586,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
   unsigned bytes = Expr::getMinBytesForWidth(type);
   ref<Expr> unsafeAddress = UseGEPExpr && isa<GEPExpr>(address) ? dyn_cast<GEPExpr>(address)->address : address;
+  ref<Expr> base = UseGEPExpr && isa<GEPExpr>(address) ? cast<GEPExpr>(address)->base : unsafeAddress;
+  unsigned size = UseGEPExpr && isa<GEPExpr>(address) ? cast<GEPExpr>(address)->sourceSize : bytes;
 
   if (SimplifySymIndices) {
     if (!isa<ConstantExpr>(unsafeAddress))
@@ -4632,20 +4655,17 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
       return;
     }
-  } 
+  }
 
   // we are on an error path (no resolution, multiple resolution, one
   // resolution with out of bounds)
 
   unsafeAddress = optimizer.optimizeExpr(unsafeAddress, true);
-  ResolutionList rl;  
+  ResolutionList rl;
   solver->setTimeout(coreSolverTimeout);
   bool incomplete;
 
-  if (UseGEPExpr && isa<GEPExpr>(address))
-      incomplete = state.addressSpace.resolve(state, solver, dyn_cast<GEPExpr>(address)->base, rl, 0, coreSolverTimeout);
-  else
-      incomplete = state.addressSpace.resolve(state, solver, unsafeAddress, rl, 0, coreSolverTimeout);
+ incomplete = state.addressSpace.resolve(state, solver, base, rl, 0, coreSolverTimeout);
 
   solver->setTimeout(time::Span());
 
@@ -4658,16 +4678,17 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
 
-    if (UseGEPExpr && isa<GEPExpr>(address)) {
-      auto gep = dyn_cast<GEPExpr>(address);
-      inBounds = AndExpr::create(inBounds, mo->getBoundsCheckPointer(gep->base, gep->sourceSize));
-    }
+    if (UseGEPExpr && isa<GEPExpr>(address))
+      inBounds = AndExpr::create(inBounds, mo->getBoundsCheckPointer(base, size));
 
     StatePair branches = fork(*unbound, inBounds, true);
     ExecutionState *bound = branches.first;
+    unbound = branches.second;
 
     // bound can be 0 on failure or overlapped 
     if (bound) {
+      if (unbound)
+        bound->redundant = true;
       switch (operation) {
         case Write: {
           if (os->readOnly) {
@@ -4687,7 +4708,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       }
     }
 
-    unbound = branches.second;
     if (!unbound)
       break;
   }
@@ -4697,9 +4717,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
     } else if (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isa<GEPExpr>(address))) {
-      ref<Expr> base = UseGEPExpr && isa<GEPExpr>(address) ? cast<GEPExpr>(address)->base : unsafeAddress;
-      unsigned size = UseGEPExpr && isa<GEPExpr>(address) ? cast<GEPExpr>(address)->sourceSize : bytes;
-
       ObjectPair p = lazyInstantiateVariable(*unbound, base, target, size);
       assert(p.first && p.second);
 
@@ -4713,21 +4730,26 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       solver->setTimeout(time::Span());
 
       if (res ==Solver::False) {
-        terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
-                              NULL, getAddressInfo(*unbound, address));
-      } else {
+        if (unbound->isolated) {
+          p = lazyInstantiateVariable(*unbound, unsafeAddress, target, bytes);
+          mo = p.first;
+        } else {
+          terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
+                                NULL, getAddressInfo(*unbound, address));
+          return;
+        }
+      } else
         unbound->addConstraint(inBounds);
-        switch (operation) {
-          case Write: {
-            ObjectState *wos = unbound->addressSpace.getWriteable(p.first, p.second);
-            wos->write(p.first->getOffsetExpr(unsafeAddress), value);
-            break;
-          }
-          case Read: {
-            ref<Expr> result = p.second->read(p.first->getOffsetExpr(unsafeAddress), type);
-            bindLocal(target, *unbound, result);
-            break;
-          }
+      switch (operation) {
+        case Write: {
+          ObjectState *wos = unbound->addressSpace.getWriteable(p.first, p.second);
+          wos->write(p.first->getOffsetExpr(unsafeAddress), value);
+          break;
+        }
+        case Read: {
+          ref<Expr> result = p.second->read(p.first->getOffsetExpr(unsafeAddress), type);
+          bindLocal(target, *unbound, result);
+          break;
         }
       }
     } else {
@@ -5035,7 +5057,7 @@ void Executor::runMainAsGuided(Function *mainFn,
                                       char **argv,
                                       char **envp) {
   ExecutionState *state = formState(mainFn, argc, argv, envp);
-  state->pathCompleted = false;
+  state->isolated = true;
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[mainFn];
   runCovered(*state);

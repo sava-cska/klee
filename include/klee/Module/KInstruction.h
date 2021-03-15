@@ -15,6 +15,7 @@
 
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Instruction.h"
 
 #include <vector>
 
@@ -49,6 +50,7 @@ namespace klee {
     explicit KInstruction(const KInstruction& ki);
     virtual ~KInstruction();
     std::string getSourceLocation() const;
+    bool isCallOrInvokeInst();
 
   };
 

@@ -36,3 +36,7 @@ std::string KInstruction::getSourceLocation() const {
            std::to_string(info->column);
   else return "[no debug info]";
 }
+
+bool KInstruction::isCallOrInvokeInst() {
+  return inst->getOpcode() == llvm::Instruction::Call || inst->getOpcode() == llvm::Instruction::Invoke;
+}

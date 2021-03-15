@@ -248,11 +248,14 @@ public:
   /// @brief Disables forking for this state. Set by user code
   bool forkDisabled;
 
-  /// @brief The target basic block that the state must achieve
-  KBlock *target;
-
   /// @brief Readiness state to process a test case
   bool pathCompleted;
+
+  bool isolated;
+  bool redundant;
+
+  /// @brief The target basic block that the state must achieve
+  KBlock *target;
 
 public:
   #ifdef KLEE_UNITTEST

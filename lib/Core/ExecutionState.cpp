@@ -85,8 +85,10 @@ ExecutionState::ExecutionState(KFunction *kf) :
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
-    target(nullptr),
-    pathCompleted(true) {
+    pathCompleted(false),
+    isolated(false),
+    redundant(false),
+    target(nullptr) {
   pushFrame(nullptr, kf);
   setID();
 }
@@ -103,8 +105,10 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
-    target(nullptr),
-    pathCompleted(true) {
+    pathCompleted(false),
+    isolated(false),
+    redundant(false),
+    target(nullptr) {
   pushFrame(nullptr, kf);
   setID();
 }
@@ -142,8 +146,10 @@ ExecutionState::ExecutionState(const ExecutionState& state):
                              : nullptr),
     coveredNew(state.coveredNew),
     forkDisabled(state.forkDisabled),
-    target(state.target),
-    pathCompleted(state.pathCompleted) {
+    pathCompleted(state.pathCompleted),
+    isolated(state.isolated),
+    redundant(state.redundant),
+    target(state.target) {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
 }

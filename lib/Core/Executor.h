@@ -481,8 +481,10 @@ private:
   void terminateState(ExecutionState &state);
   // call exit handler and terminate state
   void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
+  void silentRemove(ExecutionState &state);
   // pause state
   void pauseState(ExecutionState &state);
+  void pauseRedundantState(ExecutionState &state);
   // unpause state
   void unpauseState(ExecutionState &state);
   void unpauseStates(std::vector<ExecutionState *> &states);

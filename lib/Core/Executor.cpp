@@ -4519,7 +4519,8 @@ void Executor::executeFree(ExecutionState &state,
     for (Executor::ExactResolutionList::iterator it = rl.begin(), 
            ie = rl.end(); it != ie; ++it) {
       const MemoryObject *mo = it->first.first;
-      if (mo->isLocal) {
+      if (it->second->isolated && (mo->isGlobal || mo->isLocal)) {
+      } else if (mo->isLocal) {
         terminateStateOnError(*it->second, "free of alloca", Free, NULL,
                               getAddressInfo(*it->second, address));
       } else if (mo->isGlobal) {
@@ -4675,6 +4676,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) {
     const MemoryObject *mo = i->first;
     const ObjectState *os = i->second;
+
+    if (unbound->isolated && mo->isGlobal)
+      break;
 
     ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
 

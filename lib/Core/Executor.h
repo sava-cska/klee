@@ -144,16 +144,28 @@ private:
   static const char *TerminateReasonNames[];
 
   std::unique_ptr<KModule> kmodule;
+
   InterpreterHandler *interpreterHandler;
+
   Searcher *searcher;
 
   ExternalDispatcher *externalDispatcher;
+
   TimingSolver *solver;
+
   MemoryManager *memory;
+
   std::set<ExecutionState*, ExecutionStateIDCompare> states;
+  ExecutionResult cfaIsolatedResult;
+
+  std::set<ExecutionState*> finalStates;
+
   StatsTracker *statsTracker;
+
   TreeStreamWriter *pathWriter, *symPathWriter;
+
   SpecialFunctionHandler *specialFunctionHandler;
+
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
 
@@ -217,6 +229,9 @@ private:
   /// Whether implied-value concretization is enabled. Currently
   /// false, it is buggy (it needs to validate its writes).
   bool ivcEnabled;
+
+  /// used to make choice between transferToBasicBlock and composition
+  bool prefereComposition = false;
 
   /// The maximum time to allow for a single core solver query.
   /// (e.g. for a single STP query)
@@ -287,8 +302,8 @@ private:
   void updateStates(ExecutionState *current);
   void filterStates(ExecutionState *current);
   void transferToBasicBlock(llvm::BasicBlock *dst,
-			    llvm::BasicBlock *src,
-			    ExecutionState &state);
+			                      llvm::BasicBlock *src,
+                            ExecutionState &state);
 
   void callExternalFunction(ExecutionState &state,
                             KInstruction *target,
@@ -364,14 +379,17 @@ private:
                    llvm::Function *f,
                    std::vector< ref<Expr> > &arguments);
                    
+public:
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
   void executeMemoryOperation(ExecutionState &state,
                               MemoryOperation operation,
                               ref<Expr> address,
                               ref<Expr> value /* def if write*/,
-                              KInstruction *target /* def if read*/);
+                              KInstruction *target /* def if read*/,
+                              std::vector<ExecutionState*> *results = nullptr);
 
+private:
   ObjectPair lazyInstantiate(ExecutionState &state,
                              bool isLocal,
                              const MemoryObject *mo);
@@ -429,6 +447,19 @@ private:
     return state.stack.back().locals[target->dest];
   }
 
+public:
+  const Cell& getArgumentCell(const ExecutionState &state,
+                              const KFunction *kf,
+                              unsigned index) {
+    return state.stack.back().locals[kf->getArgRegister(index)];
+  }
+
+  const Cell& getDestCell(const ExecutionState &state,
+                          const KInstruction *target) {
+    return state.stack.back().locals[target->dest];
+  }
+
+private:
   void bindLocal(KInstruction *target, 
                  ExecutionState &state, 
                  ref<Expr> value);
@@ -538,7 +569,7 @@ private:
 
   /// Only for debug purposes; enable via debugger or klee-control
   void dumpStates();
-  void dumpPTForest();
+  void dumpPForest();
 
 public:
   Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
@@ -626,6 +657,16 @@ public:
 
   /// Returns the errno location in memory of the state
   int *getErrnoLocation(const ExecutionState &state) const;
+
+  TimingSolver * getSolver();
+
+  time::Span getMaxSolvTime();
+
+  KInstruction *getKInst(llvm::Instruction * ints);
+
+  KBlock *getKBlock(llvm::BasicBlock & bb);
+
+  const KFunction *getKFunction(const llvm::Function *f) const;
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };

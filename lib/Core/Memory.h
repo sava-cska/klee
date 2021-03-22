@@ -296,6 +296,8 @@ private:
   void setKnownSymbolic(unsigned offset, Expr *value);
 
   ArrayCache *getArrayCache() const;
+public:
+  const Array *getArray() const;
 };
   
 } // End klee namespace

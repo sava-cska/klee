@@ -13,6 +13,8 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <chrono>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <sys/time.h>
 
@@ -71,6 +73,7 @@ namespace klee {
       Span() = default;
       explicit Span(const Duration &d): duration(d) {}
       explicit Span(const std::string &s);
+      static const Span null;
 
       // operators
       Span& operator=(const Duration&);

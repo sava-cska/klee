@@ -11,6 +11,7 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr/Expr.h"
+#include <string>
 
 namespace klee {
 
@@ -62,19 +63,39 @@ public:
 
   /// Add constraint to the referenced constraint set
   /// \param constraint
-  void addConstraint(const ref<Expr> &constraint);
+  void addConstraint(const ref<Expr> &constraint, bool *sat = 0);
 
 private:
   /// Rewrite set of constraints using the visitor
   /// \param visitor constraint rewriter
   /// \return true iff any constraint has been changed
-  bool rewriteConstraints(ExprVisitor &visitor);
+  bool rewriteConstraints(ExprVisitor &visitor, bool *sat = 0);
 
   /// Add constraint to the set of constraints
-  void addConstraintInternal(const ref<Expr> &constraint);
+  void addConstraintInternal(const ref<Expr> &constraint, bool *sat = 0);
 
   ConstraintSet &constraints;
 };
+
+#ifndef divider
+#define divider(n) std::string(n, '-') + "\n"
+#endif
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const ConstraintSet &constraints)
+{
+    if(!constraints.empty())
+    {
+        os << "\n" << divider(30);
+        for(const auto &expr: constraints)
+        {
+            os << divider(30);
+            os << expr << "\n";
+            os << divider(30);
+        }
+        os << divider(30);
+    }
+    return os;
+}
 
 } // namespace klee
 

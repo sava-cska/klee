@@ -18,6 +18,7 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Module/KInstIterator.h"
 #include "klee/Solver/Solver.h"
+#include "TimingSolver.h"
 #include "klee/System/Time.h"
 
 #include "llvm/IR/Function.h"
@@ -65,6 +66,7 @@ struct StackFrame {
   StackFrame(KInstIterator caller, KFunction *kf);
   StackFrame(const StackFrame &s);
   ~StackFrame();
+  void print() const;
 };
 
 /// Contains information related to unwinding (Itanium ABI/2-Phase unwinding)
@@ -205,6 +207,9 @@ public:
   /// taken to reach/create this state
   TreeOStream symPathOS;
 
+  /// @brief History of state branching including switches
+  std::string executionPath;
+
   /// @brief Set containing which lines in which files are covered by this state
   std::map<const std::string *, std::set<std::uint32_t>> coveredLines;
 
@@ -278,14 +283,17 @@ public:
   ExecutionState *withKFunction(KFunction *kf);
   ExecutionState *withKBlock(KBlock *kb);
   ExecutionState *empty();
-  ExecutionState *copy();
+  ExecutionState *copy() const;
 
   void pushFrame(KInstIterator caller, KFunction *kf);
   void popFrame();
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
-  void addConstraint(ref<Expr> e);
+  void addConstraint(ref<Expr> e, bool *sat = 0);
+  bool tryAddConstraint(ref<Expr> e, 
+                        time::Span timeout = time::Span::null, 
+                        TimingSolver * solver = nullptr);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
@@ -296,6 +304,10 @@ public:
   llvm::BasicBlock *getPrevPCBlock();
   llvm::BasicBlock *getPCBlock();
   void addLevel(llvm::BasicBlock *bb);
+  bool isEmpty() const;
+  // for debugging
+  static void printCompareList(const ExecutionState &, const ExecutionState &, llvm::raw_ostream &);
+  void print(llvm::raw_ostream & os) const;
 };
 
 struct ExecutionStateIDCompare {

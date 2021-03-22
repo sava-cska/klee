@@ -24,6 +24,7 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
+#include "Composer.h"
 
 #include "klee/ADT/KTest.h"
 #include "klee/ADT/RNG.h"
@@ -181,6 +182,11 @@ cl::opt<bool>
                                   "querying the solver (default=true)"),
                          cl::cat(SolvingCat));
 
+cl::opt<bool>
+    UseSolverInComposition("check-sat-compose",
+                        cl::init(false),
+                        cl::desc("Checks constraits feasibility during composition"),
+                        cl::cat(SolvingCat));
 
 /*** External call policy options ***/
 
@@ -333,6 +339,12 @@ cl::opt<unsigned> MaxDepth(
     cl::init(0),
     cl::cat(TerminationCat));
 
+cl::opt<uint64_t> MaxRec( 
+    "max-rec-depth",
+    cl::desc("defines a maximum depth of recursive calls"),
+    cl::init(0),
+    cl::cat(TerminationCat));
+
 cl::opt<unsigned> MaxMemory("max-memory",
                             cl::desc("Refuse to fork when above this amount of "
                                      "memory (in MB) (see -max-memory-inhibit) and terminate "
@@ -440,11 +452,17 @@ cl::opt<bool> DebugCheckForImpliedValues(
     cl::desc("Debug the implied value optimization"),
     cl::cat(DebugCat));
 
+cl::opt<bool> DebugPrintResult(
+    "debug-print-states",
+    cl::desc("Printing constraints for resulting states after compositional execution"),
+    cl::init(false),
+    cl::cat(DebugCat));
+
 } // namespace
 
 // XXX hack
-extern "C" unsigned dumpStates, dumpPTForest;
-unsigned dumpStates = 0, dumpPTForest = 0;
+extern "C" unsigned dumpStates, dumpPForest;
+unsigned dumpStates = 0, dumpPForest = 0;
 
 const char *Executor::TerminateReasonNames[] = {
   [ Abort ] = "abort",
@@ -464,6 +482,7 @@ const char *Executor::TerminateReasonNames[] = {
   [ Unhandled ] = "xxx",
 };
 
+Executor *Composer::executor = nullptr;
 
 Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
@@ -474,6 +493,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
       ivcEnabled(false), debugLogBuffer(debugBufferString) {
 
+  Composer::executor = this;
 
   const time::Span maxTime{MaxTime};
   if (maxTime) timers.add(
@@ -1119,6 +1139,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   // search ones. If that makes sense.
   if (res==Solver::True) {
     if (!isInternal) {
+      current.executionPath += "1";
       if (pathWriter) {
         current.pathOS << "1";
       }
@@ -1127,6 +1148,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     return StatePair(&current, 0);
   } else if (res==Solver::False) {
     if (!isInternal) {
+      current.executionPath += "0";
       if (pathWriter) {
         current.pathOS << "0";
       }
@@ -1180,6 +1202,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
     processForest->attach(current.ptreeNode, falseState, trueState);
 
+    trueState->executionPath += "1";
+    falseState->executionPath += "0";
     if (pathWriter) {
       // Need to update the pathOS.id field of falseState, otherwise the same id
       // is used for both falseState and trueState.
@@ -1714,6 +1738,10 @@ ref<klee::ConstantExpr> Executor::getEhTypeidFor(ref<Expr> type_info) {
 
 void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
                            std::vector<ref<Expr>> &arguments) {
+  if(MaxRec && state.stack.size() > MaxRec) {
+    terminateStateOnExit(state);
+    return;
+  }
   Instruction *i = ki->inst;
   if (isa_and_nonnull<DbgInfoIntrinsic>(i))
     return;
@@ -2047,6 +2075,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     if (state.stack.size() <= 1) {
       assert(!caller && "caller set on initial stack frame");
       state.addLevel(state.getPrevPCBlock());
+      finalStates.insert(state.copy());
       terminateStateOnExit(state);
     } else {
       state.popFrame();
@@ -2256,6 +2285,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 #else
       unsigned index = si->findCaseValue(ci).getSuccessorIndex();
 #endif
+      state.executionPath += std::to_string(index);
       transferToBasicBlock(si->getSuccessor(index), si->getParent(), state);
     } else {
       // Handle possible different branch targets
@@ -2269,11 +2299,15 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
       std::map<ref<Expr>, BasicBlock *> expressionOrder;
 
+      std::map<BasicBlock *, unsigned> caseNumber;
+
       // Iterate through all non-default cases and order them by expressions
+      unsigned cn = 0;
       for (auto i : si->cases()) {
         ref<Expr> value = evalConstant(i.getCaseValue());
 
         BasicBlock *caseSuccessor = i.getCaseSuccessor();
+        caseNumber.insert(std::make_pair(caseSuccessor, cn++));
         expressionOrder.insert(std::make_pair(value, caseSuccessor));
       }
 
@@ -2355,8 +2389,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
                                                ie = bbOrder.end();
            it != ie; ++it) {
         ExecutionState *es = *bit;
-        if (es)
+        if (es) {
+          es->executionPath += std::to_string(caseNumber[*it]);
           transferToBasicBlock(*it, bb, *es);
+        }
         ++bit;
       }
     }
@@ -3220,7 +3256,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       break;
     }
 
-    ref<Expr> arg = eval(ki, 0, state).value;
+    ref<Expr> arg = symbolicEval(ki, 0, state).value;
     ref<Expr> exceptionPointer = ExtractExpr::create(arg, 0, Expr::Int64);
     ref<Expr> selectorValue =
         ExtractExpr::create(arg, Expr::Int64, Expr::Int32);
@@ -3506,7 +3542,7 @@ void Executor::seed(ExecutionState &initialState) {
     executeInstruction(state, ki);
     timers.invoke();
     if (::dumpStates) dumpStates();
-    if (::dumpPTForest) dumpPTForest();
+    if (::dumpPForest) dumpPForest();
     updateStates(&state);
 
     if ((stats::instructions % 1000) == 0) {
@@ -3632,7 +3668,7 @@ void Executor::executeStep(ExecutionState &state) {
 
   timers.invoke();
   if (::dumpStates) dumpStates();
-  if (::dumpPTForest) dumpPTForest();
+  if (::dumpPForest) dumpPForest();
 
   updateStates(&state);
 
@@ -3853,6 +3889,9 @@ void Executor::guidedRun(ExecutionState &initialState) {
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
 
+  states.clear();
+  addedStates.clear();
+  removedStates.clear();
   states.insert(&initialState);
 
   if (usingSeeds) {
@@ -4573,7 +4612,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                                       MemoryOperation operation,
                                       ref<Expr> address,
                                       ref<Expr> value /* def if write*/,
-                                      KInstruction *target /* def if read*/) {
+                                      KInstruction *target /* def if read*/,
+                                      std::vector<ExecutionState*> *results) {
   Expr::Width type;
   switch (operation) {
   case Write:
@@ -4653,6 +4693,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         bindLocal(target, state, result);
         break;
       }
+      if(prefereComposition && results) results->push_back(&state);
 
       return;
     }
@@ -4710,6 +4751,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           break;
         }
       }
+      if(prefereComposition && results) results->push_back(bound);
     }
 
     if (!unbound)
@@ -4756,6 +4798,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           break;
         }
       }
+      if(prefereComposition && results) results->push_back(unbound);
     } else {
       terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
                             NULL, getAddressInfo(*unbound, address));
@@ -4791,11 +4834,11 @@ ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> ad
 const Array * Executor::makeArray(ExecutionState &state,
                                   const uint64_t size,
                                   const std::string &name) {
-    unsigned id = 0;
-    std::string uniqueName = name;
-    while (!state.arrayNames.insert(uniqueName).second) {
-      uniqueName = name + "_" + llvm::utostr(++id);
-    }
+    static uint64_t id = 0;
+    std::string uniqueName = name + "#" + std::to_string(id++);
+    // while (!state.arrayNames.insert(uniqueName).second) {
+    //   uniqueName = name + "_" + llvm::utostr(++id);
+    // }
     const Array *array = arrayCache.CreateArray(uniqueName, size);
 
     return array;
@@ -4810,6 +4853,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
     const Array *array = makeArray(state, mo->size, name);
+    const_cast<Array*>(array)->binding = mo;
     bindObjectInState(state, mo, isAlloca, array);
     state.addSymbolic(mo, array);
 
@@ -4953,7 +4997,8 @@ ExecutionState* Executor::formState(Function *f,
     }
   }
 
-  initializeGlobals(*state);
+  if(!prefereComposition)
+    initializeGlobals(*state);
   return state;
 }
 
@@ -5003,6 +5048,7 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
                            value, /*allocationAlignment=*/8);
     memory->deallocate(mo);
     const Array *array = makeArray(state, size, name);
+    const_cast<Array*>(array)->binding = mo;
     state.addSymbolic(mo, array);
     ObjectState *os = new ObjectState(mo, array);
     ref<Expr> result = os->read(0, width);
@@ -5322,9 +5368,38 @@ int *Executor::getErrnoLocation(const ExecutionState &state) const {
 #endif
 }
 
+TimingSolver *Executor::getSolver() {
+  return solver;
+}
 
-void Executor::dumpPTForest() {
-  if (!::dumpPTForest) return;
+time::Span Executor::getMaxSolvTime() {
+  return coreSolverTimeout;
+}
+
+KInstruction *Executor::getKInst(llvm::Instruction *inst) {
+  llvm::Function *caller = inst->getFunction();
+  KFunction *kf = kmodule->functionMap[caller];
+  assert(kf && kf->instructionMap.find(inst) != kf->instructionMap.end());
+  return kf->instructionMap[inst];
+}
+
+KBlock *Executor::getKBlock(llvm::BasicBlock & bb) {
+  llvm::Function *F  = bb.getParent();
+  assert(F && this->kmodule->functionMap.find(F) != this->kmodule->functionMap.end());
+  klee::KFunction *KF = this->kmodule->functionMap[F];
+  assert(KF->blockMap.find(&bb) != KF->blockMap.end());
+  klee::KBlock *KB = KF->blockMap[&bb];
+  assert(KB);
+  return KB;
+}
+
+const KFunction *Executor::getKFunction(const llvm::Function *f) const {
+  const auto kfIt = kmodule->functionMap.find(const_cast<Function*>(f));
+  return (kfIt == kmodule->functionMap.end()) ? nullptr : kfIt->second;
+}
+
+void Executor::dumpPForest() {
+  if (!::dumpPForest) return;
 
   char name[32];
   snprintf(name, sizeof(name),"pforest%08d.dot", (int) stats::instructions);
@@ -5333,7 +5408,7 @@ void Executor::dumpPTForest() {
     processForest->dump(*os);
   }
 
-  ::dumpPTForest = 0;
+  ::dumpPForest = 0;
 }
 
 void Executor::dumpStates() {
@@ -5388,3 +5463,209 @@ Interpreter *Interpreter::create(LLVMContext &ctx, const InterpreterOptions &opt
                                  InterpreterHandler *ih) {
   return new Executor(ctx, opts, ih);
 }
+
+//-----Composer-----//
+typedef std::pair<ref<const MemoryObject>, const Array *> symb;
+
+void Composer::compose(ExecutionState *state, std::vector<ExecutionState*> &result) {
+  assert(S1 && S2 && state && !S1->isEmpty() && !S2->isEmpty());
+  state->ptreeNode = nullptr;
+
+  state->ptreeNode = nullptr;
+  state->prevPC = S2->prevPC;
+  state->pc = S2->pc;
+  state->incomingBBIndex = S2->incomingBBIndex;
+  state->pathOS = S2->pathOS.copy(); //TreeStream.cpp
+  state->symPathOS = S2->symPathOS.copy();
+  state->queryMetaData.queryCost =  state->queryMetaData.queryCost + S2->queryMetaData.queryCost;
+  state->depth = state->depth + S2->depth;
+  state->coveredNew = state->coveredNew || S2->coveredNew;
+  state->forkDisabled = state->forkDisabled || S2->forkDisabled;
+  state->steppedInstructions = state->steppedInstructions + S2->steppedInstructions;
+  state->executionPath = state->executionPath + S2->executionPath;
+  state->level.insert(S2->level.begin(), S2->level.end());
+  state->multilevel.insert(S2->multilevel.begin(), S2->multilevel.end());
+
+  //state->arrayNames = P1->arrayNames; by default
+  auto &names = S2->arrayNames;
+  state->arrayNames.insert(names.begin(), names.end());
+
+  //state->openMergestack = P1->openMergeStack
+  auto &OMcur = state->openMergeStack;
+  auto &OMoth = S2->openMergeStack;
+  OMcur.insert( OMcur.end(), OMoth.begin(), OMoth.end() );
+
+  //state->instsSinceCovNew
+  if(S2->coveredNew) {
+    state->instsSinceCovNew = S2->instsSinceCovNew;
+  } else if(S1->coveredNew) {
+    state->instsSinceCovNew = S2->steppedInstructions + S1->instsSinceCovNew;
+  } else {
+    state->instsSinceCovNew = 0;
+  }
+
+  //state->coveredLines = P1->coveredLines; by default
+  for(const auto & file: S2->coveredLines) {
+    auto acceptor = state->coveredLines.find(file.first);
+    if(acceptor != state->coveredLines.end()) {
+      const auto &p1set = file.second;
+      acceptor->second.insert(p1set.begin(), p1set.end());
+    } else {
+      state->coveredLines[file.first] = file.second;
+    }
+  }
+
+  // CONSTRAINTS //
+  if(!addComposedConstraints(*state,
+          executor->getMaxSolvTime(),
+          executor->getSolver())) {
+    return;
+  }
+
+  // STACK //
+  auto & stateFrame = state->stack.back();
+  auto & newFrame = S2->stack.back();
+  assert(stateFrame.kf == newFrame.kf &&
+        "can not compose states from different functions");
+  for(unsigned i = 0; i < newFrame.kf->numRegisters; i++) {
+    ref<Expr> newVal = newFrame.locals[i].value;
+    if(!newVal.isNull()) {
+        newVal = rebuild(newVal);
+        stateFrame.locals[i].value = newVal;
+    }
+  }
+
+  // SYMBOLICS //
+  // state->symbolics = S1->symbolics
+  for(const symb & symbolic: S2->symbolics) {
+    state->symbolics.erase(
+      std::remove_if(
+        state->symbolics.begin(),
+        state->symbolics.end(),
+        [&symbolic] (const symb& obj) { return obj.second == symbolic.second; }
+      ),
+      state->symbolics.end()
+    );
+    state->symbolics.push_back(symbolic);
+  }
+
+  // ADDRESS SPACE //
+  //state->addressSpace = P1->addressSpace
+  result.push_back(state);
+  for(auto it  = S2->addressSpace.objects.begin();
+           it != S2->addressSpace.objects.end();
+           ++it) {
+    const ObjectState *thisOS{ it->second.get() };
+    const MemoryObject *MO{ it->first };
+    assert(thisOS->size == MO->size &&
+           MO->size != 0 &&
+           thisOS->size != 0 &&
+           "corrupted object in addressSpace");
+    if(thisOS->readOnly) {
+      for(auto st : result) {
+        st->addressSpace.bindObject(MO, new ObjectState(*thisOS));
+      }
+      continue;
+    }
+
+    ref<Expr> valInS2 = thisOS->read(0, 8*thisOS->size);
+    ref<Expr> valInS1 = rebuild(valInS2);
+
+    if(MO->isLazyInstantiated()) { // is LI
+      ref<Expr> LI = rebuild(MO->lazyInstantiatedSource);
+      std::vector<ExecutionState*> oldRes;
+      std::swap(result, oldRes);
+      for(auto st : oldRes) {
+        std::vector<ExecutionState*> curRes;
+        executor->executeMemoryOperation(*st, Executor::Write, LI, valInS1, nullptr, &curRes);
+        result.insert(result.end(), curRes.begin(), curRes.end());
+      }
+      continue;
+    }
+    // compose a real object
+    ObjectState *newOS = new ObjectState(MO);
+    newOS->write(0, valInS1);
+    for(auto st : result) {
+      st->addressSpace.bindObject(MO, newOS);
+    }
+  }
+}
+
+
+//-----ComposeVisitor-----//
+
+ref<Expr> ComposeVisitor::shareUpdates(ObjectState & OS, const ReadExpr & re) {
+  std::stack < const UpdateNode* > forward{};
+
+  for(auto it = re.updates.head;
+           !it.isNull();
+           it = it->next) {
+      forward.push( it.get() );
+  }
+  // const bool doPrint = !forward.empty();
+  // auto out = [&doPrint](const auto & obj) { if(doPrint) llvm::errs() << obj << "\n"; };
+  while(!forward.empty()) {
+      const UpdateNode* UNode = forward.top();
+      forward.pop();
+      ref<Expr> newIndex = visit(UNode->index);
+      ref<Expr> newValue = visit(UNode->value);
+      OS.write(newIndex, newValue);
+  }
+  ref<Expr> index = visit(re.index);
+  return OS.read(index, re.getWidth());
+}
+
+ref<Expr> ComposeVisitor::processRead(const ReadExpr & re) {
+    const ExecutionState *S1 = caller->S1;
+    assert(S1 && "no context passed");
+    const MemoryObject *object = re.updates.root->binding;
+    if(!object) return new ReadExpr(re);
+    ObjectState OS{object};
+    if(object->isLazyInstantiated()) {
+      auto cachedLIexpr = caller->liCache.find(object);
+      if(cachedLIexpr != caller->liCache.end()) {
+        OS.write(0, cachedLIexpr->second);
+        return shareUpdates(OS, re);
+      }
+
+      ResolutionList rl;
+      auto LI = visit(object->lazyInstantiatedSource);
+      S1->addressSpace.resolve(
+        *S1, caller->executor->getSolver(), LI, rl);
+      assert(!rl.empty() && "should termitate state?");
+      ObjectState defaultCase{object, re.updates.root};
+      auto re1 = new ReadExpr(re);
+      defaultCase.write(re1->index, re1);
+      ref<Expr> sel = SExtExpr::create(defaultCase.read(0, 8*defaultCase.size), 8*OS.size);
+      for(auto op = rl.begin(), e = rl.end(); op != e; op++) {
+        sel = branchResolvePointer(*op, LI, sel, 8*OS.size);
+      }
+      caller->liCache[object] = sel;
+      OS.write(0, sel);
+      return shareUpdates(OS, re);
+    }
+    const llvm::Value *allocSite = object->allocSite;
+    if(!allocSite) return new ReadExpr(re);
+
+    ref<Expr> prevVal;
+    if(isa<Argument>(allocSite)) {
+      const Argument *arg = cast<Argument>(allocSite);
+      const Function *f   = arg->getParent();
+      const KFunction *kf = caller->executor->getKFunction(f);
+      const unsigned argN = arg->getArgNo();
+      prevVal = caller->executor->getArgumentCell(*S1, kf, argN).value;
+    } else if(isa<Instruction>(allocSite)) {
+      const Instruction *inst = cast<Instruction>(allocSite);
+      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
+      prevVal = caller->executor->getDestCell(*S1, ki).value;
+    } else {
+      return new ReadExpr(re);
+    }
+
+    if(prevVal.isNull() /*|| prevVal->isFalse()*/) {
+      return new ReadExpr(re);
+    }
+    OS.write(0, prevVal);
+    return shareUpdates(OS, re);
+}
+//~~~~~ComposeVisitor~~~~~//

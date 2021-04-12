@@ -451,8 +451,7 @@ void ExecutionState::addLevel(BasicBlock *bb) {
   level.insert(bb);
 }
 
-bool ExecutionState::isEmpty() const
-{
+bool ExecutionState::isEmpty() const {
   return stack.empty();
 }
 

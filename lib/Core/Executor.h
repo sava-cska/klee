@@ -103,13 +103,13 @@ class Executor : public Interpreter {
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
   typedef std::pair<llvm::BasicBlock*,llvm::BasicBlock*> BasicBlockPair;
-  typedef std::map<llvm::BasicBlock*, std::set<ExecutionState*, ExecutionStateIDCompare> > ExecutedBlock;
+  typedef std::map<llvm::BasicBlock*, std::set<ExecutionState*, ExecutionStateIDCompare> > ExecutedInterval;
   typedef std::map<llvm::BasicBlock*, std::set<llvm::BasicBlock*> > VisitedBlock;
   struct ExecutionBlockResult {
-    ExecutedBlock redundantStates;
-    ExecutedBlock completedStates;
-    ExecutedBlock pausedStates;
-    ExecutedBlock erroneousStates;
+    ExecutedInterval redundantStates;
+    ExecutedInterval completedStates;
+    ExecutedInterval pausedStates;
+    ExecutedInterval erroneousStates;
     VisitedBlock history;
   };
   typedef std::map<llvm::BasicBlock*, ExecutionBlockResult> ExecutionResult;
@@ -401,7 +401,7 @@ private:
 
   ObjectPair lazyInstantiateVariable(ExecutionState &state,
                                      ref<Expr> address,
-                                     KInstruction *target,
+                                     llvm::Value *allocSite,
                                      uint64_t size);
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
@@ -658,7 +658,7 @@ public:
   /// Returns the errno location in memory of the state
   int *getErrnoLocation(const ExecutionState &state) const;
 
-  TimingSolver * getSolver();
+  TimingSolver *getSolver();
 
   time::Span getMaxSolvTime();
 
@@ -668,16 +668,21 @@ public:
 
   const KFunction *getKFunction(const llvm::Function *f) const;
 
+  PForest *getProcessForest();
+
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };
-  const Array * makeArray(ExecutionState &state, const uint64_t size, const std::string &name);
+  const Array *makeArray(ExecutionState &state, const uint64_t size, const std::string &name);
   void executeStep(ExecutionState &state);
   bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
-  void coveredExecuteStep(ExecutionState &state, ExecutionState &initialState);
-  KBlock* calculateTarget(ExecutionState &state);
+  void coveredExecuteStep(ExecutionState &state);
+  void composeStep(ExecutionState &state);
+  KBlock *calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,
-                               ExecutedBlock &pausedStates,
+                               ExecutedInterval &pausedStates,
                                std::map<KBlock*, std::vector<ExecutionState*>> &targetedStates);
+  void initializeRoots(ExecutionState *initialState);
+  void addState(ExecutionState &state);
 };
   
 } // End klee namespace

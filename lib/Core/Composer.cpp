@@ -57,18 +57,17 @@ bool Composer::addComposedConstraints(ExecutionState & result,
     return true;
 }
 
-void Composer::compose(
-        const ExecutionState *S1,
-        const ExecutionState *S2,
-        std::vector<ExecutionState*> &result ) {
+void Composer::compose(const ExecutionState *S1,
+                       const ExecutionState *S2,
+                       std::vector<ExecutionState*> &result) {
   assert(S1 || S2);
-  result.clear();
   if(!S1 || S1->isEmpty()) {
     result.push_back(S2->copy());
+    return;
   } else if(!S2 || S2->isEmpty()) {
     result.push_back(S1->copy());
+    return;
   }
-  if(!result.empty()) return;
 
     TimingSolver *solver = executor->getSolver();
     assert(solver);

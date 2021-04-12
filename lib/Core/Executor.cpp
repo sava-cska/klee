@@ -3693,18 +3693,26 @@ bool Executor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
   return true;
 }
 
-void Executor::coveredExecuteStep(ExecutionState &state, ExecutionState &initialState) {
+void Executor::coveredExecuteStep(ExecutionState &state) {
+  Function *kmsf = kmodule->module->getFunction(llvm::StringRef("klee_make_symbolic"));
   KInstruction *ki = state.pc;
   KInstruction *prevKI = state.prevPC;
 
+  if (isa<ReturnInst>(ki->inst)) {
+    pauseState(state);
+    updateStates(nullptr);
+    return;
+  }
   if (prevKI->inst->isTerminator() && prevKI != ki &&
-      (state.getPCBlock()->hasNPredecessorsOrMore(2) || ki->isCallOrInvokeInst())) {
+      (state.getPCBlock()->hasNPredecessorsOrMore(2) ||
+       (ki->isCallOrInvokeInst() && ((KCallBlock*)ki->parent)->calledFunction != kmsf))) {
     addCompletedResult(state);
     silentRemove(state);
     updateStates(nullptr);
     return;
   }
-  if (state.redundant || ki->isCallOrInvokeInst()) {
+  if (state.redundant ||
+      (ki->isCallOrInvokeInst() && ((KCallBlock*)ki->parent)->calledFunction != kmsf)) {
     if (state.redundant)
       pauseRedundantState(state);
     else
@@ -3714,6 +3722,38 @@ void Executor::coveredExecuteStep(ExecutionState &state, ExecutionState &initial
   }
 
   executeStep(state);
+}
+
+void Executor::composeStep(ExecutionState &lstate) {
+  if (lstate.pc->inst->isTerminator()) {
+    executeStep(lstate);
+    return;
+  }
+  std::vector<ExecutionState *> result;
+  if (!results[lstate.getPCBlock()].completedStates.empty()) {
+    for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
+      for (auto rstate : blockstate.second) {
+        Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
+      }
+    }
+  }
+  if (!results[lstate.getPCBlock()].pausedStates.empty()) {
+    for (auto &blockstate : results[lstate.getPCBlock()].pausedStates) {
+      for (auto rstate : blockstate.second) {
+        if (rstate->pc->isCallOrInvokeInst() || isa<ReturnInst>(rstate->pc->inst)) {
+          Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
+        }
+      }
+    }
+  }
+  removedStates.push_back(&lstate);
+  updateStates(nullptr);
+  for (auto &state : result) {
+    state->pc->inst->getOpcodeName();
+    if (state->pc->isCallOrInvokeInst() || isa<ReturnInst>(state->pc->inst)) {
+      executeStep(*state);
+    }
+  }
 }
 
 void Executor::boundedRun(ExecutionState &initialState, unsigned bound) {
@@ -3835,7 +3875,7 @@ KBlock* Executor::calculateTarget(ExecutionState &state) {
 }
 
 void Executor::calculateTargetedStates(BasicBlock *initialBlock,
-                                       ExecutedBlock &pausedStates,
+                                       ExecutedInterval &pausedStates,
                                        std::map<KBlock*, std::vector<ExecutionState*>> &targetedStates) {
   VisitedBlock &history = results[initialBlock].history;
 
@@ -3929,6 +3969,24 @@ void Executor::guidedRun(ExecutionState &initialState) {
   haltExecution = false;
 }
 
+void Executor::initializeRoots(ExecutionState *initialState) {
+  Function *kmsf = kmodule->module->getFunction(llvm::StringRef("klee_make_symbolic"));
+  for (auto &kf : kmodule->functions) {
+    for (auto &kb : kf->blocks) {
+      if (kb->basicBlock->hasNPredecessorsOrMore(2) ||
+          (kb->basicBlock->hasNPredecessors(0) && kb->basicBlock != initialState->getInitPCBlock()) ||
+          (kb->getKBlockType() == KBlockType::Call && ((KCallBlock*)kb.get())->calledFunction != kmsf) ||
+          (kb->basicBlock->getSinglePredecessor() &&
+           kf->blockMap[kb->basicBlock->getSinglePredecessor()]->getKBlockType() == KBlockType::Call))
+        initializeRoot(*initialState, kb.get());
+    }
+  }
+}
+
+void Executor::addState(ExecutionState &state) {
+  addedStates.push_back(&state);
+}
+
 void Executor::coveredRun(ExecutionState &state) {
   ExecutionState *initialState = state.copy();
   initialState->stack.clear();
@@ -3938,16 +3996,7 @@ void Executor::coveredRun(ExecutionState &state) {
 
   states.insert(&state);
 
-  Function *kmsf = kmodule->module->getFunction(llvm::StringRef("klee_make_symbolic"));
-  for (auto &kf : kmodule->functions) {
-    for (auto &kb : kf->blocks) {
-      if (kb->basicBlock->hasNPredecessorsOrMore(2) ||
-          (kb->getKBlockType() == KBlockType::Call && ((KCallBlock*)kb.get())->calledFunction != kmsf) ||
-          (kb->basicBlock->getSinglePredecessor() &&
-           kf->blockMap[kb->basicBlock->getSinglePredecessor()]->getKBlockType() == KBlockType::Call))
-        initializeRoot(*initialState, kb.get());
-    }
-  }
+  initializeRoots(initialState);
 
   if (usingSeeds) {
     seed(state);
@@ -3961,9 +4010,33 @@ void Executor::coveredRun(ExecutionState &state) {
   // main interpreter loop
   while (!states.empty() && !haltExecution) {
     ExecutionState &es = searcher->selectState();
-    coveredExecuteStep(es, *initialState);
+    coveredExecuteStep(es);
   }
 
+  delete searcher;
+  searcher = new BFSSearcher();
+  haltExecution = false;
+  states.clear();
+  newStates.clear();
+
+  for (auto &executedInterval : results[initialState->getInitPCBlock()].completedStates) {
+    for (auto es : executedInterval.second) {
+      es->isolated = false;
+      states.insert(const_cast<ExecutionState*>(es));
+    }
+  }
+
+  results[initialState->getInitPCBlock()].completedStates.clear();
+
+  newStates.insert(newStates.begin(), states.begin(), states.end());
+  searcher->update(0, newStates, std::vector<ExecutionState *>());
+
+  while (!states.empty() && !haltExecution) {
+    ExecutionState &es = searcher->selectState();
+    composeStep(es);
+  }
+
+  ExecutedInterval &result = results[initialState->getInitPCBlock()].completedStates;
   delete searcher;
   searcher = nullptr;
 
@@ -4088,7 +4161,7 @@ void Executor::pauseRedundantState(ExecutionState &state) {
 }
 
 void Executor::unpauseState(ExecutionState &state) {
-  ExecutedBlock &pausedStates = results[state.getInitPCBlock()].pausedStates;
+  ExecutedInterval &pausedStates = results[state.getInitPCBlock()].pausedStates;
 
   pausedStates[state.getPCBlock()].erase(&state);
   if (pausedStates[state.getPCBlock()].empty())
@@ -4098,7 +4171,7 @@ void Executor::unpauseState(ExecutionState &state) {
 
 void Executor::unpauseStates(std::vector<ExecutionState *> &states) {
   for (auto &state : states) {
-    ExecutedBlock &pausedStates = results[state->getInitPCBlock()].pausedStates;
+    ExecutedInterval &pausedStates = results[state->getInitPCBlock()].pausedStates;
 
     pausedStates[state->getPCBlock()].erase(state);
     if (pausedStates[state->getPCBlock()].empty())
@@ -4693,8 +4766,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         bindLocal(target, state, result);
         break;
       }
-      if(prefereComposition && results) results->push_back(&state);
-
+      if (results)
+        results->push_back(&state);
       return;
     }
   }
@@ -4751,7 +4824,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           break;
         }
       }
-      if(prefereComposition && results) results->push_back(bound);
+      if (results)
+        results->push_back(bound);
     }
 
     if (!unbound)
@@ -4763,7 +4837,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
     } else if (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isa<GEPExpr>(address))) {
-      ObjectPair p = lazyInstantiateVariable(*unbound, base, target, size);
+      ObjectPair p = lazyInstantiateVariable(*unbound, base, target ? target->inst : nullptr, size);
       assert(p.first && p.second);
 
       const MemoryObject *mo = p.first;
@@ -4777,7 +4851,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
       if (res ==Solver::False) {
         if (unbound->isolated) {
-          p = lazyInstantiateVariable(*unbound, unsafeAddress, target, bytes);
+          p = lazyInstantiateVariable(*unbound, unsafeAddress, target ? target->inst : nullptr, bytes);
           mo = p.first;
         } else {
           terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
@@ -4798,7 +4872,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           break;
         }
       }
-      if(prefereComposition && results) results->push_back(unbound);
+      if (results)
+        results->push_back(unbound);
     } else {
       terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
                             NULL, getAddressInfo(*unbound, address));
@@ -4822,9 +4897,8 @@ ObjectPair Executor::lazyInstantiateAlloca(ExecutionState &state,
   return op;
 }
 
-ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, KInstruction *target, uint64_t size) {
+ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
-  const llvm::Value *allocSite = target->inst;
   MemoryObject *mo =
       memory->allocate(size, false, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
@@ -4997,8 +5071,7 @@ ExecutionState* Executor::formState(Function *f,
     }
   }
 
-  if(!prefereComposition)
-    initializeGlobals(*state);
+  initializeGlobals(*state);
   return state;
 }
 
@@ -5014,16 +5087,16 @@ void Executor:: prepareSymbolicValue(ExecutionState &state, KInstruction *target
   ref<Expr> result = makeSymbolicValue(allocSite, state, size, width, "symbolic_value");
   bindLocal(target, state, result);
   if (isa<AllocaInst>(allocSite)) {
-      AllocaInst *ai = cast<AllocaInst>(allocSite);
-      unsigned elementSize =
-        kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
-      ref<Expr> size = Expr::createPointer(elementSize);
-      if (ai->isArrayAllocation()) {
-        ref<Expr> count = symbolicEval(target, 0, state).value;
-        count = Expr::createZExtToPointerWidth(count);
-        size = MulExpr::create(size, count);
-      }
-      lazyInstantiateVariable(state, result, target, elementSize);
+    AllocaInst *ai = cast<AllocaInst>(allocSite);
+    unsigned elementSize =
+      kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
+    ref<Expr> size = Expr::createPointer(elementSize);
+    if (ai->isArrayAllocation()) {
+      ref<Expr> count = symbolicEval(target, 0, state).value;
+      count = Expr::createZExtToPointerWidth(count);
+      size = MulExpr::create(size, count);
+    }
+    lazyInstantiateVariable(state, result, target->inst, elementSize);
   }
 }
 
@@ -5398,6 +5471,10 @@ const KFunction *Executor::getKFunction(const llvm::Function *f) const {
   return (kfIt == kmodule->functionMap.end()) ? nullptr : kfIt->second;
 }
 
+PForest *Executor::getProcessForest() {
+  return processForest.get();
+}
+
 void Executor::dumpPForest() {
   if (!::dumpPForest) return;
 
@@ -5469,9 +5546,8 @@ typedef std::pair<ref<const MemoryObject>, const Array *> symb;
 
 void Composer::compose(ExecutionState *state, std::vector<ExecutionState*> &result) {
   assert(S1 && S2 && state && !S1->isEmpty() && !S2->isEmpty());
-  state->ptreeNode = nullptr;
 
-  state->ptreeNode = nullptr;
+  executor->getProcessForest()->attach(S1->ptreeNode, state, const_cast<ExecutionState *>(S1));
   state->prevPC = S2->prevPC;
   state->pc = S2->pc;
   state->incomingBBIndex = S2->incomingBBIndex;
@@ -5552,6 +5628,7 @@ void Composer::compose(ExecutionState *state, std::vector<ExecutionState*> &resu
   // ADDRESS SPACE //
   //state->addressSpace = P1->addressSpace
   result.push_back(state);
+  executor->addState(*state);
   for(auto it  = S2->addressSpace.objects.begin();
            it != S2->addressSpace.objects.end();
            ++it) {
@@ -5583,9 +5660,10 @@ void Composer::compose(ExecutionState *state, std::vector<ExecutionState*> &resu
       continue;
     }
     // compose a real object
-    ObjectState *newOS = new ObjectState(MO);
-    newOS->write(0, valInS1);
+
     for(auto st : result) {
+      ObjectState *newOS = new ObjectState(MO);
+      newOS->write(0, valInS1);
       st->addressSpace.bindObject(MO, newOS);
     }
   }

@@ -21,7 +21,9 @@
 #include "TimingSolver.h"
 #include "klee/System/Time.h"
 
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Instructions.h"
 
 #include <map>
 #include <memory>
@@ -253,10 +255,8 @@ public:
   /// @brief Disables forking for this state. Set by user code
   bool forkDisabled;
 
-  /// @brief Readiness state to process a test case
-  bool pathCompleted;
-
   bool isolated;
+
   bool redundant;
 
   /// @brief The target basic block that the state must achieve
@@ -300,11 +300,14 @@ public:
 
   std::uint32_t getID() const { return id; };
   void setID() { id = nextID++; };
-  llvm::BasicBlock *getInitPCBlock();
-  llvm::BasicBlock *getPrevPCBlock();
-  llvm::BasicBlock *getPCBlock();
+  llvm::BasicBlock *getInitPCBlock() const;
+  llvm::BasicBlock *getPrevPCBlock() const;
+  llvm::BasicBlock *getPCBlock() const;
   void addLevel(llvm::BasicBlock *bb);
   bool isEmpty() const;
+  bool isCriticalPC() const;
+  bool isIntegrated() const;
+  bool isIsolated() const;
   // for debugging
   static void printCompareList(const ExecutionState &, const ExecutionState &, llvm::raw_ostream &);
   void print(llvm::raw_ostream & os) const;

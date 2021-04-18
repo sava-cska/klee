@@ -95,7 +95,6 @@ ExecutionState::ExecutionState(KFunction *kf) :
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
-    pathCompleted(false),
     isolated(false),
     redundant(false),
     target(nullptr) {
@@ -115,7 +114,6 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     instsSinceCovNew(0),
     coveredNew(false),
     forkDisabled(false),
-    pathCompleted(false),
     isolated(false),
     redundant(false),
     target(nullptr) {
@@ -157,7 +155,6 @@ ExecutionState::ExecutionState(const ExecutionState& state):
                              : nullptr),
     coveredNew(state.coveredNew),
     forkDisabled(state.forkDisabled),
-    pathCompleted(state.pathCompleted),
     isolated(state.isolated),
     redundant(state.redundant),
     target(state.target) {
@@ -434,15 +431,15 @@ void ExecutionState::addConstraint(ref<Expr> e, bool *sat) {
   c.addConstraint(e, sat);
 }
 
-BasicBlock *ExecutionState::getInitPCBlock() {
+BasicBlock *ExecutionState::getInitPCBlock() const{
   return initPC->inst->getParent();
 }
 
-BasicBlock *ExecutionState::getPrevPCBlock() {
+BasicBlock *ExecutionState::getPrevPCBlock() const {
   return prevPC->inst->getParent();
 }
 
-BasicBlock *ExecutionState::getPCBlock() {
+BasicBlock *ExecutionState::getPCBlock() const {
   return pc->inst->getParent();
 }
 
@@ -455,11 +452,25 @@ bool ExecutionState::isEmpty() const {
   return stack.empty();
 }
 
-bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSolver * solver)
-{
+bool ExecutionState::isCriticalPC() const {
+  KInstruction *ki = pc;
+  KInstruction *prevKI = prevPC;
+  return ((prevKI->inst->isTerminator() || isa<CallInst>(prevKI->inst)) && prevKI != ki &&
+      (this->getPCBlock()->hasNPredecessorsOrMore(2) || this->getPCBlock()->hasNPredecessors(0)));
+}
+
+bool ExecutionState::isIntegrated() const {
+  return !isolated;
+}
+
+bool ExecutionState::isIsolated() const {
+  return isolated;
+}
+
+
+bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSolver * solver) {
   ref<Expr> simplified = ConstraintManager::simplifyExpr(constraints, e);
-  if( simplified->getWidth() == Expr::Bool)
-  {
+  if( simplified->getWidth() == Expr::Bool) {
     if(simplified->isFalse())
       return false;
     if(simplified->isTrue())
@@ -485,8 +496,7 @@ bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSol
 }
 
 void ExecutionState::printCompareList(const ExecutionState &fst, const ExecutionState &snd, 
-                                      llvm::raw_ostream &os)
-{
+                                      llvm::raw_ostream &os) {
   os << divider(50) << divider(50) << divider(50);
   os << "STACK\n";
   if(fst.stack.back().kf != snd.stack.back().kf) {

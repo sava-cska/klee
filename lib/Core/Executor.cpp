@@ -908,7 +908,7 @@ void Executor::initializeRoot(ExecutionState &state, KBlock *kb) {
   if (statsTracker)
     statsTracker->framePushed(*root, 0);
   processForest->addRoot(root);
-  states.insert(root);
+  addedStates.push_back(root);
 }
 
 bool Executor::branchingPermitted(const ExecutionState &state) const {
@@ -3375,8 +3375,8 @@ void Executor::updateStates(ExecutionState *current) {
       seedMap.find(es);
     if (it3 != seedMap.end())
       seedMap.erase(it3);
-    if (es->pathCompleted) {
-      processForest->remove(es->ptreeNode);
+    processForest->remove(es->ptreeNode);
+    if (es->isIntegrated()) {
       delete es;
     }
   }
@@ -3693,30 +3693,18 @@ bool Executor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
   return true;
 }
 
-void Executor::coveredExecuteStep(ExecutionState &state) {
-  Function *kmsf = kmodule->module->getFunction(llvm::StringRef("klee_make_symbolic"));
+void Executor::isolatedExecuteStep(ExecutionState &state) {
+  assert(state.isIsolated());
   KInstruction *ki = state.pc;
-  KInstruction *prevKI = state.prevPC;
 
-  if (isa<ReturnInst>(ki->inst)) {
-    pauseState(state);
-    updateStates(nullptr);
-    return;
-  }
-  if (prevKI->inst->isTerminator() && prevKI != ki &&
-      (state.getPCBlock()->hasNPredecessorsOrMore(2) ||
-       (ki->isCallOrInvokeInst() && ((KCallBlock*)ki->parent)->calledFunction != kmsf))) {
+  if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
     addCompletedResult(state);
     silentRemove(state);
     updateStates(nullptr);
     return;
   }
-  if (state.redundant ||
-      (ki->isCallOrInvokeInst() && ((KCallBlock*)ki->parent)->calledFunction != kmsf)) {
-    if (state.redundant)
-      pauseRedundantState(state);
-    else
-      pauseState(state);
+  if (state.redundant) {
+    pauseRedundantState(state);
     updateStates(nullptr);
     return;
   }
@@ -3724,34 +3712,52 @@ void Executor::coveredExecuteStep(ExecutionState &state) {
   executeStep(state);
 }
 
+void Executor::coverStep(ExecutionState &state, ExecutionState &initialState) {
+  // TODO: обновить серчер так, чтобы в первую очередь выбирались isolated состояния
+  KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
+  KInstruction *ki = state.pc;
+  if (state.isIntegrated() && isa<ReturnInst>(ki->inst)) {
+    executeStep(state);
+    updateStates(&state);
+    return;
+  }
+  if (state.isIntegrated() && state.isCriticalPC()) {
+    if (results.find(state.getPCBlock()) == results.end()) {
+      initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
+      updateStates(nullptr);
+    } else {
+      composeStep(state);
+    }
+  } else if (state.isIsolated()) {
+    isolatedExecuteStep(state);
+  } else {
+    executeStep(state);
+  }
+}
+
 void Executor::composeStep(ExecutionState &lstate) {
+  assert(lstate.isIntegrated());
   if (lstate.pc->inst->isTerminator()) {
     executeStep(lstate);
     return;
   }
   std::vector<ExecutionState *> result;
-  if (!results[lstate.getPCBlock()].completedStates.empty()) {
-    for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
-      for (auto rstate : blockstate.second) {
-        Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
-      }
+  for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
+    for (auto rstate : blockstate.second) {
+      Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
     }
   }
-  if (!results[lstate.getPCBlock()].pausedStates.empty()) {
-    for (auto &blockstate : results[lstate.getPCBlock()].pausedStates) {
-      for (auto rstate : blockstate.second) {
-        if (rstate->pc->isCallOrInvokeInst() || isa<ReturnInst>(rstate->pc->inst)) {
-          Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
-        }
-      }
+  for (auto &blockstate : results[lstate.getPCBlock()].redundantStates) {
+    for (auto rstate : blockstate.second) {
+      Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
     }
   }
   removedStates.push_back(&lstate);
   updateStates(nullptr);
   for (auto &state : result) {
-    state->pc->inst->getOpcodeName();
-    if (state->pc->isCallOrInvokeInst() || isa<ReturnInst>(state->pc->inst)) {
+    if (isa<ReturnInst>(state->pc->inst)) {
       executeStep(*state);
+      updateStates(state);
     }
   }
 }
@@ -3990,19 +3996,21 @@ void Executor::addState(ExecutionState &state) {
 void Executor::coveredRun(ExecutionState &state) {
   ExecutionState *initialState = state.copy();
   initialState->stack.clear();
+  initialState->isolated = true;
 
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
 
   states.insert(&state);
 
-  initializeRoots(initialState);
-
   if (usingSeeds) {
     seed(state);
   }
 
-  searcher = constructUserSearcher(*this);
+  searcher = new BinaryRankedSearcher(
+        ExecutionStateIsolationRank(),
+        constructUserSearcher(*this),
+        constructUserSearcher(*this));
 
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   searcher->update(0, newStates, std::vector<ExecutionState *>());
@@ -4010,33 +4018,9 @@ void Executor::coveredRun(ExecutionState &state) {
   // main interpreter loop
   while (!states.empty() && !haltExecution) {
     ExecutionState &es = searcher->selectState();
-    coveredExecuteStep(es);
+    coverStep(es, *initialState);
   }
 
-  delete searcher;
-  searcher = new BFSSearcher();
-  haltExecution = false;
-  states.clear();
-  newStates.clear();
-
-  for (auto &executedInterval : results[initialState->getInitPCBlock()].completedStates) {
-    for (auto es : executedInterval.second) {
-      es->isolated = false;
-      states.insert(const_cast<ExecutionState*>(es));
-    }
-  }
-
-  results[initialState->getInitPCBlock()].completedStates.clear();
-
-  newStates.insert(newStates.begin(), states.begin(), states.end());
-  searcher->update(0, newStates, std::vector<ExecutionState *>());
-
-  while (!states.empty() && !haltExecution) {
-    ExecutionState &es = searcher->selectState();
-    composeStep(es);
-  }
-
-  ExecutedInterval &result = results[initialState->getInitPCBlock()].completedStates;
   delete searcher;
   searcher = nullptr;
 
@@ -4111,7 +4095,7 @@ void Executor::terminateState(ExecutionState &state) {
       return;
   }
 
-  if (state.pathCompleted)
+  if (state.isIntegrated())
     interpreterHandler->incPathsExplored();
 
   std::vector<ExecutionState *>::iterator ita =
@@ -4126,17 +4110,13 @@ void Executor::terminateState(ExecutionState &state) {
     if (it3 != seedMap.end())
       seedMap.erase(it3);
     addedStates.erase(ita);
-    if (state.pathCompleted) {
-      processForest->remove(state.ptreeNode);
-    }
+    processForest->remove(state.ptreeNode);
   }
 }
 
 void Executor::terminateStateEarly(ExecutionState &state, 
                                    const Twine &message) {
-  if (!state.isolated)
-    state.pathCompleted = true;
-  if (state.pathCompleted && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+  if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, (message + "\n").str().c_str(),
                                         "early");
@@ -4144,18 +4124,15 @@ void Executor::terminateStateEarly(ExecutionState &state,
 }
 
 void Executor::silentRemove(ExecutionState &state) {
-  state.pathCompleted = false;
   removedStates.push_back(&state);
 }
 
 void Executor::pauseState(ExecutionState &state) {
-  state.pathCompleted = false;
   results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
   removedStates.push_back(&state);
 }
 
 void Executor::pauseRedundantState(ExecutionState &state) {
-  state.pathCompleted = false;
   results[state.getInitPCBlock()].redundantStates[state.getPCBlock()].insert(&state);
   removedStates.push_back(&state);
 }
@@ -4182,9 +4159,7 @@ void Executor::unpauseStates(std::vector<ExecutionState *> &states) {
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
-  if (!state.isolated)
-    state.pathCompleted = true;
-  if (state.pathCompleted && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+  if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
   addCompletedResult(state);
@@ -4296,9 +4271,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
       suffix = suffix_buf.c_str();
     }
 
-    if (!state.isolated)
-      state.pathCompleted = true;
-    if (state.pathCompleted)
+    if (state.isIntegrated())
       interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
   }
 
@@ -4791,7 +4764,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     const MemoryObject *mo = i->first;
     const ObjectState *os = i->second;
 
-    if (unbound->isolated && mo->isGlobal)
+    if (unbound->isIsolated() && mo->isGlobal)
       break;
 
     ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
@@ -4850,7 +4823,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       solver->setTimeout(time::Span());
 
       if (res ==Solver::False) {
-        if (unbound->isolated) {
+        if (unbound->isIsolated()) {
           p = lazyInstantiateVariable(*unbound, unsafeAddress, target ? target->inst : nullptr, bytes);
           mo = p.first;
         } else {
@@ -5180,7 +5153,6 @@ void Executor::runMainAsGuided(Function *mainFn,
                                       char **argv,
                                       char **envp) {
   ExecutionState *state = formState(mainFn, argc, argv, envp);
-  state->isolated = true;
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[mainFn];
   runCovered(*state);

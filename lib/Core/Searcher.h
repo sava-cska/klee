@@ -132,7 +132,7 @@ namespace klee {
   private:
     std::unique_ptr<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>> states;
     KBlock *target;
-    std::map<KFunction*, unsigned int> &distanceToTargetFunction;
+    std::map<KFunction *, unsigned int> &distanceToTargetFunction;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
     WeightResult tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets);
@@ -353,6 +353,31 @@ namespace klee {
     explicit InterleavedSearcher(const std::vector<Searcher *> &searchers);
     ~InterleavedSearcher() override = default;
 
+    ExecutionState &selectState() override;
+    void update(ExecutionState *current,
+                const std::vector<ExecutionState *> &addedStates,
+                const std::vector<ExecutionState *> &removedStates) override;
+    bool empty() override;
+    void printName(llvm::raw_ostream &os) override;
+  };
+
+  struct ExecutionStateBinaryRank {
+    ExecutionStateBinaryRank () {}
+    virtual bool getRank(ExecutionState const &state) { return 0; };
+  };
+
+  struct ExecutionStateIsolationRank : klee::ExecutionStateBinaryRank {
+    ExecutionStateIsolationRank () {}
+    bool getRank(ExecutionState const &state) override;
+  };
+
+  class BinaryRankedSearcher final : public Searcher {
+    ExecutionStateBinaryRank rank;
+    Searcher *firstRankSearcher;
+    Searcher *secondRankSearcher;
+
+  public:
+    explicit BinaryRankedSearcher(ExecutionStateBinaryRank rank, Searcher *first, Searcher *second);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,

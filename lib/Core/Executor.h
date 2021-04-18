@@ -76,6 +76,7 @@ namespace klee {
   class ObjectState;
   class PForest;
   class Searcher;
+  struct ExecutionStateBinaryRank;
   class SeedInfo;
   class SpecialFunctionHandler;
   struct StackFrame;
@@ -674,7 +675,8 @@ public:
   const Array *makeArray(ExecutionState &state, const uint64_t size, const std::string &name);
   void executeStep(ExecutionState &state);
   bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
-  void coveredExecuteStep(ExecutionState &state);
+  void isolatedExecuteStep(ExecutionState &state);
+  void coverStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
   KBlock *calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,

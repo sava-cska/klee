@@ -150,7 +150,7 @@ TargetedSearcher::TargetedSearcher(KBlock *targetBB)
     distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {}
 
 ExecutionState &TargetedSearcher::selectState() {
-  return *states->choose(0);
+  return *states->choose(0.0);
 }
 
 bool TargetedSearcher::distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance) {
@@ -191,7 +191,7 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetLocalWeight(ExecutionStat
   if (localWeight == 0) return Done;
 
   intWeight += localWeight;
-  weight = intWeight / 4294967296.0; //number on [0,1)-real-interval
+  weight = intWeight * (1.0 / 4294967296.0); //number on [0,1)-real-interval
   return Continue;
 }
 
@@ -208,7 +208,7 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPreTargetWeight(Execution
   if (localTargets.empty()) return Miss;
 
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
-  weight = 1.0/2.0 + weight / 2.0; // number on [0.5,1)-real-interval
+  weight = 1.0 / 2.0 + weight * (1.0 / 2.0); // number on [0.5,1)-real-interval
   return res == Done ? Continue : res;
 }
 
@@ -219,14 +219,14 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(Executio
   if (localTargets.empty()) return Miss;
 
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
-  weight = 1.0/2.0 + weight / 2.0; // number on [0.5,1)-real-interval
+  weight = 1.0 /  2.0 + weight * (1.0 / 2.0); // number on [0.5,1)-real-interval
   return res == Done ? Continue : res;
 }
 
 TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(ExecutionState *es, double &weight) {
   std::vector<KBlock*> localTargets = {target};
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
-  weight = weight / 2.0; // number on [0,0.5)-real-interval
+  weight = weight * (1.0 / 2.0); // number on [0,0.5)-real-interval
   return res;
 }
 
@@ -308,7 +308,7 @@ void TargetedSearcher::update(ExecutionState *current,
 
   if (result) {
     while (!states->empty()) {
-        ExecutionState *state = states->choose(0);
+        ExecutionState *state = states->choose(0.0);
         state->target = nullptr;
         states->remove(state);
     }
@@ -799,4 +799,52 @@ void InterleavedSearcher::printName(llvm::raw_ostream &os) {
   for (const auto &searcher : searchers)
     searcher->printName(os);
   os << "</InterleavedSearcher>\n";
+}
+
+BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank rank, Searcher *first, Searcher *second)
+  : rank(rank), firstRankSearcher(first), secondRankSearcher(second) {}
+
+ExecutionState &BinaryRankedSearcher::selectState() {
+  return firstRankSearcher->empty() ? secondRankSearcher->selectState() : firstRankSearcher->selectState();
+}
+
+void BinaryRankedSearcher::update(ExecutionState *current,
+                            const std::vector<ExecutionState *> &addedStates,
+                            const std::vector<ExecutionState *> &removedStates) {
+  ExecutionState *firstRankCurrent = nullptr, *secondRankCurrent = nullptr;
+  std::vector<ExecutionState *> firstRankAdded, secondRankAdded, firstRankRemoved, secondRankRemoved;
+
+  if (rank.getRank(*current))
+    firstRankCurrent = current;
+  else
+    secondRankCurrent = current;
+
+  for (const auto state : addedStates) {
+    if (rank.getRank(*state))
+      firstRankAdded.push_back(state);
+    else
+      secondRankAdded.push_back(state);
+  }
+
+  for (const auto state : removedStates) {
+    if (rank.getRank(*state))
+      firstRankRemoved.push_back(state);
+    else
+      secondRankRemoved.push_back(state);
+  }
+
+  firstRankSearcher->update(firstRankCurrent, firstRankAdded, firstRankRemoved);
+  secondRankSearcher->update(secondRankCurrent, secondRankAdded, secondRankRemoved);
+}
+
+bool BinaryRankedSearcher::empty() {
+  return firstRankSearcher->empty() && secondRankSearcher->empty();
+}
+
+void BinaryRankedSearcher::printName(llvm::raw_ostream &os) {
+  os << "BinaryRankedSearcher\n";
+}
+
+bool ExecutionStateIsolationRank::getRank(ExecutionState const &state) {
+  return state.isIsolated();
 }

@@ -3713,12 +3713,10 @@ void Executor::isolatedExecuteStep(ExecutionState &state) {
 }
 
 void Executor::coverStep(ExecutionState &state, ExecutionState &initialState) {
-  // TODO: обновить серчер так, чтобы в первую очередь выбирались isolated состояния
   KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
   KInstruction *ki = state.pc;
   if (state.isIntegrated() && isa<ReturnInst>(ki->inst)) {
     executeStep(state);
-    updateStates(&state);
     return;
   }
   if (state.isIntegrated() && state.isCriticalPC()) {
@@ -4007,8 +4005,9 @@ void Executor::coveredRun(ExecutionState &state) {
     seed(state);
   }
 
+  ExecutionStateIsolationRank rank;
   searcher = new BinaryRankedSearcher(
-        ExecutionStateIsolationRank(),
+        rank,
         constructUserSearcher(*this),
         constructUserSearcher(*this));
 

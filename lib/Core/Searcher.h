@@ -363,7 +363,7 @@ namespace klee {
 
   struct ExecutionStateBinaryRank {
     ExecutionStateBinaryRank () {}
-    virtual bool getRank(ExecutionState const &state) { return 0; };
+    virtual bool getRank(ExecutionState const &state) = 0;
   };
 
   struct ExecutionStateIsolationRank : klee::ExecutionStateBinaryRank {
@@ -372,12 +372,12 @@ namespace klee {
   };
 
   class BinaryRankedSearcher final : public Searcher {
-    ExecutionStateBinaryRank rank;
+    ExecutionStateBinaryRank &rank;
     Searcher *firstRankSearcher;
     Searcher *secondRankSearcher;
 
   public:
-    explicit BinaryRankedSearcher(ExecutionStateBinaryRank rank, Searcher *first, Searcher *second);
+    explicit BinaryRankedSearcher(ExecutionStateBinaryRank &rank, Searcher *first, Searcher *second);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,

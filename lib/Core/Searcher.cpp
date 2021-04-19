@@ -801,7 +801,7 @@ void InterleavedSearcher::printName(llvm::raw_ostream &os) {
   os << "</InterleavedSearcher>\n";
 }
 
-BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank rank, Searcher *first, Searcher *second)
+BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank &rank, Searcher *first, Searcher *second)
   : rank(rank), firstRankSearcher(first), secondRankSearcher(second) {}
 
 ExecutionState &BinaryRankedSearcher::selectState() {
@@ -814,7 +814,7 @@ void BinaryRankedSearcher::update(ExecutionState *current,
   ExecutionState *firstRankCurrent = nullptr, *secondRankCurrent = nullptr;
   std::vector<ExecutionState *> firstRankAdded, secondRankAdded, firstRankRemoved, secondRankRemoved;
 
-  if (rank.getRank(*current))
+  if (current && rank.getRank(*current))
     firstRankCurrent = current;
   else
     secondRankCurrent = current;

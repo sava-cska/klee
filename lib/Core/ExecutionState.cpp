@@ -71,9 +71,8 @@ StackFrame::~StackFrame() {
   delete[] locals;
 }
 
-void StackFrame::print() const
-{
-  for(int i = 0; i < kf->numRegisters; i++) {
+void StackFrame::print() const {
+  for(unsigned i = 0; i < kf->numRegisters; i++) {
     if(!locals[i].value.isNull()) {
       llvm::errs() << i << ":  " << locals[i].value << "\n";
     }
@@ -504,7 +503,7 @@ void ExecutionState::printCompareList(const ExecutionState &fst, const Execution
   }
   auto & fstFrame = fst.stack.back();
   auto & sndFrame = snd.stack.back();
-  for (int i = 0; i < fstFrame.kf->numRegisters; i++) {
+  for (unsigned i = 0; i < fstFrame.kf->numRegisters; i++) {
     if(!fstFrame.locals[i].value.isNull() || !sndFrame.locals[i].value.isNull()) {
       os << "reg " << i << ":\n";
       os << "state 1\n";
@@ -569,12 +568,11 @@ void ExecutionState::printCompareList(const ExecutionState &fst, const Execution
   }
 }
 
-void ExecutionState::print(llvm::raw_ostream &os) const
-{
+void ExecutionState::print(llvm::raw_ostream &os) const {
   os << divider(50) << divider(50) << divider(50);
   os << "STACK\n";
   auto & frame = this->stack.back();
-  for (int i = 0; i < frame.kf->numRegisters; i++) {
+  for (unsigned i = 0; i < frame.kf->numRegisters; i++) {
     if(!frame.locals[i].value.isNull()) {
       os << "reg " << i << ":\n";
       os << frame.locals[i].value << "\n";

@@ -3684,7 +3684,6 @@ bool Executor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
   if (prevKI->inst->isTerminator()) {
     addHistoryResult(state);
     if (state.multilevel.count(state.getPCBlock()) > bound) {
-      pauseState(state);
       return false;
     }
   }
@@ -3956,7 +3955,8 @@ void Executor::guidedRun(ExecutionState &initialState) {
         KBlock *target = calculateTarget(state);
         if (target) {
           state.target = target;
-          unpauseState(state);
+        } else {
+          pauseState(state);
           updateStates(nullptr);
         }
       }

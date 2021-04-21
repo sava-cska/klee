@@ -259,6 +259,8 @@ public:
 
   bool redundant;
 
+  bool targetable;
+
   /// @brief The target basic block that the state must achieve
   KBlock *target;
 

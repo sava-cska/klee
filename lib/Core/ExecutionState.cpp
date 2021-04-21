@@ -96,6 +96,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
+    targetable(false),
     target(nullptr) {
   pushFrame(nullptr, kf);
   setID();
@@ -115,6 +116,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
+    targetable(false),
     target(nullptr) {
   pushFrame(nullptr, kf);
   setID();
@@ -156,6 +158,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
     redundant(state.redundant),
+    targetable(state.targetable),
     target(state.target) {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);

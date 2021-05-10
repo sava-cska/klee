@@ -158,7 +158,9 @@ private:
 
   std::set<ExecutionState*, ExecutionStateIDCompare> states;
 
-  std::set<ExecutionState*> finalStates;
+  std::unordered_set<ExecutionState*> finalStates;
+
+  std::map<llvm::Function *, std::unordered_set<ExecutionState *>> targetableStates;
 
   StatsTracker *statsTracker;
 
@@ -270,6 +272,8 @@ private:
   void addCompletedResult(ExecutionState &state);
   void addErroneousResult(ExecutionState &state);
   void addHistoryResult(ExecutionState &state);
+  void addTargetable(ExecutionState &state);
+  void removeTargetable(ExecutionState &state);
 
   void executeInstruction(ExecutionState &state, KInstruction *ki);
   void targetedRun(ExecutionState &initialState, KBlock *target);
@@ -676,8 +680,9 @@ public:
   void executeStep(ExecutionState &state);
   bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
   void isolatedExecuteStep(ExecutionState &state);
-  void coverStep(ExecutionState &state, ExecutionState &initialState);
+  bool tryCoverStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
+  KBlock *calculateCoverTarget(ExecutionState &state);
   KBlock *calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,
                                ExecutedInterval &pausedStates,

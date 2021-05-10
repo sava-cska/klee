@@ -308,9 +308,9 @@ void TargetedSearcher::update(ExecutionState *current,
 
   if (result) {
     while (!states->empty()) {
-        ExecutionState *state = states->choose(0.0);
-        state->target = nullptr;
-        states->remove(state);
+      ExecutionState *state = states->choose(0.0);
+      state->target = nullptr;
+      states->remove(state);
     }
   }
 }

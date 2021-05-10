@@ -630,6 +630,18 @@ void Executor::addErroneousResult(ExecutionState &state) {
 void Executor::addHistoryResult(ExecutionState &state) {
   results[state.getInitPCBlock()].history[state.getPrevPCBlock()].insert(state.level.begin(), state.level.end());
 }
+void Executor::addTargetable(ExecutionState &state) {
+  assert(state.isIsolated());
+  targetableStates[state.getInitPCBlock()->getParent()].insert(&state);
+}
+void Executor::removeTargetable(ExecutionState &state) {
+  assert(state.isIsolated());
+  std::unordered_set<ExecutionState *> &sts = targetableStates[state.getInitPCBlock()->getParent()];
+  std::unordered_set<ExecutionState*>::iterator it = sts.find(&state);
+  if (it!=sts.end())
+    sts.erase(it);
+}
+
 
 void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
                                       const Constant *c, 
@@ -3697,6 +3709,7 @@ void Executor::isolatedExecuteStep(ExecutionState &state) {
   KInstruction *ki = state.pc;
 
   if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
+    addTargetable(state);
     addCompletedResult(state);
     silentRemove(state);
     updateStates(nullptr);
@@ -3711,25 +3724,29 @@ void Executor::isolatedExecuteStep(ExecutionState &state) {
   executeStep(state);
 }
 
-void Executor::coverStep(ExecutionState &state, ExecutionState &initialState) {
+bool Executor::tryCoverStep(ExecutionState &state, ExecutionState &initialState) {
   KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
   KInstruction *ki = state.pc;
   if (state.isIntegrated() && isa<ReturnInst>(ki->inst)) {
     executeStep(state);
-    return;
+    return true;
   }
   if (state.isIntegrated() && state.isCriticalPC()) {
     if (results.find(state.getPCBlock()) == results.end()) {
       initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
       updateStates(nullptr);
     } else {
-      composeStep(state);
+      if (!state.target && state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
+        return false;
+      else
+        composeStep(state);
     }
   } else if (state.isIsolated()) {
     isolatedExecuteStep(state);
   } else {
     executeStep(state);
   }
+  return true;
 }
 
 void Executor::composeStep(ExecutionState &lstate) {
@@ -3741,22 +3758,21 @@ void Executor::composeStep(ExecutionState &lstate) {
   std::vector<ExecutionState *> result;
   for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
     for (auto rstate : blockstate.second) {
-      Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
+      std::vector<ExecutionState *> currentResult;
+      Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), currentResult);
+      if (!currentResult.empty()) removeTargetable(*rstate);
+      result.insert(result.end(), currentResult.begin(), currentResult.end());
     }
   }
   for (auto &blockstate : results[lstate.getPCBlock()].redundantStates) {
     for (auto rstate : blockstate.second) {
-      Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), result);
+      std::vector<ExecutionState *> currentResult;
+      Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), currentResult);
+      result.insert(result.end(), currentResult.begin(), currentResult.end());
     }
   }
   removedStates.push_back(&lstate);
   updateStates(nullptr);
-  for (auto &state : result) {
-    if (isa<ReturnInst>(state->pc->inst)) {
-      executeStep(*state);
-      updateStates(state);
-    }
-  }
 }
 
 void Executor::boundedRun(ExecutionState &initialState, unsigned bound) {
@@ -3833,7 +3849,33 @@ void Executor::targetedRun(ExecutionState &initialState, KBlock *target) {
   haltExecution = false;
 }
 
-KBlock* Executor::calculateTarget(ExecutionState &state) {
+KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
+  BasicBlock *bb = state.getPCBlock();
+  KFunction *kf = kmodule->functionMap[bb->getParent()];
+  KBlock *kb = kf->blockMap[bb];
+  KBlock *nearestBlock = nullptr;
+  unsigned int sfNum = 0;
+  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe; sfi++, sfNum++) {
+    kf = sfi->kf;
+    std::map<KBlock*, unsigned int> &kbd = kf->getDistance(kb);
+    for (auto &tstate : targetableStates[kf->function]) {
+      KBlock *currKB = kf->blockMap[tstate->getInitPCBlock()];
+      if (kbd.find(currKB) != kbd.end())
+        nearestBlock = currKB;
+    }
+
+    if (nearestBlock) {
+      return nearestBlock;
+    }
+
+    if (sfi->caller) {
+      kb = sfi->caller->parent;
+    }
+  }
+  return nearestBlock;
+}
+
+KBlock *Executor::calculateTarget(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
   BasicBlock *bb = state.getPCBlock();
@@ -4009,15 +4051,30 @@ void Executor::coveredRun(ExecutionState &state) {
   searcher = new BinaryRankedSearcher(
         rank,
         constructUserSearcher(*this),
-        constructUserSearcher(*this));
+        new GuidedSearcher(constructUserSearcher(*this)));
 
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   searcher->update(0, newStates, std::vector<ExecutionState *>());
 
   // main interpreter loop
   while (!states.empty() && !haltExecution) {
-    ExecutionState &es = searcher->selectState();
-    coverStep(es, *initialState);
+    while (!searcher->empty() && !haltExecution) {
+      ExecutionState &es = searcher->selectState();
+      if (state.target)
+        executeStep(es);
+      else if (!tryCoverStep(es, *initialState)) {
+        KBlock *target = calculateCoverTarget(es);
+        if (target) {
+          es.target = target;
+        } else {
+          pauseState(es);
+          updateStates(nullptr);
+        }
+      }
+    }
+
+    if (searcher->empty())
+      haltExecution = true;
   }
 
   delete searcher;
@@ -4762,9 +4819,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) {
     const MemoryObject *mo = i->first;
     const ObjectState *os = i->second;
-
-    if (unbound->isIsolated() && mo->isGlobal)
-      break;
 
     ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
 

@@ -4066,6 +4066,7 @@ void Executor::coveredRun(ExecutionState &state) {
         KBlock *target = calculateCoverTarget(es);
         if (target) {
           es.target = target;
+          updateStates(&es);
         } else {
           pauseState(es);
           updateStates(nullptr);

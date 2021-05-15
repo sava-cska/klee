@@ -270,10 +270,14 @@ void TargetedSearcher::update(ExecutionState *current,
   if (current && std::find(removedStates.begin(), removedStates.end(), current) == removedStates.end()) {
     switch (tryGetWeight(current, weight)) {
     case Continue:
-      states->update(current, weight);
+      if (states->inTree(current))
+        states->update(current, weight);
+      else
+        states->insert(current, weight);
       break;
     case Done:
       current->multilevel.clear();
+      current->target = nullptr;
       result = current;
       break;
     case Miss:
@@ -352,10 +356,10 @@ void GuidedSearcher::update(ExecutionState *current,
     }
   }
   for (const auto state : removedStates) {
-  if (state->target) {
-    targets.insert(state->target);
-     removedTStates[state->target].push_back(state);
-   }
+    if (state->target) {
+      targets.insert(state->target);
+      removedTStates[state->target].push_back(state);
+    }
   }
   KBlock *currTarget = current ? current->target : nullptr;
   if (currTarget)

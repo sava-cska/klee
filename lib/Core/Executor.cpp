@@ -4298,13 +4298,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped 
     if (bound) {
-
       ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
       if (UseGEPExpr && isGEPExpr(address)) {
         inBounds = AndExpr::create(
             inBounds, mo->getBoundsCheckPointer(base, size));
       }
-
       StatePair branches_inner = fork(*bound, inBounds, true);
       ExecutionState *bound_inner = branches_inner.first;
       ExecutionState *unbound_inner = branches_inner.second;
@@ -4328,6 +4326,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         }
         if (results)
           results->push_back(bound_inner);
+      }
+      if(unbound_inner) {
+        terminateState(*unbound_inner);
       }
       if(unbound_inner) {
         terminateState(*unbound_inner);

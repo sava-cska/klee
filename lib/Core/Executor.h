@@ -434,32 +434,23 @@ private:
   // Used for testing.
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
-  const Cell& eval(KInstruction *ki, unsigned index,
-                             ExecutionState &state) const;
+public:
+  const Cell& eval(const KInstruction *ki, unsigned index,
+                   const ExecutionState &state) const;
 
+private:
   const Cell& symbolicEval(KInstruction *ki, unsigned index,
-                   ExecutionState &state);
+                           ExecutionState &state);
 
-  Cell& getArgumentCell(ExecutionState &state,
-                        KFunction *kf,
+public:
+  Cell& getArgumentCell(const ExecutionState &state,
+                        const KFunction *kf,
                         unsigned index) {
     return state.stack.back().locals[kf->getArgRegister(index)];
   }
 
-  Cell& getDestCell(ExecutionState &state,
-                    KInstruction *target) {
-    return state.stack.back().locals[target->dest];
-  }
-
-public:
-  const Cell& getArgumentCell(const ExecutionState &state,
-                              const KFunction *kf,
-                              unsigned index) {
-    return state.stack.back().locals[kf->getArgRegister(index)];
-  }
-
-  const Cell& getDestCell(const ExecutionState &state,
-                          const KInstruction *target) {
+  Cell& getDestCell(const ExecutionState &state,
+                    const KInstruction *target) {
     return state.stack.back().locals[target->dest];
   }
 

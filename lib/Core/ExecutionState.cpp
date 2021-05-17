@@ -454,7 +454,7 @@ bool ExecutionState::isEmpty() const {
 bool ExecutionState::isCriticalPC() const {
   KInstruction *ki = pc;
   KInstruction *prevKI = prevPC;
-  return ((prevKI->inst->isTerminator() || isa<CallInst>(prevKI->inst)) && prevKI != ki &&
+  return ((prevKI->inst->isTerminator() || isa<CallInst>(prevKI->inst)) &&
       (this->getPCBlock()->hasNPredecessorsOrMore(2) || this->getPCBlock()->hasNPredecessors(0)));
 }
 

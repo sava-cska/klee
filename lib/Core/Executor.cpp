@@ -1282,8 +1282,8 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
                                  ConstantExpr::alloc(1, Expr::Bool));
 }
 
-const Cell& Executor::eval(KInstruction *ki, unsigned index,
-                           ExecutionState &state) const {
+const Cell& Executor::eval(const KInstruction *ki, unsigned index,
+                           const ExecutionState &state) const {
   assert(index < ki->inst->getNumOperands());
   int vnumber = ki->operands[index];
 
@@ -1296,7 +1296,7 @@ const Cell& Executor::eval(KInstruction *ki, unsigned index,
     return kmodule->constantTable[index];
   } else {
     unsigned index = vnumber;
-    StackFrame &sf = state.stack.back();
+    const StackFrame &sf = state.stack.back();
     return sf.locals[index];
   }
 }
@@ -3708,7 +3708,8 @@ void Executor::isolatedExecuteStep(ExecutionState &state) {
   assert(state.isIsolated());
   KInstruction *ki = state.pc;
 
-  if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
+  if (state.isCriticalPC() ||
+      isa<ReturnInst>(ki->inst) || isa<CallInst>(ki->inst) || isa<InvokeInst>(ki->inst)) {
     addTargetable(state);
     addCompletedResult(state);
     silentRemove(state);
@@ -3727,10 +3728,6 @@ void Executor::isolatedExecuteStep(ExecutionState &state) {
 bool Executor::tryCoverStep(ExecutionState &state, ExecutionState &initialState) {
   KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
   KInstruction *ki = state.pc;
-  if (state.isIntegrated() && isa<ReturnInst>(ki->inst)) {
-    executeStep(state);
-    return true;
-  }
   if (state.isIntegrated() && state.isCriticalPC()) {
     if (results.find(state.getPCBlock()) == results.end()) {
       initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
@@ -5777,7 +5774,10 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr & re) {
     } else if(isa<Instruction>(allocSite)) {
       const Instruction *inst = cast<Instruction>(allocSite);
       const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
-      prevVal = caller->executor->getDestCell(*S1, ki).value;
+      if (isa<PHINode>(inst))
+        prevVal = caller->executor->eval(ki, S1->incomingBBIndex, *S1).value;
+      else
+        prevVal = caller->executor->getDestCell(*S1, ki).value;
     } else {
       return new ReadExpr(re);
     }

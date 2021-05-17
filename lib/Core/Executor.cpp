@@ -4821,10 +4821,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     const MemoryObject *mo = i->first;
     const ObjectState *os = i->second;
 
-    ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
-
+    ref<Expr> inBounds;
     if (UseGEPExpr && isa<GEPExpr>(address))
-      inBounds = AndExpr::create(inBounds, mo->getBoundsCheckPointer(base, size));
+      inBounds = mo->getBoundsCheckPointer(dyn_cast<GEPExpr>(address)->base, 1);
+    else
+      inBounds = mo->getBoundsCheckPointer(unsafeAddress, 1);
 
     StatePair branches = fork(*unbound, inBounds, true);
     ExecutionState *bound = branches.first;
@@ -4834,25 +4835,40 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (bound) {
       if (unbound)
         bound->redundant = true;
-      switch (operation) {
-        case Write: {
-          if (os->readOnly) {
-            terminateStateOnError(*bound, "memory error: object read only",
-                                  ReadOnly);
-          } else {
-            ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-            wos->write(mo->getOffsetExpr(unsafeAddress), value);
-          }
-          break;
-        }
-        case Read: {
-          ref<Expr> result = os->read(mo->getOffsetExpr(unsafeAddress), type);
-          bindLocal(target, *bound, result);
-          break;
-        }
+
+      ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
+      if (UseGEPExpr && isa<GEPExpr>(address)) {
+        auto gep = dyn_cast<GEPExpr>(address);
+        inBounds = AndExpr::create(
+            inBounds, mo->getBoundsCheckPointer(gep->base, gep->sourceSize));
       }
-      if (results)
-        results->push_back(bound);
+      StatePair branches_inner = fork(*bound, inBounds, true);
+      ExecutionState *bound_inner = branches_inner.first;
+      ExecutionState *unbound_inner = branches_inner.second;
+      if(bound_inner) {
+        switch (operation) {
+          case Write: {
+            if (os->readOnly) {
+              terminateStateOnError(*bound_inner, "memory error: object read only",
+                                    ReadOnly);
+            } else {
+              ObjectState *wos = bound_inner->addressSpace.getWriteable(mo, os);
+              wos->write(mo->getOffsetExpr(unsafeAddress), value);
+            }
+            break;
+          }
+          case Read: {
+            ref<Expr> result = os->read(mo->getOffsetExpr(unsafeAddress), type);
+            bindLocal(target, *bound_inner, result);
+            break;
+          }
+        }
+        if (results)
+          results->push_back(bound_inner);
+      }
+      if(unbound_inner) {
+        terminateState(*unbound_inner);
+      }
     }
 
     if (!unbound)

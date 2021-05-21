@@ -7,24 +7,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Executor.h"
+#include "BaseExecutor.h"
 
-#include "Context.h"
-#include "CoreStats.h"
-#include "ExecutionState.h"
-#include "ExternalDispatcher.h"
-#include "GetElementPtrTypeIterator.h"
-#include "ImpliedValue.h"
-#include "Memory.h"
-#include "MemoryManager.h"
-#include "PForest.h"
-#include "Searcher.h"
-#include "SeedInfo.h"
-#include "SpecialFunctionHandler.h"
-#include "StatsTracker.h"
-#include "TimingSolver.h"
-#include "UserSearcher.h"
-#include "Composer.h"
+#include "../Context.h"
+#include "../CoreStats.h"
+#include "../ExecutionState.h"
+#include "../ExternalDispatcher.h"
+#include "../GetElementPtrTypeIterator.h"
+#include "../ImpliedValue.h"
+#include "../Memory.h"
+#include "../MemoryManager.h"
+#include "../PForest.h"
+#include "../Searcher.h"
+#include "../SeedInfo.h"
+#include "../SpecialFunctionHandler.h"
+#include "../StatsTracker.h"
+#include "../TimingSolver.h"
+#include "../UserSearcher.h"
+#include "../Composer.h"
 
 #include "klee/ADT/KTest.h"
 #include "klee/ADT/RNG.h"
@@ -4031,7 +4031,7 @@ void Executor::addState(ExecutionState &state) {
 }
 
 void Executor::coveredRun(ExecutionState &state) {
-  ExecutionState *initialState = state.copy();
+  std::unique_ptr<ExecutionState> initialState(state.copy());
   initialState->stack.clear();
   initialState->isolated = true;
 
@@ -4054,25 +4054,20 @@ void Executor::coveredRun(ExecutionState &state) {
   searcher->update(0, newStates, std::vector<ExecutionState *>());
 
   // main interpreter loop
-  while (!states.empty() && !haltExecution) {
-    while (!searcher->empty() && !haltExecution) {
-      ExecutionState &es = searcher->selectState();
-      if (state.target)
-        executeStep(es);
-      else if (!tryCoverStep(es, *initialState)) {
-        KBlock *target = calculateCoverTarget(es);
-        if (target) {
-          es.target = target;
-          updateStates(&es);
-        } else {
-          pauseState(es);
-          updateStates(nullptr);
-        }
+  while (!searcher->empty() && !haltExecution) {
+    ExecutionState &es = searcher->selectState();
+    if (state.target)
+      executeStep(es);
+    else if (!tryCoverStep(es, *initialState)) {
+      KBlock *target = calculateCoverTarget(es);
+      if (target) {
+        es.target = target;
+        updateStates(&es);
+      } else {
+        pauseState(es);
+        updateStates(nullptr);
       }
     }
-
-    if (searcher->empty())
-      haltExecution = true;
   }
 
   delete searcher;

@@ -13,7 +13,8 @@ klee_add_component(kleeCore
   Context.cpp
   CoreStats.cpp
   ExecutionState.cpp
-  Executor.cpp
+  Executors/BaseExecutor.cpp
+  Executors/ForwardExecutor.cpp
   ExecutorUtil.cpp
   ExternalDispatcher.cpp
   ImpliedValue.cpp

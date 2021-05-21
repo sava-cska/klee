@@ -15,8 +15,8 @@
 #ifndef KLEE_EXECUTOR_H
 #define KLEE_EXECUTOR_H
 
-#include "ExecutionState.h"
-#include "UserSearcher.h"
+#include "../ExecutionState.h"
+#include "../UserSearcher.h"
 
 #include "klee/ADT/RNG.h"
 #include "klee/Core/Interpreter.h"

@@ -123,7 +123,7 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng, PForest &proce
   return searcher;
 }
 
-Searcher *klee::constructUserSearcher(Executor &executor) {
+Searcher *klee::constructUserSearcher(BaseExecutor &executor) {
 
   Searcher *searcher = getNewSearcher(CoreSearch[0], executor.theRNG, *executor.processForest);
 

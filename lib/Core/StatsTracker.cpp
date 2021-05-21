@@ -162,7 +162,7 @@ std::string sqlite3ErrToStringAndFree(const std::string& prefix , char* sqlite3E
   return sstream.str();
 }
 
-StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
+StatsTracker::StatsTracker(BaseExecutor &_executor, std::string _objectFilename,
                            bool _updateMinDistToUncovered)
   : executor(_executor),
     objectFilename(_objectFilename),

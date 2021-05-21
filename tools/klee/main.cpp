@@ -159,11 +159,6 @@ namespace {
                    cl::desc("Issue a warning on startup for all external symbols (default=false)."),
                    cl::cat(StartCat));
 
-  enum class ExecutionKind {
-    Default, // Defualt symbolic execution
-    Guided,  // Use GuidedSearcher and guidedRun
-  };
-
   cl::opt<ExecutionKind> ExecutionMode(
       "execution-mode",
       cl::values(
@@ -1509,7 +1504,7 @@ int main(int argc, char **argv, char **envp) {
   IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
   KleeHandler *handler = new KleeHandler(pArgc, pArgv);
   Interpreter *interpreter =
-    theInterpreter = Interpreter::create(ctx, IOpts, handler);
+    theInterpreter = Interpreter::create(ctx, IOpts, handler, ExecutionMode);
   assert(interpreter);
   handler->setInterpreter(interpreter);
 
@@ -1622,14 +1617,7 @@ int main(int argc, char **argv, char **envp) {
                    << " bytes)"
                    << " (" << ++i << "/" << kTestFiles.size() << ")\n";
       // XXX should put envp in .ktest ?
-      switch (ExecutionMode) {
-      case ExecutionKind::Default:
-        interpreter->runFunctionAsMain(mainFn, out->numArgs, out->args, pEnvp);
-        break;
-      case ExecutionKind::Guided:
-        interpreter->runMainAsGuided(mainFn, out->numArgs, out->args, pEnvp);
-        break;
-      }
+      interpreter->runFunctionAsMain(mainFn, out->numArgs, out->args, pEnvp);
       if (interrupted) break;
     }
     interpreter->setReplayKTest(0);
@@ -1678,14 +1666,7 @@ int main(int argc, char **argv, char **envp) {
                    sys::StrError(errno).c_str());
       }
     }
-    switch (ExecutionMode) {
-    case ExecutionKind::Default:
-      interpreter->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
-      break;
-    case ExecutionKind::Guided:
-      interpreter->runMainAsGuided(mainFn, pArgc, pArgv, pEnvp);
-      break;
-    }
+    interpreter->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
     while (!seeds.empty()) {
       kTest_free(seeds.back());
       seeds.pop_back();

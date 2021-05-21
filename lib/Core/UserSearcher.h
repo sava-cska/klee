@@ -11,7 +11,7 @@
 #define KLEE_USERSEARCHER_H
 
 namespace klee {
-  class Executor;
+  class BaseExecutor;
   class Searcher;
 
   // XXX gross, should be on demand?
@@ -19,7 +19,7 @@ namespace klee {
 
   void initializeSearchOptions();
 
-  Searcher *constructUserSearcher(Executor &executor);
+  Searcher *constructUserSearcher(BaseExecutor &executor);
 }
 
 #endif /* KLEE_USERSEARCHER_H */

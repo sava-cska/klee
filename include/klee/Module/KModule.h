@@ -38,7 +38,6 @@ namespace llvm {
 
 namespace klee {
   struct Cell;
-  class Executor;
   class Expr;
   class InterpreterHandler;
   class InstructionInfoTable;

@@ -11,7 +11,7 @@
 #include "klee/Expr/Expr.h"
 #include "ExecutionState.h"
 #include "AddressSpace.h"
-#include "Executors/BaseExecutor.h"
+#include "Executors/BidirectionalExecutor.h"
 #include "Composer.h"
 
 #include <stack>

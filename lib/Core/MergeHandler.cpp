@@ -133,7 +133,7 @@ bool MergeHandler::hasMergedStates() {
   return (!reachedCloseMerge.empty());
 }
 
-MergeHandler::MergeHandler(Executor *_executor, ExecutionState *es)
+MergeHandler::MergeHandler(BaseExecutor *_executor, ExecutionState *es)
     : executor(_executor), openInstruction(es->steppedInstructions),
       closedMean(0), closedStateCount(0) {
     executor->mergingSearcher->mergeGroups.push_back(this);

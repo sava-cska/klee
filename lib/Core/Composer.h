@@ -18,6 +18,7 @@
 #include <sstream>
 
 namespace klee {
+    class BidirectionalExecutor;
     class ComposeVisitor;
 
     const MemoryObject *extractObject(const ref<Expr> read);
@@ -73,7 +74,7 @@ namespace klee {
         const ExecutionState *S2;
         std::map<const MemoryObject*, ref<Expr> > liCache; 
     public:
-        static Executor *executor;
+        static BidirectionalExecutor *executor;
     };
 
 

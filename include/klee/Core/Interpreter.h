@@ -48,6 +48,11 @@ public:
                                const char *suffix) = 0;
 };
 
+enum class ExecutionKind {
+  Default, // Defualt symbolic execution
+  Guided,  // Use GuidedSearcher and guidedRun
+};
+
 class Interpreter {
 public:
   /// ModuleOptions - Module level options which can be set when
@@ -100,7 +105,8 @@ public:
 
   static Interpreter *create(llvm::LLVMContext &ctx,
                              const InterpreterOptions &_interpreterOpts,
-                             InterpreterHandler *ih);
+                             InterpreterHandler *ih,
+                             ExecutionKind executionKind);
 
   /// Register the module to be executed.
   /// \param modules A list of modules that should form the final
@@ -133,19 +139,6 @@ public:
   virtual void useSeeds(const std::vector<struct KTest *> *seeds) = 0;
 
   virtual void runFunctionAsMain(llvm::Function *f,
-                                 int argc,
-                                 char **argv,
-                                 char **envp) = 0;
-  virtual void runFunctionGuided(llvm::Function *fn,
-                                          int argc,
-                                          char **argv,
-                                          char **envp) = 0;
-  virtual void runMainAsGuided(llvm::Function *f,
-                                      int argc,
-                                      char **argv,
-                                      char **envp) = 0;
-  virtual void runMainWithTarget(llvm::Function *mainFn,
-                                 llvm::BasicBlock *target,
                                  int argc,
                                  char **argv,
                                  char **envp) = 0;

@@ -161,7 +161,7 @@ namespace klee {
     void addTarget(KBlock *target);
 
   public:
-    GuidedSearcher(Searcher *baseSearcher);
+    GuidedSearcher(std::unique_ptr<Searcher> baseSearcher);
     ~GuidedSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
@@ -372,11 +372,11 @@ namespace klee {
 
   class BinaryRankedSearcher final : public Searcher {
     ExecutionStateBinaryRank &rank;
-    Searcher *firstRankSearcher;
-    Searcher *secondRankSearcher;
+    std::unique_ptr<Searcher> firstRankSearcher;
+    std::unique_ptr<Searcher> secondRankSearcher;
 
   public:
-    explicit BinaryRankedSearcher(ExecutionStateBinaryRank &rank, Searcher *first, Searcher *second);
+    explicit BinaryRankedSearcher(ExecutionStateBinaryRank &rank, std::unique_ptr<Searcher> first, std::unique_ptr<Searcher> second);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,

@@ -73,7 +73,8 @@ namespace klee {
     unsigned getArgRegister(unsigned index) const { return index; }
     void handleKInstruction(std::map<llvm::Instruction*, unsigned> &registerMap,
                             llvm::Instruction *inst, KModule *km, KInstruction *ki);
-    virtual KBlockType getKBlockType() const { return KBlockType::Base; };
+    virtual KBlockType getKBlockType() const { return KBlockType::Base; }
+    KInstruction * getLastInstruction() const noexcept { return instructions[numInstructions - 1]; }
   };
 
   struct KCallBlock : KBlock {

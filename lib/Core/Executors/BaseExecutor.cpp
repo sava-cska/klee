@@ -12,16 +12,11 @@
 #include "../Context.h"
 #include "../CoreStats.h"
 #include "../ExecutionState.h"
-#include "../ExternalDispatcher.h"
 #include "../GetElementPtrTypeIterator.h"
 #include "../ImpliedValue.h"
 #include "../Memory.h"
-#include "../MemoryManager.h"
 #include "../PForest.h"
 #include "../Searcher.h"
-#include "../SeedInfo.h"
-#include "../SpecialFunctionHandler.h"
-#include "../StatsTracker.h"
 #include "../TimingSolver.h"
 #include "../UserSearcher.h"
 
@@ -477,9 +472,9 @@ const char *BaseExecutor::TerminateReasonNames[] = {
 
 BaseExecutor::BaseExecutor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
-    : Interpreter(opts), interpreterHandler(ih), searcher(0),
-      externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(0),
-      pathWriter(0), symPathWriter(0), specialFunctionHandler(0), timers{time::Span(TimerInterval)},
+    : Interpreter(opts), interpreterHandler(ih), searcher(nullptr),
+      externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(nullptr),
+      pathWriter(0), symPathWriter(0), specialFunctionHandler(nullptr), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
       ivcEnabled(false), debugLogBuffer(debugBufferString) {
@@ -505,8 +500,8 @@ BaseExecutor::BaseExecutor(LLVMContext &ctx, const InterpreterOptions &opts,
       interpreterHandler->getOutputFilename(ALL_QUERIES_KQUERY_FILE_NAME),
       interpreterHandler->getOutputFilename(SOLVER_QUERIES_KQUERY_FILE_NAME));
 
-  this->solver = new TimingSolver(solver, EqualitySubstitution);
-  memory = new MemoryManager(&arrayCache);
+  this->solver = std::make_unique<TimingSolver>(solver, EqualitySubstitution);
+  memory = std::make_unique<MemoryManager>(&arrayCache);
 
   initializeSearchOptions();
 
@@ -566,7 +561,8 @@ BaseExecutor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
 
   // Create a list of functions that should be preserved if used
   std::vector<const char *> preservedFunctions;
-  specialFunctionHandler = new SpecialFunctionHandler(*this);
+  assert(!specialFunctionHandler);
+  specialFunctionHandler = std::make_unique<SpecialFunctionHandler>(*this);
   specialFunctionHandler->prepare(preservedFunctions);
 
   preservedFunctions.push_back(opts.EntryPoint.c_str());
@@ -587,7 +583,7 @@ BaseExecutor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
 
   if (StatsTracker::useStatistics() || userSearcherRequiresMD2U()) {
     statsTracker = 
-      new StatsTracker(*this,
+      std::make_unique<StatsTracker>(*this,
                        interpreterHandler->getOutputFilename("assembly.ll"),
                        userSearcherRequiresMD2U());
   }
@@ -598,14 +594,6 @@ BaseExecutor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
                       (Expr::Width)TD->getPointerSizeInBits());
 
   return kmodule->module.get();
-}
-
-BaseExecutor::~BaseExecutor() {
-  delete memory;
-  delete externalDispatcher;
-  delete specialFunctionHandler;
-  delete statsTracker;
-  delete solver;
 }
 
 /***/
@@ -1226,7 +1214,7 @@ void BaseExecutor::addConstraint(ExecutionState &state, ref<Expr> condition) {
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res) {
-        siit->patchSeed(state, condition, solver);
+        siit->patchSeed(state, condition, solver.get());
         warn = true;
       }
     }
@@ -3814,7 +3802,7 @@ void BaseExecutor::callExternalFunction(ExecutionState &state,
       // Checking to see if the argument is a pointer to something
       if (ce->getWidth() == Context::get().getPointerWidth() &&
           state.addressSpace.resolveOne(ce, op)) {
-        op.second->flushToConcreteStore(solver, state);
+        op.second->flushToConcreteStore(solver.get(), state);
       }
       wordIndex += (ce->getWidth()+63)/64;
     } else {
@@ -4112,7 +4100,7 @@ void BaseExecutor::resolveExact(ExecutionState &state,
   p = optimizer.optimizeExpr(p, true);
   // XXX we may want to be capping this?
   ResolutionList rl;
-  state.addressSpace.resolve(state, solver, p, rl);
+  state.addressSpace.resolve(state, solver.get(), p, rl);
   
   ExecutionState *unbound = &state;
   for (ResolutionList::iterator it = rl.begin(), ie = rl.end(); 
@@ -4174,7 +4162,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
   ObjectPair op;
   bool success;
   solver->setTimeout(coreSolverTimeout);
-  if (!state.addressSpace.resolveOne(state, solver, unsafeAddress, op, success)) {
+  if (!state.addressSpace.resolveOne(state, solver.get(), unsafeAddress, op, success)) {
     unsafeAddress = toConstant(state, unsafeAddress, "resolveOne failure");
     success = state.addressSpace.resolveOne(cast<ConstantExpr>(unsafeAddress), op);
   }
@@ -4238,7 +4226,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
   solver->setTimeout(coreSolverTimeout);
   bool incomplete;
 
- incomplete = state.addressSpace.resolve(state, solver, base, rl, 0, coreSolverTimeout);
+ incomplete = state.addressSpace.resolve(state, solver.get(), base, rl, 0, coreSolverTimeout);
 
   solver->setTimeout(time::Span());
 
@@ -4620,8 +4608,7 @@ void BaseExecutor::runFunctionAsMain(Function *f,
   processForest = nullptr;
 
   // hack to clear memory objects
-  delete memory;
-  memory = new MemoryManager(NULL);
+  memory = std::make_unique<MemoryManager>(nullptr);
 
   clearGlobal();
 
@@ -4864,7 +4851,7 @@ int *BaseExecutor::getErrnoLocation(const ExecutionState &state) const {
 }
 
 TimingSolver *BaseExecutor::getSolver() {
-  return solver;
+  return solver.get();
 }
 
 time::Span BaseExecutor::getMaxSolvTime() {

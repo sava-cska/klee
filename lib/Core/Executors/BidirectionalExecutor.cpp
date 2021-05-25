@@ -15,6 +15,8 @@
 #include "../StatsTracker.h"
 #include "../Composer.h"
 
+#include <stack>
+
 using namespace llvm;
 
 namespace klee {
@@ -171,77 +173,32 @@ void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
   updateStates(nullptr);
 }
 
-/// TODO: remove?
-void BidirectionalExecutor::boundedRun(ExecutionState &initialState, unsigned bound) {
-  // Delay init till now so that ticks don't accrue during optimization and such.
-  timers.reset();
-
-  states.insert(&initialState);
-
-  if (usingSeeds) {
-    seed(initialState);
-  }
-
-  searcher = constructUserSearcher(*this);
-
-  std::vector<ExecutionState *> newStates(states.begin(), states.end());
-  searcher->update(0, newStates, std::vector<ExecutionState *>());
-  // main interpreter loop
-  while (!states.empty() && !haltExecution) {
-    ExecutionState &state = searcher->selectState();
-    tryBoundedExecuteStep(state, bound);
-  }
-
-  delete searcher;
-  searcher = nullptr;
-
-  doDumpStates();
-  haltExecution = false;
-}
-
-/// TODO: remove?
+/// TODO: update?
 void BidirectionalExecutor::targetedRun(ExecutionState &initialState, KBlock *target) {
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
-
   states.insert(&initialState);
 
-  TargetedSearcher *targetedSearcher = new TargetedSearcher(target);
-  searcher = targetedSearcher;
+  auto targetedSearcher = new TargetedSearcher(target);
+  searcher.reset(targetedSearcher);
+  searcher->update(0, {states.begin(), states.end()}, {});
 
-  std::vector<ExecutionState *> newStates(states.begin(), states.end());
-  searcher->update(0, newStates, std::vector<ExecutionState *>());
   // main interpreter loop
-  KInstruction *terminator = target != nullptr ? target->instructions[target->numInstructions - 1] : nullptr;
-  while (!states.empty() && !haltExecution) {
-    while (!searcher->empty() && !haltExecution) {
-      ExecutionState &state = searcher->selectState();
+  KInstruction *terminator = (target ? target->getLastInstruction() : nullptr);
+  while (!searcher->empty() && !haltExecution) {
+    ExecutionState &state = searcher->selectState();
+    KInstruction *ki = state.pc;
 
-      KInstruction *ki = state.pc;
+    executeStep(state);
 
-      if (ki == terminator) {
-        terminateStateOnTerminator(state);
-        updateStates(&state);
-        continue;
-      }
-
-      executeStep(state);
-    }
-
-    if (targetedSearcher) {
-      newStates.clear();
-      newStates.push_back(targetedSearcher->result);
-      delete searcher;
-      targetedSearcher = nullptr;
-      searcher = constructUserSearcher(*this);
-      searcher->update(0, newStates, std::vector<ExecutionState *>());
-    } else {
+    if (ki == terminator) {
+      terminateStateEarly(state, "The target has been found!");
+      updateStates(&state);
       break;
     }
   }
 
-  delete searcher;
-  searcher = nullptr;
+  searcher.reset();
 
   doDumpStates();
   haltExecution = false;
@@ -317,58 +274,7 @@ KBlock *BidirectionalExecutor::calculateTarget(ExecutionState &state) {
   return nearestBlock;
 }
 
-void BidirectionalExecutor::calculateTargetedStates(BasicBlock *initialBlock,
-                                       ExecutedInterval &pausedStates,
-                                       std::map<KBlock*, std::vector<ExecutionState*>> &targetedStates) {
-  VisitedBlock &history = results[initialBlock].history;
-
-  for (auto blockstate : pausedStates) {
-    std::set<ExecutionState *, ExecutionStateIDCompare> &ess = blockstate.second;
-    for (auto &state : ess) {
-      llvm::BasicBlock *bb = state->getPCBlock();
-      KFunction *kf = kmodule->functionMap[bb->getParent()];
-      KBlock *kb = kf->blockMap[bb];
-      KBlock *nearestBlock = nullptr;
-      unsigned int minDistance = -1;
-      unsigned int sfNum = 0;
-      bool newCov = false;
-      for (auto sfi = state->stack.rbegin(), sfe = state->stack.rend(); sfi != sfe; sfi++, sfNum++) {
-        kf = sfi->kf;
-
-        for (auto &kbd : kf->getDistance(kb)) {
-          KBlock *target = kbd.first;
-          unsigned distance = kbd.second;
-          if ((sfNum > 0 || distance > 0) && distance < minDistance) {
-            if (history[target->basicBlock].size() != 0) {
-              std::vector<BasicBlock*> diff;
-              if (!newCov)
-                std::set_difference(state->level.begin(), state->level.end(),
-                                    history[target->basicBlock].begin(), history[target->basicBlock].end(),
-                                    std::inserter(diff, diff.begin()));
-              if (diff.empty()) {
-                continue;
-              }
-            } else
-              newCov = true;
-            nearestBlock = target;
-            minDistance = distance;
-          }
-        }
-        if (nearestBlock) {
-          targetedStates[nearestBlock].push_back(state);
-          break;
-        }
-
-        if (sfi->caller) {
-          kb = sfi->caller->parent;
-          bb = kb->basicBlock;
-        }
-      }
-    }
-  }
-}
-
-/// TODO: remove?
+/// TODO: update?
 void BidirectionalExecutor::guidedRun(ExecutionState &initialState) {
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
@@ -382,7 +288,7 @@ void BidirectionalExecutor::guidedRun(ExecutionState &initialState) {
     seed(initialState);
   }
 
-  searcher = new GuidedSearcher(constructUserSearcher(*this));
+  searcher = std::make_unique<GuidedSearcher>(constructUserSearcher(*this));
 
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   searcher->update(0, newStates, std::vector<ExecutionState *>());
@@ -407,8 +313,7 @@ void BidirectionalExecutor::guidedRun(ExecutionState &initialState) {
       haltExecution = true;
   }
 
-  delete searcher;
-  searcher = nullptr;
+  searcher.reset();
 
   doDumpStates();
   haltExecution = false;
@@ -428,15 +333,14 @@ void BidirectionalExecutor::run(ExecutionState &state) {
 
   states.insert(&state);
 
-  if (usingSeeds) {
+  if (usingSeeds)
     seed(state);
-  }
 
   ExecutionStateIsolationRank rank;
-  searcher = new BinaryRankedSearcher(
+  searcher = std::make_unique<BinaryRankedSearcher>(
         rank,
         constructUserSearcher(*this),
-        new GuidedSearcher(constructUserSearcher(*this)));
+        std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
 
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   searcher->update(0, newStates, std::vector<ExecutionState *>());
@@ -458,8 +362,7 @@ void BidirectionalExecutor::run(ExecutionState &state) {
     }
   }
 
-  delete searcher;
-  searcher = nullptr;
+  searcher.reset();
 
   doDumpStates();
   haltExecution = false;
@@ -488,18 +391,6 @@ void BidirectionalExecutor::unpauseState(ExecutionState &state) {
   addedStates.push_back(&state);
 }
 
-void BidirectionalExecutor::unpauseStates(std::vector<ExecutionState *> &states) {
-  for (auto &state : states) {
-    ExecutedInterval &pausedStates = results[state->getInitPCBlock()].pausedStates;
-
-    pausedStates[state->getPCBlock()].erase(state);
-    if (pausedStates[state->getPCBlock()].empty())
-      pausedStates.erase(state->getPCBlock());
-    this->states.insert(state);
-  }
-  searcher->update(nullptr, states, {});
-}
-
 void BidirectionalExecutor::actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {
   switch (reason) {
     case TerminateReason::Model       : addCompletedResult(state); break;
@@ -521,8 +412,7 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
   KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
   runWithTarget(*state, kb);
   // hack to clear memory objects
-  delete memory;
-  memory = new MemoryManager(NULL);
+  memory = std::make_unique<MemoryManager>(nullptr);
   clearGlobal();
 }
 

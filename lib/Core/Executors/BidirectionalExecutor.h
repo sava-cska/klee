@@ -45,7 +45,6 @@ private:
 
   void targetedRun(ExecutionState &initialState, KBlock *target);
   void guidedRun(ExecutionState &initialState);
-  void boundedRun(ExecutionState &initialState, unsigned bound);
 
   void run(ExecutionState &initialState) override;
   void runWithTarget(ExecutionState &state, KBlock *target);
@@ -60,7 +59,6 @@ private:
   void pauseRedundantState(ExecutionState &state);
   // unpause state
   void unpauseState(ExecutionState &state);
-  void unpauseStates(std::vector<ExecutionState *> &states);
 
 protected:
   void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) override;

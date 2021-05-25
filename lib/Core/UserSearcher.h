@@ -7,8 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef KLEE_USERSEARCHER_H
-#define KLEE_USERSEARCHER_H
+#pragma once
+
+#include <memory>
 
 namespace klee {
   class BaseExecutor;
@@ -19,7 +20,5 @@ namespace klee {
 
   void initializeSearchOptions();
 
-  Searcher *constructUserSearcher(BaseExecutor &executor);
+  std::unique_ptr<Searcher> constructUserSearcher(BaseExecutor &executor);
 }
-
-#endif /* KLEE_USERSEARCHER_H */

@@ -327,7 +327,9 @@ void TargetedSearcher::printName(llvm::raw_ostream &os) {
   os << "TargetedSearcher";
 }
 
-GuidedSearcher::GuidedSearcher(Searcher *_baseSearcher) : baseSearcher(_baseSearcher) {}
+GuidedSearcher::GuidedSearcher(std::unique_ptr<Searcher> _baseSearcher) 
+  : baseSearcher(std::move(_baseSearcher))
+{}
 
 ExecutionState &GuidedSearcher::selectState() {
   unsigned size = targetedSearchers.size();
@@ -805,8 +807,8 @@ void InterleavedSearcher::printName(llvm::raw_ostream &os) {
   os << "</InterleavedSearcher>\n";
 }
 
-BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank &rank, Searcher *first, Searcher *second)
-  : rank(rank), firstRankSearcher(first), secondRankSearcher(second) {}
+BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank &rank, std::unique_ptr<Searcher> first, std::unique_ptr<Searcher> second)
+  : rank(rank), firstRankSearcher(std::move(first)), secondRankSearcher(std::move(second)) {}
 
 ExecutionState &BinaryRankedSearcher::selectState() {
   return firstRankSearcher->empty() ? secondRankSearcher->selectState() : firstRankSearcher->selectState();

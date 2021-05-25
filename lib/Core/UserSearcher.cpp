@@ -123,34 +123,33 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng, PForest &proce
   return searcher;
 }
 
-Searcher *klee::constructUserSearcher(BaseExecutor &executor) {
+std::unique_ptr<Searcher> klee::constructUserSearcher(BaseExecutor &executor) {
 
-  Searcher *searcher = getNewSearcher(CoreSearch[0], executor.theRNG, *executor.processForest);
+  std::unique_ptr<Searcher> searcher(getNewSearcher(CoreSearch[0], executor.theRNG, *executor.processForest));
 
   if (CoreSearch.size() > 1) {
     std::vector<Searcher *> s;
-    s.push_back(searcher);
+    s.push_back(searcher.release());
 
     for (unsigned i = 1; i < CoreSearch.size(); i++)
       s.push_back(getNewSearcher(CoreSearch[i], executor.theRNG, *executor.processForest));
 
-    searcher = new InterleavedSearcher(s);
+    searcher.reset(new InterleavedSearcher(s));
   }
 
   if (UseBatchingSearch) {
-    searcher = new BatchingSearcher(searcher, time::Span(BatchTime),
-                                    BatchInstructions);
+    searcher.reset(new BatchingSearcher(searcher.release(), time::Span(BatchTime),
+                                    BatchInstructions));
   }
 
   if (UseIterativeDeepeningTimeSearch) {
-    searcher = new IterativeDeepeningTimeSearcher(searcher);
+    searcher.reset(new IterativeDeepeningTimeSearcher(searcher.release()));
   }
 
   if (UseMerge) {
-    auto *ms = new MergingSearcher(searcher);
-    executor.setMergingSearcher(ms);
-
-    searcher = ms;
+    auto mt = std::make_unique<MergingSearcher>(searcher.release());
+    executor.setMergingSearcher(mt.get());
+    searcher = std::move(mt);
   }
 
   llvm::raw_ostream &os = executor.getHandler().getInfoStream();

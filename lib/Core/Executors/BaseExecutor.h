@@ -16,8 +16,14 @@
 
 #include "../ExecutionState.h"
 #include "../UserSearcher.h"
+#include "../ExternalDispatcher.h"
+#include "../SpecialFunctionHandler.h"
+#include "../MemoryManager.h"
+#include "../SeedInfo.h"
+#include "../StatsTracker.h"
 
 #include "klee/ADT/RNG.h"
+#include "klee/ADT/DiscretePDF.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Expr/ArrayCache.h"
 #include "klee/Expr/ArrayExprOptimizer.h"
@@ -95,8 +101,7 @@ class BaseExecutor : public Interpreter {
   friend class SpecialFunctionHandler;
   friend class StatsTracker;
   friend class MergeHandler;
-  friend klee::Searcher *
-  klee::constructUserSearcher(BaseExecutor &BaseExecutor);
+  friend std::unique_ptr<Searcher> klee::constructUserSearcher(BaseExecutor &BaseExecutor);
 
 public:
   enum MemoryOperation { Read, Write };
@@ -131,21 +136,21 @@ protected:
 
   InterpreterHandler *interpreterHandler;
 
-  Searcher *searcher;
+  std::unique_ptr<Searcher> searcher;
 
-  ExternalDispatcher *externalDispatcher;
+  std::unique_ptr<ExternalDispatcher> externalDispatcher;
 
-  TimingSolver *solver;
+  std::unique_ptr<TimingSolver> solver;
 
-  MemoryManager *memory;
+  std::unique_ptr<MemoryManager> memory;
 
   std::set<ExecutionState *, ExecutionStateIDCompare> states;
 
-  StatsTracker *statsTracker;
+  std::unique_ptr<StatsTracker> statsTracker;
 
   TreeStreamWriter *pathWriter, *symPathWriter;
 
-  SpecialFunctionHandler *specialFunctionHandler;
+  std::unique_ptr<SpecialFunctionHandler> specialFunctionHandler;
 
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
@@ -508,7 +513,7 @@ protected:
 public:
   BaseExecutor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
                InterpreterHandler *ie);
-  virtual ~BaseExecutor();
+  virtual ~BaseExecutor() = default;
 
   const InterpreterHandler &getHandler() { return *interpreterHandler; }
 

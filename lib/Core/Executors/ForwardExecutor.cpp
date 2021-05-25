@@ -41,8 +41,7 @@ void ForwardExecutor::run(ExecutionState &initialState) {
     executeStep(state);
   }
 
-  delete searcher;
-  searcher = nullptr;
+  searcher.reset();
 
   doDumpStates();
   haltExecution = false;

@@ -26,7 +26,7 @@ namespace llvm {
 namespace klee {
   struct InstructionInfo;
   class KModule;
-  class KBlock;
+  struct KBlock;
 
 
   /// KInstruction - Intermediate instruction representation used

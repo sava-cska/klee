@@ -80,6 +80,7 @@ public:
   void isolatedExecuteStep(ExecutionState &state);
   bool tryCoverStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
+  void backwardStep(ExecutionState &state, ExecutionState &pobStates);
   KBlock *calculateCoverTarget(ExecutionState &state);
   KBlock *calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,

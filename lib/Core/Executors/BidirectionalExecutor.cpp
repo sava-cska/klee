@@ -146,6 +146,28 @@ bool BidirectionalExecutor::tryCoverStep(ExecutionState &state, ExecutionState &
   return true;
 }
 
+void BidirectionalExecutor::backwardStep(ExecutionState &state, ExecutionState &pobState) {
+  assert(state.pc == pobState.initPC);
+  ref<Expr> rebuildCond = ConstantExpr::create(true, Expr::Bool);
+  for (auto &constraint : pobState.constraints) {
+    ref<Expr> rebuildCond = AndExpr::create(rebuildCond, constraint);
+  }
+  for (auto &st : state.statesForRebuild) {
+    rebuildCond = Composer::rebuild(rebuildCond, st);
+  }
+  bool mayBeTrue;
+  if (!solver->mayBeTrue(state.constraints, rebuildCond, mayBeTrue,
+                         state.queryMetaData)) {
+    return;
+  }
+  if (mayBeTrue) {
+    state.addConstraint(rebuildCond);
+    state.statesForRebuild.push_back(&pobState);
+  } else {
+    // TODO: заблокировать state для query
+  }
+}
+
 /// TODO: remove?
 void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
   assert(lstate.isIntegrated());

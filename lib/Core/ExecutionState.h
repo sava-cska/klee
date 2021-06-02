@@ -262,6 +262,9 @@ public:
   /// @brief The target basic block that the state must achieve
   KBlock *target;
 
+  /// @brief Еhe sequence of states, to be used to fill the expressions
+  std::vector<ExecutionState *> statesForRebuild;
+
 public:
   #ifdef KLEE_UNITTEST
   // provide this function only in the context of unittests

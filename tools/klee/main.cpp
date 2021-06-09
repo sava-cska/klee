@@ -66,7 +66,6 @@
 #include <klee/Misc/json.hpp>
 using json = nlohmann::json;
 
-
 using namespace llvm;
 using namespace klee;
 
@@ -125,16 +124,16 @@ namespace {
                 cl::desc("Write .sym.path files for each test case (default=false)"),
                 cl::cat(TestCaseCat));
 
-  cl::opt<bool> WriteKTestFiles(
-      "write-ktest-files", cl::init(true),
-      cl::desc(
-          "Write KTest files alongside json-formatted TestCase (default=true)"),
-      cl::cat(TestCaseCat));
+  cl::opt<bool>
+  WriteKTestFiles("write-ktest-files",
+                  cl::init(true),
+                  cl::desc("Write KTest files alongside json-formatted TestCase (default=true)"),
+                  cl::cat(TestCaseCat));
 
   cl::opt<bool>
-      WriteStates("write-states", cl::init(false),
-                  cl::desc("Write state info for debug (default=false)"),
-                  cl::cat(TestCaseCat));
+  WriteStates("write-states", cl::init(false),
+              cl::desc("Write state info for debug (default=false)"),
+              cl::cat(TestCaseCat));
 
   /*** Startup options ***/
 
@@ -361,6 +360,7 @@ private:
   // used for writing .ktest files
   int m_argc;
   char **m_argv;
+
   void writeTestCaseKTest(const TestCase &tc, unsigned id);
 
   void writeTestCaseXML(
@@ -387,6 +387,7 @@ public:
                        const char *errorMessage,
                        const char *errorSuffix,
                        bool back);
+
 
   std::string getOutputFilename(const std::string &filename);
   std::unique_ptr<llvm::raw_fd_ostream> openOutputFile(const std::string &filename);
@@ -652,7 +653,6 @@ void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id, bool back)
   ++m_numGeneratedTests;
 }
 
-/* Outputs all files (.ktest, .kquery, .cov etc.) describing a test case */
 void KleeHandler::processTestCase(ExecutionState &state,
                                   const char *errorMessage,
                                   const char *errorSuffix,
@@ -688,16 +688,16 @@ void KleeHandler::processTestCase(ExecutionState &state,
     if (WriteKTestFiles && success && lazy_instantiation_resolved == 0) {
       writeTestCaseKTest(assignments, test_id);
     }
+
     if (success && lazy_instantiation_resolved != -1) {
       writeTestCasePlain(assignments, test_id, back);
       if(WriteStates) {
-	auto f = openTestFile("state", test_id);
-	m_interpreter->logState(state,test_id,f);
+        auto f = openTestFile("state", test_id);
+        m_interpreter->logState(state,test_id,f);
       }
     }
 
     TestCase_free(&assignments);
-    
     if (WriteStates && lazy_instantiation_resolved == -1) {
       auto f_s = openTestFile("state_li_unresolved", test_id);
       m_interpreter->logState(state, state_id, f_s);

@@ -23,19 +23,19 @@ TestCase* TC_fromFile(const char* path) {
   for(size_t i = 0; i<ret->n_objects; i++) {
     ret->objects[i].name = new char[js.at("objects").at(i).at("name").get<std::string>().size()+1];
     strcpy(ret->objects[i].name, js.at("objects").at(i).at("name").get<std::string>().c_str());
-    
+
     ret->objects[i].size = js.at("objects").at(i).at("size").get<unsigned>();
     ret->objects[i].address = js.at("objects").at(i).at("address").get<uint64_t>();
-    
+
     ret->objects[i].values = new unsigned char[ret->objects[i].size];
-    
-    std::copy(js.at("objects").at(i).at("values").begin(), js.at("objects").at(i).at("values").end(),
-	      ret->objects[i].values);
-    
+
+    std::copy(js.at("objects").at(i).at("values").begin(), js.at("objects").at(i).at("values").end(), 
+              ret->objects[i].values);
+
     ret->objects[i].n_offsets = js.at("objects").at(i).at("n_offsets");
-    
+
     ret->objects[i].offsets = new Offset[ret->objects[i].n_offsets];
-    
+
     for(size_t j = 0; j<ret->objects[i].n_offsets; j++) {
       ret->objects[i].offsets[j].index = js.at("objects").at(i).at("offsets").at(j).at("index");
       ret->objects[i].offsets[j].offset =

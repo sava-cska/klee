@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Executor.h"
-
 #include "BidirectionalSearcher.h"
 #include "Composer.h"
 #include "Context.h"
@@ -51,7 +50,6 @@
 #include "klee/System/Time.h"
 #include "klee/ADT/TestCaseUtils.h"
 #include "klee/Expr/ArrayExprVisitor.h"
-
 
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -137,17 +135,17 @@ cl::opt<unsigned long long> MaxCycles(
     cl::init(1),
     cl::cat(TerminationCat));
 
-
 cl::opt<bool> UseGEPExpr(
     "use-gep-expr",
     cl::init(true),
     cl::desc("Kind of execution mode"),
     cl::cat(ExecCat));
 
-cl::opt<bool>
-    LazyInstantiation("lazyinstantiation", cl::init(true),
-                      cl::desc("Enable lazy instantiation (default=true)"),
-                      cl::cat(ExecCat));
+cl::opt<bool> LazyInstantiation(
+    "lazyinstantiation",
+     cl::init(true),
+     cl::desc("Enable lazy instantiation (default=true)"),
+     cl::cat(ExecCat));
 
 } // namespace klee
 
@@ -4668,8 +4666,8 @@ void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
 
 ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
   MemoryObject *mo =
-        memory->allocate(size, true, /*isGlobal=*/false,
-                          value, /*allocationAlignment=*/8);
+    memory->allocate(size, true, /*isGlobal=*/false, 
+                     value, /*allocationAlignment=*/8);
   const Array *array = makeArray(state, size, name);
   BasicBlock *predInitBlock = state.getInitPCBlock()->getSinglePredecessor();
   if (predInitBlock) {
@@ -4798,7 +4796,7 @@ int Executor::resolveLazyInstantiation(ExecutionState &state) {
       ref<ReadExpr> base = dyn_cast<ReadExpr>(lisource);
       auto parent = base->updates.root->binding->getObject();
       if(!parent) {
-	return -1;
+        return -1;
       }
       state.pointers[lisource] = std::make_pair(parent, base->index);
       break;
@@ -4833,12 +4831,11 @@ void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
                                     state.queryMetaData);
     if (!success)
       klee_error("Offset resolution failure (setInstantiationGraph)");
-    // Resolve indices of i and parent.first
     size_t index_parent;
     for(size_t j = 0; j < state.symbolics.size(); j++) {
       if(state.symbolics[j].first == parent.first) {
-	index_parent = j;
-	break;
+        index_parent = j;
+        break;
       }
     }
     // Put data in TestCase tc, indices coincide
@@ -4857,9 +4854,8 @@ void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
   return;
 }
 
- 
 bool Executor::getSymbolicSolution(const ExecutionState &state,
-                                       TestCase &res) {
+                                   TestCase &res) {
   solver->setTimeout(coreSolverTimeout);
 
   ConstraintSet extendedConstraints(state.constraints);
@@ -4908,7 +4904,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                              ConstantExpr::alloc(0, Expr::Bool));
     return false;
   }
-  
+
   res.objects = new ConcretizedObject[state.symbolics.size()];
   res.n_objects = state.symbolics.size();
 
@@ -4919,6 +4915,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
 
   return true;
 }
+
 
 void Executor::getCoveredLines(const ExecutionState &state,
                                std::map<const std::string*, std::set<unsigned> > &res) {

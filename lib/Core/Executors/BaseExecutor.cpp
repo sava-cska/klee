@@ -4308,7 +4308,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
       solver->evaluate(unbound->constraints, inBounds, res, unbound->queryMetaData);
       solver->setTimeout(time::Span());
 
-      if (res ==Solver::False) {
+      if (res == Solver::False) {
         if (unbound->isIsolated()) {
           p = lazyInstantiateVariable(*unbound, unsafeAddress, target ? target->inst : nullptr, bytes);
           mo = p.first;
@@ -4356,7 +4356,7 @@ ObjectPair BaseExecutor::lazyInstantiateAlloca(ExecutionState &state,
   return op;
 }
 
-ObjectPair BaseExecutor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, llvm::Value *allocSite, uint64_t size) {
+ObjectPair BaseExecutor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
   MemoryObject *mo =
       memory->allocate(size, false, /*isGlobal=*/false,

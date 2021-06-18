@@ -349,6 +349,9 @@ public:
                               KInstruction *target /* def if read*/,
                               std::vector<ExecutionState *> *results = nullptr);
 
+  ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
+                                     const llvm::Value *allocSite, uint64_t size);
+
 private:
   ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,
                              const MemoryObject *mo);
@@ -356,9 +359,6 @@ private:
   ObjectPair lazyInstantiateAlloca(ExecutionState &state,
                                    const MemoryObject *mo, KInstruction *target,
                                    bool isLocal);
-
-  ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
-                                     llvm::Value *allocSite, uint64_t size);
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                            const std::string &name, bool isAlloca);

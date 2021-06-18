@@ -34,7 +34,7 @@ namespace klee {
 
         /// @param curLImap a map between LI objects from \S2 and their possible 
         /// copies from S1
-        Composer(const ExecutionState *S1, const ExecutionState *S2) :
+        Composer(ExecutionState *S1,ExecutionState *S2) :
             S1(S1), S2(S2) {
             assert(S1);
         }
@@ -44,7 +44,7 @@ namespace klee {
         /// @brief returns a composition of \state and \S2 in context \S1
         /// @param possible is false if the resulting state has unsat path constraints
         /// otherwise true
-        void compose(ExecutionState *state, std::vector<ExecutionState*> &result);
+        void compose(ExecutionState *state, ExecutionState *&result);
 
 
         /// @brief adds composed constraints from S2 to @param acceptor and checks sat
@@ -59,19 +59,19 @@ namespace klee {
 
     public:
 
-        static void compose(const ExecutionState *,
-                            const ExecutionState *,
-                            std::vector<ExecutionState*> &result);
+        static void compose(ExecutionState *,
+                            ExecutionState *,
+                            ExecutionState *&);
 
         // static bool update( ExecutionState * S1,
         //                     const ExecutionState * S2);
 
         static ref<Expr> rebuild(const ref<Expr>, 
-                                 const ExecutionState *);
+                                 ExecutionState *);
 
     private:
-        const ExecutionState *S1;
-        const ExecutionState *S2;
+        ExecutionState *S1;
+        ExecutionState *S2;
         std::map<const MemoryObject*, ref<Expr> > liCache; 
     public:
         static BidirectionalExecutor *executor;

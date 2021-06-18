@@ -57,15 +57,15 @@ bool Composer::addComposedConstraints(ExecutionState & result,
     return true;
 }
 
-void Composer::compose(const ExecutionState *S1,
-                       const ExecutionState *S2,
-                       std::vector<ExecutionState*> &result) {
+void Composer::compose(ExecutionState *S1,
+                       ExecutionState *S2,
+                       ExecutionState *&result) {
   assert(S1 || S2);
   if(!S1 || S1->isEmpty()) {
-    result.push_back(S2->copy());
+    result = S2->copy();
     return;
   } else if(!S2 || S2->isEmpty()) {
-    result.push_back(S1->copy());
+    result = S1->copy();
     return;
   }
 
@@ -78,7 +78,7 @@ void Composer::compose(const ExecutionState *S1,
 }
 
 ref<Expr> Composer::rebuild(const ref<Expr> expr, 
-                            const ExecutionState *S1) {
+                            ExecutionState *S1) {
     Composer composer(S1, nullptr);
     return composer.rebuild(expr);
 }

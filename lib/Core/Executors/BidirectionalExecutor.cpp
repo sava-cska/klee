@@ -179,20 +179,20 @@ void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
     for (auto rstate : blockstate.second) {
       ExecutionState *currentResult = nullptr;
       Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), currentResult);
-      if (!currentResult)
+      if (currentResult) {
         removeTargetable(*rstate);
-      else
         result.push_back(currentResult);
+      }
     }
   }
   for (auto &blockstate : results[lstate.getPCBlock()].redundantStates) {
     for (auto rstate : blockstate.second) {
       ExecutionState *currentResult = nullptr;
       Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), currentResult);
-      if (!currentResult)
+      if (currentResult) {
         removeTargetable(*rstate);
-      else
         result.push_back(currentResult);
+      }
     }
   }
   removedStates.push_back(&lstate);
@@ -232,18 +232,47 @@ void BidirectionalExecutor::targetedRun(ExecutionState &initialState, KBlock *ta
 }
 
 KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
+  BasicBlock *initialBlock = state.getInitPCBlock();
+  VisitedBlock &history = results[initialBlock].history;
   BasicBlock *bb = state.getPCBlock();
   KFunction *kf = kmodule->functionMap[bb->getParent()];
   KBlock *kb = kf->blockMap[bb];
   KBlock *nearestBlock = nullptr;
+  unsigned int minDistance = -1;
   unsigned int sfNum = 0;
+  bool newCov = false;
   for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
     std::map<KBlock*, unsigned int> &kbd = kf->getDistance(kb);
     for (auto &tstate : targetableStates[kf->function]) {
       KBlock *currKB = kf->blockMap[tstate->getInitPCBlock()];
-      if (kbd.find(currKB) != kbd.end())
+      unsigned distance = kbd[currKB];
+      if (kbd.find(currKB) != kbd.end() && distance < minDistance) {
         nearestBlock = currKB;
+        minDistance = distance;
+      }
+    }
+    for (auto currKB : kf->finalKBlocks) {
+      unsigned distance = kbd[currKB];
+      if (kbd.find(currKB) != kbd.end() && distance < minDistance) {
+        if (history[currKB->basicBlock].size() != 0) {
+          std::vector<BasicBlock*> diff;
+          if (!newCov) {
+            std::set<BasicBlock*> left(state.level.begin(), state.level.end());
+            std::set<BasicBlock*> right(history[currKB->basicBlock].begin(), history[currKB->basicBlock].end());
+            std::set_difference(left.begin(), left.end(),
+                                right.begin(), right.end(),
+                                std::inserter(diff, diff.begin()));
+          }
+
+          if (diff.empty()) {
+            continue;
+          }
+        } else
+          newCov = true;
+      nearestBlock = currKB;
+      minDistance = distance;
+      }
     }
 
     if (nearestBlock) {
@@ -254,6 +283,7 @@ KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
       kb = sfi->caller->parent;
     }
   }
+
   return nearestBlock;
 }
 
@@ -375,9 +405,7 @@ void BidirectionalExecutor::run(ExecutionState &state) {
   // main interpreter loop
   while (!searcher->empty() && !haltExecution) {
     ExecutionState &es = searcher->selectState();
-    if (state.target)
-      executeStep(es);
-    else if (!tryCoverStep(es, *initialState)) {
+    if (!tryCoverStep(es, *initialState)) {
       KBlock *target = calculateCoverTarget(es);
       if (target) {
         es.target = target;
@@ -455,6 +483,7 @@ void Composer::compose(ExecutionState *state, ExecutionState *&result) {
     for (auto &st : state->statesForRebuild) {
       rebuildConstraint = Composer::rebuild(rebuildConstraint, st);
     }
+    rebuildConstraint = Composer::rebuild(rebuildConstraint, state);
     bool mayBeTrue;
     if (!executor->getSolver()->mayBeTrue(state->constraints, rebuildConstraint, 
                                           mayBeTrue, state->queryMetaData)) {
@@ -540,7 +569,7 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr & re) {
       for(auto op = rl.begin(), e = rl.end(); op != e; op++) {
         const MemoryObject *mo = op->first;
         const ObjectState *os = op->second;
-        ref<Expr> inBounds = mo->getBoundsCheckPointer(LI, 8*OS.size);
+        ref<Expr> inBounds = mo->getBoundsCheckPointer(LI, OS.size);
 
         time::Span timeout = caller->executor->getMaxSolvTime();
         TimingSolver *solver = caller->executor->getSolver();
@@ -570,7 +599,7 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr & re) {
                            SExtExpr::create(trueCase, 8 * OS.size)});
       }
 
-      ref<Expr> result; // TODO: реализовать сборку result из results, добавили ленивую инстанциацию
+      ref<Expr> result;
 
       if (results.size() == 1) {
         result = results.back().second;

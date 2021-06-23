@@ -864,7 +864,13 @@ public:
   Kind getKind() const { return GEP; }
 
   unsigned getNumKids() const { return numKids; }
-  ref<Expr> getKid(unsigned i) const { return address; }
+  ref<Expr> getKid(unsigned i) const {
+      if(i == 0)
+        return address;
+      if(i == 1)
+        return base;
+      return 0;
+    }
 
   virtual ref<Expr> rebuild(ref<Expr> kids[]) const {
     return create(kids[0], kids[1], sourceSize);

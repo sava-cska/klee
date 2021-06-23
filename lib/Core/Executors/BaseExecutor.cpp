@@ -3636,6 +3636,7 @@ void BaseExecutor::terminateStateOnExit(ExecutionState &state) {
   if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
+  actionBeforeStateTerminating(state, TerminateReason::Model);
   terminateState(state);
 }
 
@@ -3643,7 +3644,7 @@ void BaseExecutor::terminateStateOnTerminator(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
-  
+
   actionBeforeStateTerminating(state, TerminateReason::Model);
   terminateState(state);
 }
@@ -4151,7 +4152,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
 
   if (SimplifySymIndices) {
     if (!isa<ConstantExpr>(unsafeAddress))
-      unsafeAddress = ConstraintManager::simplifyExpr(state.constraints, address);
+      unsafeAddress = ConstraintManager::simplifyExpr(state.constraints, unsafeAddress);
     if (operation == Write && !isa<ConstantExpr>(value))
       value = ConstraintManager::simplifyExpr(state.constraints, value);
   }
@@ -4239,7 +4240,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
 
     ref<Expr> inBounds;
     if (UseGEPExpr && isa<GEPExpr>(address))
-      inBounds = mo->getBoundsCheckPointer(dyn_cast<GEPExpr>(address)->base, 1);
+      inBounds = mo->getBoundsCheckPointer(base, 1);
     else
       inBounds = mo->getBoundsCheckPointer(unsafeAddress, 1);
 
@@ -4254,9 +4255,8 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
 
       ref<Expr> inBounds = mo->getBoundsCheckPointer(unsafeAddress, bytes);
       if (UseGEPExpr && isa<GEPExpr>(address)) {
-        auto gep = dyn_cast<GEPExpr>(address);
         inBounds = AndExpr::create(
-            inBounds, mo->getBoundsCheckPointer(gep->base, gep->sourceSize));
+            inBounds, mo->getBoundsCheckPointer(base, size));
       }
       StatePair branches_inner = fork(*bound, inBounds, true);
       ExecutionState *bound_inner = branches_inner.first;
@@ -4314,7 +4314,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
           mo = p.first;
         } else {
           terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
-                                NULL, getAddressInfo(*unbound, address));
+                                NULL, getAddressInfo(*unbound, unsafeAddress));
           return;
         }
       } else
@@ -4335,7 +4335,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
         results->push_back(unbound);
     } else {
       terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
-                            NULL, getAddressInfo(*unbound, address));
+                            NULL, getAddressInfo(*unbound, unsafeAddress));
     }
   }
 }

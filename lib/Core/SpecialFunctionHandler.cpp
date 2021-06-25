@@ -837,9 +837,10 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
     name = "unnamed";
     klee_warning("klee_make_symbolic: renamed empty name to \"unnamed\"");
   }
-
+  executor.prepareSymbolicRegister(state, state.stack.back(), target->operands[1]);
+  ref<Expr> arg = executor.symbolicEval(target, 1, state).value;
   BaseExecutor::ExactResolutionList rl;
-  executor.resolveExact(state, arguments[0], rl, "make_symbolic");
+  executor.resolveExact(state, arg, rl, "make_symbolic");
   
   for (BaseExecutor::ExactResolutionList::iterator it = rl.begin(), 
          ie = rl.end(); it != ie; ++it) {

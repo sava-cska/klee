@@ -403,8 +403,9 @@ public:
     return state.stack.back().locals[target->dest];
   }
 
-private:
   void bindLocal(KInstruction *target, ExecutionState &state, ref<Expr> value);
+
+private:
   void bindArgument(KFunction *kf, unsigned index, ExecutionState &state,
                     ref<Expr> value);
 

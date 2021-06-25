@@ -454,8 +454,9 @@ bool ExecutionState::isEmpty() const {
 bool ExecutionState::isCriticalPC() const {
   KInstruction *ki = pc;
   KInstruction *prevKI = prevPC;
-  return ((prevKI->inst->isTerminator() || isa<CallInst>(prevKI->inst)) &&
-      (this->getPCBlock()->hasNPredecessorsOrMore(2) || this->getPCBlock()->hasNPredecessors(0)));
+  return ((this->getPCBlock()->hasNPredecessors(0) && this->isIntegrated()) ||
+          (prevKI->inst->isTerminator() && this->getPCBlock()->hasNPredecessorsOrMore(2)) ||
+          prevKI->parent->getKBlockType() == KBlockType::Call);
 }
 
 bool ExecutionState::isIntegrated() const {

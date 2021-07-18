@@ -54,11 +54,11 @@ public:
 
 class ExprReplaceVisitor2 : public ExprVisitor {
 private:
-  const std::map< ref<Expr>, ref<Expr> > &replacements;
+   std::map< ref<Expr>, ref<Expr> > &replacements;
 
 public:
   explicit ExprReplaceVisitor2(
-      const std::map<ref<Expr>, ref<Expr>> &_replacements)
+      std::map<ref<Expr>, ref<Expr>> &_replacements)
       : ExprVisitor(true), replacements(_replacements) {}
 
   Action visitExprPost(const Expr &e) override {
@@ -67,6 +67,27 @@ public:
       return Action::changeTo(it->second);
     }
     return Action::doChildren();
+  }
+
+  ref<Expr> processSelect(const SelectExpr& sexpr) {
+    ref<Expr> cond = visit(sexpr.cond);
+    Action res = visitExprPost(*cond.get());
+    if (res.kind == Action::ChangeTo)
+      cond = res.argument;
+    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
+      return CE->isTrue() ? visit(sexpr.trueExpr) : visit(sexpr.falseExpr);
+    }
+    replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(1, Expr::Bool)));
+    ref<Expr> trueExpr = visit(sexpr.trueExpr);
+    replacements.erase(sexpr.cond);
+    replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(0, Expr::Bool)));
+    ref<Expr> falseExpr = visit(sexpr.falseExpr);
+    replacements.erase(sexpr.cond);
+    return SelectExpr::create(cond, trueExpr, falseExpr);
+  }
+
+  Action visitSelect(const SelectExpr& sexpr) override {
+    return Action::changeTo(processSelect(sexpr));
   }
 };
 

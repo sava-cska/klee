@@ -154,6 +154,7 @@ protected:
 
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
+  std::map<ref<Expr>, std::pair<ref<Expr>, unsigned>> gepExprBases;
 
   /// Used to track states that have been added during the current
   /// instructions step.
@@ -612,6 +613,7 @@ public:
   const Array *makeArray(ExecutionState &state, const uint64_t size,
                          const std::string &name);
   void executeStep(ExecutionState &state);
+  bool isGEPExpr(ref<Expr> expr);
 };
 
 } // namespace klee

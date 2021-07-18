@@ -2737,10 +2737,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::GetElementPtr: {
     KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
     GetElementPtrInst *gepInst = static_cast<GetElementPtrInst*>(kgepi->inst);
-    unsigned sourceSize =
-        kmodule->targetData->getTypeStoreSize(gepInst->getSourceElementType());
-    unsigned resultSize =
-        kmodule->targetData->getTypeStoreSize(gepInst->getResultElementType());
+    unsigned size = gepInst->getSourceElementType()->isAggregateType() ?
+      kmodule->targetData->getTypeStoreSize(gepInst->getSourceElementType()) :
+      kmodule->targetData->getTypeStoreSize(gepInst->getResultElementType());
     ref<Expr> base = eval(ki, 0, state).value;
     ref<Expr> offset = ConstantExpr::create(0, base->getWidth());
     for (std::vector< std::pair<unsigned, uint64_t> >::iterator
@@ -2756,10 +2755,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       offset = AddExpr::create(offset,
                              Expr::createPointer(kgepi->offset));
     ref<Expr> address = AddExpr::create(base, offset);
-    if (UseGEPExpr)
-      gepExprBases[address] =
-        gepInst->getSourceElementType()->isAggregateType() ?
-          std::make_pair(base, sourceSize) : std::make_pair(address, resultSize);
+    if (UseGEPExpr && !isa<ConstantExpr>(address))
+      gepExprBases[address] = {base, size};
     bindLocal(ki, state, address);
     break;
   }
@@ -4161,10 +4158,8 @@ void Executor::resolveExact(ExecutionState &state,
   }
 
   if (unbound) {
-    if (bytes && (isa<ReadExpr>(p) || isa<ConcatExpr>(p) || (UseGEPExpr && isGEPExpr(p)))) {
-      ObjectPair li = lazyInstantiateVariable(*unbound, p, target ? target->inst : nullptr, bytes);
-      assert(li.first && li.second);
-      results.push_back(std::make_pair(li, unbound));
+    if (isReadFromSymbolicArray(p)) {
+      terminateStateEarly(*unbound, "insufficient information: symbolic size of object in isolationMode.");
     } else {
       terminateStateOnError(*unbound, "memory error: invalid pointer: " + name,
                             Ptr, NULL, getAddressInfo(*unbound, p));
@@ -4283,10 +4278,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     const ObjectState *os = i->second;
 
     ref<Expr> inBounds;
-    if (UseGEPExpr && isGEPExpr(address))
-      inBounds = mo->getBoundsCheckPointer(base, 1);
-    else
-      inBounds = mo->getBoundsCheckPointer(address, 1);
+    inBounds = mo->getBoundsCheckPointer(base, 1);
 
     StatePair branches = fork(*unbound, inBounds, true);
     ExecutionState *bound = branches.first;
@@ -4295,11 +4287,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped 
     if (bound) {
-      ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
-      if (UseGEPExpr && isGEPExpr(address)) {
-        inBounds = AndExpr::create(
-            inBounds, mo->getBoundsCheckPointer(base, size));
-      }
+      ref<Expr> inBounds = mo->getBoundsCheckPointer(base, bytes);
+
       StatePair branches_inner = fork(*bound, inBounds, true);
       ExecutionState *bound_inner = branches_inner.first;
       ExecutionState *unbound_inner = branches_inner.second;
@@ -4325,9 +4314,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
           results->push_back(bound_inner);
       }
       if(unbound_inner) {
-        terminateState(*unbound_inner);
-      }
-      if(unbound_inner) {
         terminateStateOnError(*unbound_inner, "memory error: out of bound pointer", Ptr,
                                 NULL, getAddressInfo(*unbound, address));
       }
@@ -4341,7 +4327,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   if (unbound) {
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
-    } else if (LazyInstantiation && !isa<ConstantExpr>(address) && (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isGEPExpr(address)))) {
+    } else if (LazyInstantiation && (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isGEPExpr(address)))) {
 
       if(!isReadFromSymbolicArray(base)) {
         terminateStateEarly(*unbound, "Instantiation source contains read "
@@ -5146,7 +5132,6 @@ void Executor::dumpStates() {
 bool Executor::isGEPExpr(ref<Expr> expr) {
   return gepExprBases.find(expr) != gepExprBases.end();
 }
-
 
 void Executor::addCompletedResult(ExecutionState &state) {
   results[state.getInitPCBlock()]

@@ -2732,6 +2732,8 @@ void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     GetElementPtrInst *gepInst = static_cast<GetElementPtrInst*>(kgepi->inst);
     unsigned sourceSize =
         kmodule->targetData->getTypeStoreSize(gepInst->getSourceElementType());
+    unsigned resultSize =
+        kmodule->targetData->getTypeStoreSize(gepInst->getResultElementType());
     ref<Expr> base = symbolicEval(ki, 0, state).value;
     ref<Expr> offset = ConstantExpr::create(0, base->getWidth());
     for (std::vector< std::pair<unsigned, uint64_t> >::iterator
@@ -2748,7 +2750,9 @@ void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
                              Expr::createPointer(kgepi->offset));
     ref<Expr> address = AddExpr::create(base, offset);
     if (UseGEPExpr)
-      gepExprBases[address] = {base, sourceSize};
+      gepExprBases[address] =
+        gepInst->getSourceElementType()->isAggregateType() ?
+          std::make_pair(base, sourceSize) : std::make_pair(address, resultSize);
     bindLocal(ki, state, address);
     break;
   }
@@ -4239,7 +4243,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
     const MemoryObject *mo = i->first;
     const ObjectState *os = i->second;
 
-    if (!isa<ConstantExpr>(address) && mo->isGlobal) break;
+    if (!isa<ConstantExpr>(address) && mo->isGlobal) continue;
 
     ref<Expr> inBounds;
     if (UseGEPExpr && isGEPExpr(address))
@@ -4253,14 +4257,13 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped 
     if (bound) {
-      if (unbound)
-        bound->redundant = true;
 
       ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
       if (UseGEPExpr && isGEPExpr(address)) {
         inBounds = AndExpr::create(
             inBounds, mo->getBoundsCheckPointer(base, size));
       }
+
       StatePair branches_inner = fork(*bound, inBounds, true);
       ExecutionState *bound_inner = branches_inner.first;
       ExecutionState *unbound_inner = branches_inner.second;
@@ -4383,13 +4386,14 @@ const Array * BaseExecutor::makeArray(ExecutionState &state,
 void BaseExecutor::executeMakeSymbolic(ExecutionState &state,
                                    const MemoryObject *mo,
                                    const std::string &name,
-                                   bool isAlloca) {
+                                   bool isAlloca,
+                                   bool isHandleMakeSymbolic) {
   // Create a new object state for the memory object (instead of a copy).
   if (!replayKTest) {
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
     const Array *array = makeArray(state, mo->size, name);
-    const_cast<Array*>(array)->binding = mo;
+    const_cast<Array*>(array)->binding = isHandleMakeSymbolic ? nullptr : mo;
     bindObjectInState(state, mo, isAlloca, array);
     state.addSymbolic(mo, array);
 

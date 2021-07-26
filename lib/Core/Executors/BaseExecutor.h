@@ -362,7 +362,7 @@ private:
                                    bool isLocal);
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
-                           const std::string &name, bool isAlloca);
+                           const std::string &name, bool isAlloca, bool isHandleMakeSymbolic = false);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

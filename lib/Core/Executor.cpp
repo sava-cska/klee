@@ -1323,9 +1323,9 @@ Executor::toConstant(ExecutionState &state,
 
   std::string str;
   llvm::raw_string_ostream os(str);
-  os << "silently concretizing (reason: " << reason << ") expression " << e
-     << " to value " << value << " (" << (*(state.pc)).info->file << ":"
-     << (*(state.pc)).info->line << ")";
+  // os << "silently concretizing (reason: " << reason << ") expression " << e
+  //    << " to value " << value << " (" << (*(state.pc)).info->file << ":"
+  //    << (*(state.pc)).info->line << ")"; _-_
 
   if (AllExternalWarnings)
     klee_warning("%s", os.str().c_str());
@@ -3312,7 +3312,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
 // TODO: Refactor
 void Executor::updateStates(ActionResult r) {
-  
   if (searcher) {
     // ultra hot fix
     if(std::holds_alternative<ForwardResult>(r)) {
@@ -3680,7 +3679,6 @@ void Executor::terminateStateOnTerminator(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
-
   actionBeforeStateTerminating(state, TerminateReason::Model);
   terminateState(state);
 }
@@ -4284,7 +4282,6 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     const MemoryObject *mo = i->first;
     const ObjectState *os = i->second;
 
-    if (mo->isGlobal) break;
     ref<Expr> inBounds;
     if (UseGEPExpr && isGEPExpr(address))
       inBounds = mo->getBoundsCheckPointer(base, 1);
@@ -4294,6 +4291,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     StatePair branches = fork(*unbound, inBounds, true);
     ExecutionState *bound = branches.first;
     unbound = branches.second;
+
 
     // bound can be 0 on failure or overlapped 
     if (bound) {
@@ -4330,7 +4328,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         terminateState(*unbound_inner);
       }
       if(unbound_inner) {
-        terminateState(*unbound_inner);
+	    terminateStateOnError(*unbound_inner, "memory error: out of bound pointer", Ptr,
+                              NULL, getAddressInfo(*unbound, address));
       }
     }
 
@@ -4437,10 +4436,10 @@ ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, r
 }
 
 const Array * Executor::makeArray(ExecutionState &state,
-                                      const uint64_t size,
-                                      const std::string &name,
-                                      bool isForeign,
-                                      ref<Expr> liSource) {
+                                  const uint64_t size,
+                                  const std::string &name,
+                                  bool isForeign,
+                                  ref<Expr> liSource) {
   static uint64_t id = 0;
   std::string uniqueName = name + "#" + std::to_string(id++);
   // std::string uniqueName = name;

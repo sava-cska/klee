@@ -650,7 +650,7 @@ void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id, bool back)
   }
   auto file = openTestFile("ktestjson", id, back);
   *file << out.dump(4);
-  ++m_numGeneratedTests;
+  // ++m_numGeneratedTests;
 }
 
 void KleeHandler::processTestCase(ExecutionState &state,

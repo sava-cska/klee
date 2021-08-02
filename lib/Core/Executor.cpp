@@ -4328,8 +4328,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         terminateState(*unbound_inner);
       }
       if(unbound_inner) {
-	    terminateStateOnError(*unbound_inner, "memory error: out of bound pointer", Ptr,
-                              NULL, getAddressInfo(*unbound, address));
+        terminateStateOnError(*unbound_inner, "memory error: out of bound pointer", Ptr,
+                                NULL, getAddressInfo(*unbound, address));
       }
     }
 
@@ -4903,7 +4903,6 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                              ConstantExpr::alloc(0, Expr::Bool));
     return false;
   }
-
   res.objects = new ConcretizedObject[state.symbolics.size()];
   res.n_objects = state.symbolics.size();
 

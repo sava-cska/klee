@@ -660,6 +660,7 @@ void BidirectionalExecutor::goBack(ExecutionState & state, ProofObligation & pob
   bool mayBeTrue;
   auto composedCondition = compose(state, pob.condition, *solver, mayBeTrue);
   if (mayBeTrue) {
+    auto nearestReachableParent = pob.propagateUnreachability();
     if (nearestReachableParent->isOriginPob() && reachabilityTracker.isReachably(pob.location)) {
         // answer_no(...);
         // static_assert(false && "TODO");
@@ -681,24 +682,6 @@ void BidirectionalExecutor::goBack(ExecutionState & state, ProofObligation & pob
   backwardQueue.push_back(pob.makeNewChild(*newLocation, lvl, std::move(composedCondition)));
 }
 
-bool BidirectionalExecutor::canReach(ExecutionState & state, KBlock const & location) const {
-  // kmodule->getDistance(??);
-  // static_assert(false && "TODO");
-  return false;
-}
-
-void BidirectionalExecutor::subscribe(ExecutionState & state, KBlock & location) {
-  statesPassedThroughLocation[&location].insert(&state); // location to state subscribing
-  assert(state.level.count(location.basicBlock));        // state to location subscribing
-}
-
-void BidirectionalExecutor::markUnblocked(ExecutionState & state, ProofObligation & pob) const {
-  if (state.multilevel <= pob.current_lvl && canReach(state, pob.location)) {
-    pob.addAsUnblocked(state);
-    // state.unblock(pob);
-  }
-}
-
 void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBlock const & target, size_t lvl_bound) {
   using namespace std;
   queue<ExecutionState *> forwardQueue;
@@ -715,8 +698,6 @@ void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBl
         initializeRoot(initialState, action.location->parent->blockMap[action.state->getPCBlock()]); // WTF???
         updateStates(nullptr);
         reachabilityTracker.reindex(*action.state, *action.location);
-        for (auto & pob : backwardQueue)
-          markUnblocked(*action.state, pob); // how? action.state is nullptr in Init
         break;
       case Action::Type::Forward:
         assert(forwardQueue.front() == action.state);

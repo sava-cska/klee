@@ -68,8 +68,6 @@ private:
   void goFront(ExecutionState &state, std::queue<ExecutionState *> &forwardQueue);
   void goBack(ExecutionState &state, ProofObligation &pob, std::deque<ProofObligation> &backwardQueue, ExecutionState const &entryPoint);
 
-  void markUnblocked(ExecutionState &state, ProofObligation &pob) const;
-
   KBlock * getStartLocation(ExecutionState &state);
   KBlock * getLastExecutedLocation(ExecutionState &state);
   KBlock * getCurrentLocation(ExecutionState &state);

@@ -7,49 +7,49 @@
 namespace klee {
 
 class DominationTree {
-    using IdType = KBlock::IndexType;
-    struct Node {
-        std::vector<IdType> children;
-        IdType parent;
-        KBlock const & location;
-    };
 public:
+    using IdType = KBlock::IndexType;
+    using Graph = std::vector<std::vector<IdType>>;
 
-    KBlock const * getParent(KBlock const & location) {
-        auto const & node = locationIdToNode.at(location.id);
-        if (node->parent == IdType(-1))
+    DominationTree(KBlock const & start_location);
+
+    KBlock const * getParent(KBlock const & location) const {
+        auto const & parent = parents.at(location.id);
+        if (parent == IdType(-1))
             return nullptr;
-        return &node->location;
+        return KBlock::getMemById(parent);
     }
 
-    std::vector<IdType> const & getChildrenIds(KBlock const & location) {
-        return locationIdToNode.at(location.id)->children;
+    std::vector<IdType> const & getChildrenIds(KBlock const & location) const {
+        return children.at(location.id);
     }
 
-    KBlock const & getLocationById(IdType const & id) {
-        return locationIdToNode.at(id)->location;
+    KBlock const & getLocationById(IdType const & id) const {
+        return *KBlock::getMemById(id);
     }
 
 private:
-    std::vector<Node *> locationIdToNode;
+    std::vector<IdType> parents;
+    Graph children;
 };
 
 
 class Tracker {
     using MarkedStates = std::unordered_set<ExecutionState*>;
-    DominationTree domTree;
 
+    DominationTree domTree;
     std::vector<MarkedStates> locationIdToMarkedStates;
 
     void updateMarkedStatesForLocation(ExecutionState & state, std::vector<ExecutionState *> childrenStates, KBlock const & location);
-    
+
     MarkedStates::const_iterator findFirstReachably(KBlock const & location, MarkedStates const & states);
 
+    bool canReach(ExecutionState & state, KBlock const & location);
+
 public:
+    Tracker(KBlock const & start_location);
 
     void notifyDueToExecution(ExecutionState & state, std::vector<ExecutionState *> childrenStates, KBlock const & executedLocation);
-
-    bool canReach(ExecutionState & state, KBlock const & location);
 
     bool isReachably(KBlock const & location);
 

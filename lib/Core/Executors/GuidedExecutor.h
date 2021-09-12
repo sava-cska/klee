@@ -37,7 +37,7 @@ public:
 
 private:
   std::map<llvm::Function *, std::unordered_set<ExecutionState *>> targetableStates;
-  Tracker reachabilityTracker;
+  std::unique_ptr<Tracker> reachabilityTracker;
 
   ExecutionResult results;
 
@@ -68,9 +68,9 @@ private:
   void goFront(ExecutionState &state, std::queue<ExecutionState *> &forwardQueue);
   void goBack(ExecutionState &state, ProofObligation &pob, std::deque<ProofObligation> &backwardQueue, ExecutionState const &entryPoint);
 
-  KBlock * getStartLocation(ExecutionState &state);
-  KBlock * getLastExecutedLocation(ExecutionState &state);
-  KBlock * getCurrentLocation(ExecutionState &state);
+  KBlock * getStartLocation(const ExecutionState &state);
+  KBlock * getLastExecutedLocation(const ExecutionState &state);
+  KBlock * getCurrentLocation(const ExecutionState &state);
 protected:
   void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) override;
 

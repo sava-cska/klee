@@ -713,7 +713,8 @@ std::map<KBlock*, unsigned int>& KFunction::getBackwardDistance(KBlock *kb) {
 KBlock::KBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,
                std::map<Instruction*, unsigned> &registerMap,
                std::map<unsigned, KInstruction*> &reg2inst)
-  : parent(_kfunction),
+  : IndexToMemMapper(this, id),
+    parent(_kfunction),
     basicBlock(block),
     numInstructions(0),
     trackCoverage(true) {

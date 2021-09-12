@@ -651,7 +651,7 @@ ConstraintSet compose(ExecutionState & state, ConstraintSet const & fromPob, Tim
 void BidirectionalExecutor::goFront(ExecutionState & state, std::queue<ExecutionState *> & forwardQueue) {
   auto current_location = getCurrentLocation(state);
   executeInstruction(state, state.pc);
-  reachabilityTracker.notifyDueToExecution(state, addedStates, *current_location);
+  reachabilityTracker->notifyDueToExecution(state, addedStates, *current_location);
   assert(removedStates.empty());
 }
 
@@ -661,7 +661,7 @@ void BidirectionalExecutor::goBack(ExecutionState & state, ProofObligation & pob
   auto composedCondition = compose(state, pob.condition, *solver, mayBeTrue);
   if (mayBeTrue) {
     auto nearestReachableParent = pob.propagateUnreachability();
-    if (nearestReachableParent->isOriginPob() && reachabilityTracker.isReachably(pob.location)) {
+    if (nearestReachableParent->isOriginPob() && reachabilityTracker->isReachably(pob.location)) {
         // answer_no(...);
         // static_assert(false && "TODO");
     }
@@ -684,6 +684,7 @@ void BidirectionalExecutor::goBack(ExecutionState & state, ProofObligation & pob
 
 void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBlock const & target, size_t lvl_bound) {
   using namespace std;
+  reachabilityTracker = std::make_unique<Tracker>(*getStartLocation(initialState));
   queue<ExecutionState *> forwardQueue;
   deque<ProofObligation> backwardQueue;
   SimpleBidirectionalSearcher searcher;
@@ -697,7 +698,7 @@ void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBl
       case Action::Type::Init:
         initializeRoot(initialState, action.location->parent->blockMap[action.state->getPCBlock()]); // WTF???
         updateStates(nullptr);
-        reachabilityTracker.reindex(*action.state, *action.location);
+        reachabilityTracker->reindex(*action.state, *action.location);
         break;
       case Action::Type::Forward:
         assert(forwardQueue.front() == action.state);
@@ -714,15 +715,15 @@ void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBl
   }
 }
 
-KBlock * BidirectionalExecutor::getStartLocation(ExecutionState &state) {
+KBlock * BidirectionalExecutor::getStartLocation(const ExecutionState &state) {
   return kmodule->functionMap[state.getInitPCBlock()->getParent()]->blockMap[state.getInitPCBlock()];
 }
 
-KBlock * BidirectionalExecutor::getLastExecutedLocation(ExecutionState &state) {
+KBlock * BidirectionalExecutor::getLastExecutedLocation(const ExecutionState &state) {
   return kmodule->functionMap[state.getPrevPCBlock()->getParent()]->blockMap[state.getPrevPCBlock()];
 }
 
-KBlock * BidirectionalExecutor::getCurrentLocation(ExecutionState &state) {
+KBlock * BidirectionalExecutor::getCurrentLocation(const ExecutionState &state) {
   return kmodule->functionMap[state.getPCBlock()->getParent()]->blockMap[state.getPCBlock()];
 }
 

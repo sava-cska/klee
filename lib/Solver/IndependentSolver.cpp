@@ -348,7 +348,7 @@ IndependentElementSet getIndependentConstraints(const Query& query,
   } while (!done);
 
   KLEE_DEBUG(
-    std::set< ref<Expr> > reqset(result.begin(), result.end());
+    ExprHashSet reqset(result.begin(), result.end());
     errs() << "--\n";
     errs() << "Q: " << query.expr << "\n";
     errs() << "\telts: " << IndependentElementSet(query.expr) << "\n";

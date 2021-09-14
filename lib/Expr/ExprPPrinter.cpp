@@ -10,6 +10,7 @@
 #include "klee/Expr/ExprPPrinter.h"
 
 #include "klee/Expr/Constraints.h"
+#include "klee/Expr/ExprHashMap.h"
 #include "klee/Support/OptionCategories.h"
 #include "klee/Support/PrintContext.h"
 
@@ -59,9 +60,9 @@ class PPrinter : public ExprPPrinter {
 public:
   std::set<const Array*> usedArrays;
 private:
-  std::map<ref<Expr>, unsigned> bindings;
+  ExprHashMap<unsigned> bindings;
   std::map<const UpdateNode*, unsigned> updateBindings;
-  std::set< ref<Expr> > couldPrint, shouldPrint;
+  ExprHashSet couldPrint, shouldPrint;
   std::set<const UpdateNode*> couldPrintUpdates, shouldPrintUpdates;
   llvm::raw_ostream &os;
   unsigned counter;
@@ -381,7 +382,7 @@ public:
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
       printConst(CE, PC, printConstWidth);
     else {
-      std::map<ref<Expr>, unsigned>::iterator it = bindings.find(e);
+      ExprHashMap<unsigned>::iterator it = bindings.find(e);
       if (it!=bindings.end()) {
         PC << 'N' << it->second;
       } else {

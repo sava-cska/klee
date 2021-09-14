@@ -12,6 +12,7 @@
 #include "Memory.h"
 
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/ExprHashMap.h"
 #include "klee/Module/Cell.h"
 #include "klee/Module/InstructionInfoTable.h"
 #include "klee/Module/KInstruction.h"
@@ -255,10 +256,10 @@ bool ExecutionState::merge(const ExecutionState &b) {
       return false;
   }
 
-  std::set< ref<Expr> > aConstraints(constraints.begin(), constraints.end());
-  std::set< ref<Expr> > bConstraints(b.constraints.begin(), 
+  ExprHashSet aConstraints(constraints.begin(), constraints.end());
+  ExprHashSet bConstraints(b.constraints.begin(), 
                                      b.constraints.end());
-  std::set< ref<Expr> > commonConstraints, aSuffix, bSuffix;
+  ExprHashSet commonConstraints, aSuffix, bSuffix;
   std::set_intersection(aConstraints.begin(), aConstraints.end(),
                         bConstraints.begin(), bConstraints.end(),
                         std::inserter(commonConstraints, commonConstraints.begin()));
@@ -270,19 +271,19 @@ bool ExecutionState::merge(const ExecutionState &b) {
                       std::inserter(bSuffix, bSuffix.end()));
   if (DebugLogStateMerge) {
     llvm::errs() << "\tconstraint prefix: [";
-    for (std::set<ref<Expr> >::iterator it = commonConstraints.begin(),
+    for (ExprHashSet::iterator it = commonConstraints.begin(),
                                         ie = commonConstraints.end();
          it != ie; ++it)
       llvm::errs() << *it << ", ";
     llvm::errs() << "]\n";
     llvm::errs() << "\tA suffix: [";
-    for (std::set<ref<Expr> >::iterator it = aSuffix.begin(),
+    for (ExprHashSet::iterator it = aSuffix.begin(),
                                         ie = aSuffix.end();
          it != ie; ++it)
       llvm::errs() << *it << ", ";
     llvm::errs() << "]\n";
     llvm::errs() << "\tB suffix: [";
-    for (std::set<ref<Expr> >::iterator it = bSuffix.begin(),
+    for (ExprHashSet::iterator it = bSuffix.begin(),
                                         ie = bSuffix.end();
          it != ie; ++it)
       llvm::errs() << *it << ", ";
@@ -336,10 +337,10 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   ref<Expr> inA = ConstantExpr::alloc(1, Expr::Bool);
   ref<Expr> inB = ConstantExpr::alloc(1, Expr::Bool);
-  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
+  for (ExprHashSet::iterator it = aSuffix.begin(), 
          ie = aSuffix.end(); it != ie; ++it)
     inA = AndExpr::create(inA, *it);
-  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(), 
+  for (ExprHashSet::iterator it = bSuffix.begin(), 
          ie = bSuffix.end(); it != ie; ++it)
     inB = AndExpr::create(inB, *it);
 

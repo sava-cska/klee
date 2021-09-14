@@ -12,6 +12,7 @@
 #define KLEE_EXPRSMTLIBPRINTER_H
 
 #include "klee/Expr/Constraints.h"
+#include "klee/Expr/ExprHashMap.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Solver/Solver.h"
 #include "klee/Support/PrintContext.h"
@@ -215,7 +216,7 @@ protected:
   std::set<const Array *> usedArrays;
 
   /// Set of expressions seen during scan.
-  std::set<ref<Expr> > seenExprs;
+  ExprHashSet seenExprs;
 
   typedef std::map<const ref<Expr>, int> BindingMap;
 

@@ -154,7 +154,7 @@ protected:
 
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
-  std::map<ref<Expr>, std::pair<ref<Expr>, unsigned>> gepExprBases;
+  ExprHashMap<std::pair<ref<Expr>, unsigned>> gepExprBases;
 
   /// Used to track states that have been added during the current
   /// instructions step.

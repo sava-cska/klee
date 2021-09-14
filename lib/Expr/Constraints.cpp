@@ -54,11 +54,11 @@ public:
 
 class ExprReplaceVisitor2 : public ExprVisitor {
 private:
-   std::map< ref<Expr>, ref<Expr> > &replacements;
+   ExprHashMap<ref<Expr>> &replacements;
 
 public:
   explicit ExprReplaceVisitor2(
-      std::map<ref<Expr>, ref<Expr>> &_replacements)
+      ExprHashMap<ref<Expr>> &_replacements)
       : ExprVisitor(true), replacements(_replacements) {}
 
   Action visitExprPost(const Expr &e) override {
@@ -117,7 +117,7 @@ ref<Expr> ConstraintManager::simplifyExpr(const ConstraintSet &constraints,
   if (isa<ConstantExpr>(e))
     return e;
 
-  std::map< ref<Expr>, ref<Expr> > equalities;
+  ExprHashMap<ref<Expr>> equalities;
 
   for (auto &constraint : constraints) {
     if (const EqExpr *ee = dyn_cast<EqExpr>(constraint)) {

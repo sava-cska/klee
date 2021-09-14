@@ -1351,7 +1351,7 @@ void BaseExecutor::executeGetValue(ExecutionState &state,
     (void) success;
     bindLocal(target, state, value);
   } else {
-    std::set< ref<Expr> > values;
+    ExprHashSet values;
     for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
            siie = it->second.end(); siit != siie; ++siit) {
       ref<Expr> cond = siit->assignment.evaluate(e);
@@ -1365,7 +1365,7 @@ void BaseExecutor::executeGetValue(ExecutionState &state,
     }
     
     std::vector< ref<Expr> > conditions;
-    for (std::set< ref<Expr> >::iterator vit = values.begin(), 
+    for (ExprHashSet::iterator vit = values.begin(), 
            vie = values.end(); vit != vie; ++vit)
       conditions.push_back(EqExpr::create(e, *vit));
 
@@ -1373,7 +1373,7 @@ void BaseExecutor::executeGetValue(ExecutionState &state,
     branch(state, conditions, branches);
     
     std::vector<ExecutionState*>::iterator bit = branches.begin();
-    for (std::set< ref<Expr> >::iterator vit = values.begin(), 
+    for (ExprHashSet::iterator vit = values.begin(), 
            vie = values.end(); vit != vie; ++vit) {
       ExecutionState *es = *bit;
       if (es)
@@ -2254,7 +2254,7 @@ void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       std::vector<BasicBlock *> bbOrder;
       std::map<BasicBlock *, ref<Expr> > branchTargets;
 
-      std::map<ref<Expr>, BasicBlock *> expressionOrder;
+      ExprHashMap<BasicBlock *> expressionOrder;
 
       std::map<BasicBlock *, unsigned> caseNumber;
 
@@ -2272,7 +2272,7 @@ void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       ref<Expr> defaultValue = ConstantExpr::alloc(1, Expr::Bool);
 
       // iterate through all non-default cases but in order of the expressions
-      for (std::map<ref<Expr>, BasicBlock *>::iterator
+      for (ExprHashMap<BasicBlock *>::iterator
                it = expressionOrder.begin(),
                itE = expressionOrder.end();
            it != itE; ++it) {

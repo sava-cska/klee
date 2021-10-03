@@ -15,7 +15,7 @@ klee_add_component(kleeCore
   ExecutionState.cpp
   Executors/BaseExecutor.cpp
   Executors/ForwardExecutor.cpp
-  Executors/BidirectionalExecutor.cpp
+  Executors/GuidedExecutor.cpp
   ExecutorUtil.cpp
   Interpreter.cpp
   ExternalDispatcher.cpp

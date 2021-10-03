@@ -1,4 +1,4 @@
-//===-- BidirectionalExecutor.h ----------------------------------------------*- C++ -*-===//
+//===-- GuidedExecutor.h ----------------------------------------------*- C++ -*-===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -18,7 +18,7 @@
 
 namespace klee {
 
-class BidirectionalExecutor : public BaseExecutor {
+class GuidedExecutor : public BaseExecutor {
 public:
   typedef std::pair<llvm::BasicBlock*, llvm::BasicBlock*> BasicBlockPair;
   typedef std::map<llvm::BasicBlock*, std::set<ExecutionState*, ExecutionStateIDCompare> > ExecutedInterval;
@@ -66,10 +66,10 @@ protected:
   void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) override;
 
 public:
-  BidirectionalExecutor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
+  GuidedExecutor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
       InterpreterHandler *ie);
 
-  virtual ~BidirectionalExecutor() = default;
+  virtual ~GuidedExecutor() = default;
 
   const InterpreterHandler& getHandler() {
     return *interpreterHandler;
@@ -80,7 +80,7 @@ public:
 
   bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
   void isolatedExecuteStep(ExecutionState &state);
-  bool tryCoverStep(ExecutionState &state, ExecutionState &initialState);
+  bool tryExploreStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
   void executeReturn(ExecutionState &state, KInstruction *ki);
   KBlock *calculateCoverTarget(ExecutionState &state);

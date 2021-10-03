@@ -1,4 +1,4 @@
-//===-- BidirectionalExecutor.cpp ------------------------------------------------------===//
+//===-- GuidedExecutor.cpp ------------------------------------------------------===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "BidirectionalExecutor.h"
+#include "GuidedExecutor.h"
 
 #include "../MemoryManager.h"
 #include "../PForest.h"
@@ -29,34 +29,34 @@ cl::opt<unsigned long long> MaxCycles(
     cl::init(1),
     cl::cat(TerminationCat));
 
-BidirectionalExecutor *Composer::executor = nullptr;
+GuidedExecutor *Composer::executor = nullptr;
 
-BidirectionalExecutor::BidirectionalExecutor(LLVMContext &ctx, const InterpreterOptions &opts,
+GuidedExecutor::GuidedExecutor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : BaseExecutor(ctx, opts, ih)
 {
   Composer::executor = this;
 }
 
-void BidirectionalExecutor::addCompletedResult(ExecutionState &state) {
+void GuidedExecutor::addCompletedResult(ExecutionState &state) {
   results[state.getInitPCBlock()].completedStates[state.getPrevPCBlock()].insert(&state);
 }
 
-void BidirectionalExecutor::addErroneousResult(ExecutionState &state) {
+void GuidedExecutor::addErroneousResult(ExecutionState &state) {
   results[state.getInitPCBlock()].erroneousStates[state.getPrevPCBlock()].insert(&state);
 }
 
-void BidirectionalExecutor::addHistoryResult(ExecutionState &state) {
+void GuidedExecutor::addHistoryResult(ExecutionState &state) {
   results[state.getInitPCBlock()].history[state.getPrevPCBlock()].insert(state.level.begin(), state.level.end());
   results[state.getInitPCBlock()].transitionHistory[state.getPrevPCBlock()].insert(state.transitionLevel.begin(), state.transitionLevel.end());
 }
 
-void BidirectionalExecutor::addTargetable(ExecutionState &state) {
+void GuidedExecutor::addTargetable(ExecutionState &state) {
   assert(state.isIsolated());
   targetableStates[state.getInitPCBlock()->getParent()].insert(&state);
 }
 
-void BidirectionalExecutor::removeTargetable(ExecutionState &state) {
+void GuidedExecutor::removeTargetable(ExecutionState &state) {
   assert(state.isIsolated());
   std::unordered_set<ExecutionState *> &sts = targetableStates[state.getInitPCBlock()->getParent()];
   std::unordered_set<ExecutionState*>::iterator it = sts.find(&state);
@@ -65,14 +65,14 @@ void BidirectionalExecutor::removeTargetable(ExecutionState &state) {
   }
 }
 
-bool BidirectionalExecutor::isTargetable(ExecutionState &state) {
+bool GuidedExecutor::isTargetable(ExecutionState &state) {
   assert(state.isIsolated());
   std::unordered_set<ExecutionState *> &sts = targetableStates[state.getInitPCBlock()->getParent()];
   std::unordered_set<ExecutionState*>::iterator it = sts.find(&state);
   return it!=sts.end();
 }
 
-void BidirectionalExecutor::initializeRoot(ExecutionState &state, KBlock *kb) {
+void GuidedExecutor::initializeRoot(ExecutionState &state, KBlock *kb) {
   ExecutionState *root = state.withKBlock(kb);
   prepareSymbolicArgs(*root, kb->parent);
   if (statsTracker)
@@ -81,7 +81,7 @@ void BidirectionalExecutor::initializeRoot(ExecutionState &state, KBlock *kb) {
   addedStates.push_back(root);
 }
 
-void BidirectionalExecutor::runWithTarget(ExecutionState &state, KBlock *target) {
+void GuidedExecutor::runWithTarget(ExecutionState &state, KBlock *target) {
   if (pathWriter)
     state.pathOS = pathWriter->open();
   if (symPathWriter)
@@ -99,7 +99,7 @@ void BidirectionalExecutor::runWithTarget(ExecutionState &state, KBlock *target)
     statsTracker->done();
 }
 
-bool BidirectionalExecutor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
+bool GuidedExecutor::tryBoundedExecuteStep(ExecutionState &state, unsigned bound) {
   KInstruction *prevKI = state.prevPC;
 
   if (prevKI->inst->isTerminator()) {
@@ -113,7 +113,7 @@ bool BidirectionalExecutor::tryBoundedExecuteStep(ExecutionState &state, unsigne
   return true;
 }
 
-void BidirectionalExecutor::isolatedExecuteStep(ExecutionState &state) {
+void GuidedExecutor::isolatedExecuteStep(ExecutionState &state) {
   assert(state.isIsolated());
   KInstruction *ki = state.pc;
 
@@ -137,7 +137,7 @@ void BidirectionalExecutor::isolatedExecuteStep(ExecutionState &state) {
   executeStep(state);
 }
 
-bool BidirectionalExecutor::tryCoverStep(ExecutionState &state, ExecutionState &initialState) {
+bool GuidedExecutor::tryExploreStep(ExecutionState &state, ExecutionState &initialState) {
   KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
   KInstruction *ki = state.pc;
   if (state.isIntegrated() && state.isCriticalPC()) {
@@ -158,7 +158,7 @@ bool BidirectionalExecutor::tryCoverStep(ExecutionState &state, ExecutionState &
   return true;
 }
 
-void BidirectionalExecutor::executeReturn(ExecutionState &state, KInstruction *ki) {
+void GuidedExecutor::executeReturn(ExecutionState &state, KInstruction *ki) {
   assert(isa<ReturnInst>(ki->inst));
   ReturnInst *ri = cast<ReturnInst>(ki->inst);
   KInstIterator kcaller = state.stack.back().caller;
@@ -196,7 +196,7 @@ void BidirectionalExecutor::executeReturn(ExecutionState &state, KInstruction *k
 
 
 /// TODO: remove?
-void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
+void GuidedExecutor::composeStep(ExecutionState &lstate) {
   assert(lstate.isIntegrated());
   std::vector<ExecutionState *> result;
   for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
@@ -232,7 +232,7 @@ void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
 }
 
 /// TODO: update?
-void BidirectionalExecutor::targetedRun(ExecutionState &initialState, KBlock *target) {
+void GuidedExecutor::targetedRun(ExecutionState &initialState, KBlock *target) {
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
   states.insert(&initialState);
@@ -262,7 +262,7 @@ void BidirectionalExecutor::targetedRun(ExecutionState &initialState, KBlock *ta
   haltExecution = false;
 }
 
-KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
+KBlock *GuidedExecutor::calculateCoverTarget(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
   VisitedTransition &transitionHistory = results[initialBlock].transitionHistory;
@@ -323,7 +323,7 @@ KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
   return nearestBlock;
 }
 
-KBlock *BidirectionalExecutor::calculateTarget(ExecutionState &state) {
+KBlock *GuidedExecutor::calculateTarget(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
   BasicBlock *bb = state.getPCBlock();
@@ -368,7 +368,7 @@ KBlock *BidirectionalExecutor::calculateTarget(ExecutionState &state) {
 }
 
 /// TODO: update?
-void BidirectionalExecutor::guidedRun(ExecutionState &initialState) {
+void GuidedExecutor::guidedRun(ExecutionState &initialState) {
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
 
@@ -412,11 +412,11 @@ void BidirectionalExecutor::guidedRun(ExecutionState &initialState) {
   haltExecution = false;
 }
 
-void BidirectionalExecutor::addState(ExecutionState &state) {
+void GuidedExecutor::addState(ExecutionState &state) {
   addedStates.push_back(&state);
 }
 
-void BidirectionalExecutor::run(ExecutionState &state) {
+void GuidedExecutor::run(ExecutionState &state) {
   std::unique_ptr<ExecutionState> initialState(state.copy());
   initialState->stack.clear();
   initialState->stackBalance = 0;
@@ -443,7 +443,7 @@ void BidirectionalExecutor::run(ExecutionState &state) {
   // main interpreter loop
   while (!searcher->empty() && !haltExecution) {
     ExecutionState &es = searcher->selectState();
-    if (!tryCoverStep(es, *initialState)) {
+    if (!tryExploreStep(es, *initialState)) {
       KBlock *target = calculateCoverTarget(es);
       if (target) {
         es.target = target;
@@ -462,17 +462,17 @@ void BidirectionalExecutor::run(ExecutionState &state) {
   haltExecution = false;
 }
 
-void BidirectionalExecutor::pauseState(ExecutionState &state) {
+void GuidedExecutor::pauseState(ExecutionState &state) {
   results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
   removedStates.push_back(&state);
 }
 
-void BidirectionalExecutor::pauseRedundantState(ExecutionState &state) {
+void GuidedExecutor::pauseRedundantState(ExecutionState &state) {
   results[state.getInitPCBlock()].redundantStates[state.getPCBlock()].insert(&state);
   removedStates.push_back(&state);
 }
 
-void BidirectionalExecutor::unpauseState(ExecutionState &state) {
+void GuidedExecutor::unpauseState(ExecutionState &state) {
   ExecutedInterval &pausedStates = results[state.getInitPCBlock()].pausedStates;
 
   pausedStates[state.getPCBlock()].erase(&state);
@@ -481,7 +481,7 @@ void BidirectionalExecutor::unpauseState(ExecutionState &state) {
   addedStates.push_back(&state);
 }
 
-void BidirectionalExecutor::actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {
+void GuidedExecutor::actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {
   switch (reason) {
     case TerminateReason::Model       : addCompletedResult(state); break;
     case TerminateReason::ReportError : addErroneousResult(state); break;
@@ -491,7 +491,7 @@ void BidirectionalExecutor::actionBeforeStateTerminating(ExecutionState &state, 
 }
 
 /// TODO: remove?
-void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
+void GuidedExecutor::runMainWithTarget(Function *mainFn,
                                  BasicBlock *target,
                                  int argc,
                                  char **argv,

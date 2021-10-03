@@ -13,7 +13,7 @@
 #include "PForest.h"
 #include "ExecutionState.h"
 #include "AddressSpace.h"
-#include "Executors/BidirectionalExecutor.h"
+#include "Executors/GuidedExecutor.h"
 #include "Composer.h"
 
 #include <stack>

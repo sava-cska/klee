@@ -51,7 +51,7 @@ namespace klee {
     ExecutionState *S2;
 
   public:
-    static BidirectionalExecutor *executor;
+    static GuidedExecutor *executor;
   };
 
   class ComposeVisitor : public ExprVisitor {

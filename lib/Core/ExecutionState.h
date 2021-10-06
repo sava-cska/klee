@@ -10,6 +10,8 @@
 #ifndef KLEE_EXECUTIONSTATE_H
 #define KLEE_EXECUTIONSTATE_H
 
+#include "ProofObligation.h"
+
 #include "AddressSpace.h"
 #include "MergeHandler.h"
 
@@ -202,6 +204,8 @@ public:
   std::unordered_set<llvm::BasicBlock *> level;
   std::unordered_set<Transition, BasicBlockPairHash> transitionLevel;
 
+  std::unordered_set<ProofObligation*> unblockedPobs;
+
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
 
@@ -309,6 +313,9 @@ public:
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
+
+  void unblock(ProofObligation &pob) { unblockedPobs.insert(&pob); }
+  void block(ProofObligation &pob) { unblockedPobs.erase(&pob); }
 
   std::uint32_t getID() const { return id; };
   void setID() { id = nextID++; };

@@ -8,6 +8,7 @@
 #===------------------------------------------------------------------------===#
 klee_add_component(kleeCore
   AddressSpace.cpp
+  BidirectionalSearcher.cpp
   MergeHandler.cpp
   CallPathManager.cpp
   Context.cpp
@@ -31,6 +32,7 @@ klee_add_component(kleeCore
   TimingSolver.cpp
   UserSearcher.cpp
   Composer.cpp
+  ProofObligation.cpp
 )
 
 # TODO: Work out what the correct LLVM components are for

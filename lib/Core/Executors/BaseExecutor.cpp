@@ -4432,7 +4432,6 @@ void BaseExecutor::executeMakeSymbolic(ExecutionState &state,
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
     const Array *array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
-    const_cast<Array*>(array)->binding = isHandleMakeSymbolic ? nullptr : mo;
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);
     const_cast<Array*>(array)->binding = os;
     state.addSymbolic(mo, array);

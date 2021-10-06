@@ -21,7 +21,7 @@ namespace klee {
     struct ExprHash  {
       unsigned operator()(const ref<Expr> &e) const { return e->hash(); }
     };
-    
+
     struct ExprCmp {
       bool operator()(const ref<Expr> &a, const ref<Expr> &b) const {
         return a==b;

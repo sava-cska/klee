@@ -20,7 +20,6 @@ namespace klee {
 
 class BidirectionalExecutor : public BaseExecutor {
 public:
-  typedef std::pair<llvm::BasicBlock*,llvm::BasicBlock*> BasicBlockPair;
   typedef std::pair<llvm::BasicBlock*, llvm::BasicBlock*> BasicBlockPair;
   typedef std::map<llvm::BasicBlock*, std::set<ExecutionState*, ExecutionStateIDCompare> > ExecutedInterval;
   typedef std::map<llvm::BasicBlock*, std::unordered_set<llvm::BasicBlock*> > VisitedBlock;

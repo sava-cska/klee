@@ -178,7 +178,7 @@ public:
   /// @brief Required by klee::ref-managed objects
   class ReferenceCounter _refCount;
 
-protected:  
+protected:
   unsigned hashValue;
 
   /// Compares `b` to `this` Expr and determines how they are ordered
@@ -290,6 +290,7 @@ public:
 private:
   typedef llvm::DenseSet<std::pair<const Expr *, const Expr *> > ExprEquivSet;
   int compare(const Expr &b, ExprEquivSet &equivs) const;
+  int hashCompare(const Expr &b, ExprEquivSet &equivs) const;
 };
 
 struct Expr::CreateArg {
@@ -691,7 +692,7 @@ public:
 
 private:
   Width width;
-  ref<Expr> left, right;  
+  ref<Expr> left, right;
 
 public:
   static ref<Expr> alloc(const ref<Expr> &l, const ref<Expr> &r) {
@@ -709,7 +710,7 @@ public:
 
   unsigned getNumKids() const { return numKids; }
   ref<Expr> getKid(unsigned i) const { 
-    if (i == 0) return left; 
+    if (i == 0) return left;
     else if (i == 1) return right;
     else return NULL;
   }

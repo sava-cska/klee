@@ -96,6 +96,35 @@ int Expr::compare(const Expr &b) const {
   return r;
 }
 
+int Expr::hashCompare(const Expr &b, ExprEquivSet &equivs) const {
+  if (this == &b) return 0;
+
+  const Expr *ap, *bp;
+  if (this < &b) {
+    ap = this; bp = &b;
+  } else {
+    ap = &b; bp = this;
+  }
+
+  if (equivs.count(std::make_pair(ap, bp)))
+    return 0;
+
+  Kind ak = getKind(), bk = b.getKind();
+  if (ak!=bk)
+    return (ak < bk) ? -1 : 1;
+
+  if (hashValue != b.hashValue)
+    return (hashValue < b.hashValue) ? -1 : 1;
+
+  unsigned aN = getNumKids();
+  for (unsigned i=0; i<aN; i++)
+    if (int res = getKid(i)->hashCompare(*b.getKid(i), equivs))
+      return res;
+
+  equivs.insert(std::make_pair(ap, bp));
+  return 0;
+}
+
 // returns 0 if b is structurally equal to *this
 int Expr::compare(const Expr &b, ExprEquivSet &equivs) const {
   if (this == &b) return 0;

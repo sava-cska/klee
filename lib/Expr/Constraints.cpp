@@ -74,12 +74,29 @@ public:
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
       return CE->isTrue() ? visit(sexpr.trueExpr) : visit(sexpr.falseExpr);
     }
-    replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(1, Expr::Bool)));
-    ref<Expr> trueExpr = visit(sexpr.trueExpr);
-    replacements.erase(sexpr.cond);
+
+    ref<Expr> er;
+    if (const EqExpr *ee = dyn_cast<EqExpr>(sexpr.cond)) {
+      if (isa<ConstantExpr>(ee->left)) {
+        replacements.insert(std::make_pair(ee->right, ee->left));
+        er = ee->right;
+      } else {
+        replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(1, Expr::Bool)));
+        er = sexpr.cond;
+      }
+    } else {
+      replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(1, Expr::Bool)));
+      er = sexpr.cond;
+    }
+    ref<Expr> trueExpr =
+        ExprReplaceVisitor2(replacements).visit(sexpr.trueExpr);
+    replacements.erase(er);
+
     replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(0, Expr::Bool)));
-    ref<Expr> falseExpr = visit(sexpr.falseExpr);
+    ref<Expr> falseExpr =
+        ExprReplaceVisitor2(replacements).visit(sexpr.falseExpr);
     replacements.erase(sexpr.cond);
+
     ref<Expr> seres = SelectExpr::create(cond, trueExpr, falseExpr);
     Action res = visitExprPost(*seres.get());
     if (res.kind == Action::ChangeTo)

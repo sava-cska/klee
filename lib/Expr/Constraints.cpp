@@ -71,9 +71,6 @@ public:
 
   ref<Expr> processSelect(const SelectExpr& sexpr) {
     ref<Expr> cond = visit(sexpr.cond);
-    Action res = visitExprPost(*cond.get());
-    if (res.kind == Action::ChangeTo)
-      cond = res.argument;
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
       return CE->isTrue() ? visit(sexpr.trueExpr) : visit(sexpr.falseExpr);
     }
@@ -83,7 +80,11 @@ public:
     replacements.insert(std::make_pair(sexpr.cond, ConstantExpr::alloc(0, Expr::Bool)));
     ref<Expr> falseExpr = visit(sexpr.falseExpr);
     replacements.erase(sexpr.cond);
-    return SelectExpr::create(cond, trueExpr, falseExpr);
+    ref<Expr> seres = SelectExpr::create(cond, trueExpr, falseExpr);
+    Action res = visitExprPost(*seres.get());
+    if (res.kind == Action::ChangeTo)
+      seres = res.argument;
+    return seres;
   }
 
   Action visitSelect(const SelectExpr& sexpr) override {

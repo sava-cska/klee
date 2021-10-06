@@ -151,10 +151,19 @@ public:
     return SubExpr::create(pointer, getBaseExpr());
   }
   ref<Expr> getBoundsCheckPointer(ref<Expr> pointer) const {
-    return getBoundsCheckOffset(getOffsetExpr(pointer));
+    if (size!=0 && isa<ConstantExpr>(getBaseExpr())) {
+      return EqExpr::create(pointer, getBaseExpr());
+    } else {
+      return getBoundsCheckOffset(getOffsetExpr(pointer));
+    }
   }
+
   ref<Expr> getBoundsCheckPointer(ref<Expr> pointer, unsigned bytes) const {
-    return getBoundsCheckOffset(getOffsetExpr(pointer), bytes);
+    if (size==bytes && isa<ConstantExpr>(getBaseExpr())) {
+      return EqExpr::create(pointer, getBaseExpr());
+    } else {
+      return getBoundsCheckOffset(getOffsetExpr(pointer), bytes);
+    }
   }
 
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset) const {

@@ -37,16 +37,16 @@ ExprVisitor::Action ComposeVisitor::visitSelect(const SelectExpr &select) {
 }
 
 ref<Expr> ComposeVisitor::shareUpdates(ref<ObjectState> OS, const ReadExpr &re) {
-  std::stack < const UpdateNode* > forward{};
+  std::stack<ref<UpdateNode>> forward;
 
   for(auto it = re.updates.head;
            !it.isNull();
            it = it->next) {
-    forward.push( it.get() );
+    forward.push(it);
   }
 
   while(!forward.empty()) {
-    const UpdateNode* UNode = forward.top();
+    ref<UpdateNode> UNode = forward.top();
     forward.pop();
     ref<Expr> newIndex = visit(UNode->index);
     ref<Expr> newValue = visit(UNode->value);

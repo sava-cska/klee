@@ -570,7 +570,6 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
     results.pop_back();
     for (auto cri = results.rbegin(), cre = results.rend(); cri != cre; ++cri) {
       result = SelectExpr::create(cri->first, cri->second, result);
-      result = ConstraintManager::simplifyExpr(S1->constraints, result);
     }
   }
 

@@ -44,12 +44,6 @@ cl::opt<bool> DebugLogStateMerge(
     cl::cat(MergeCat));
 }
 
-/***/
-
-std::uint32_t ExecutionState::nextID = 1;
-
-/***/
-
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
   : caller(_caller), kf(_kf), callPathNode(0), 
     minDistToUncoveredOnReturn(0), varargs(0) {
@@ -98,7 +92,8 @@ ExecutionState::ExecutionState(KFunction *kf) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
-    target(nullptr) {
+    target(nullptr)
+{
   pushFrame(nullptr, kf);
   stackBalance = 0;
   setID();
@@ -119,7 +114,8 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
-    target(nullptr) {
+    target(nullptr)
+{
   pushFrame(nullptr, kf);
   stackBalance = 0;
   setID();
@@ -165,6 +161,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     redundant(state.redundant),
     target(state.target),
     statesForRebuild(state.statesForRebuild) {
+    target(state.target)
+{
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
 }
@@ -173,7 +171,6 @@ ExecutionState *ExecutionState::branch() {
   depth++;
 
   auto *falseState = new ExecutionState(*this);
-  falseState->setID();
   falseState->coveredNew = false;
   falseState->coveredLines.clear();
 
@@ -183,7 +180,6 @@ ExecutionState *ExecutionState::branch() {
 ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
   assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
-  newState->setID();
   newState->pushFrame(nullptr, kf);
   newState->stackBalance = 0;
   newState->initPC = kf->blockMap[&*kf->function->begin()]->instructions;
@@ -195,7 +191,6 @@ ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
 ExecutionState *ExecutionState::withKBlock(KBlock *kb) {
   assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
-  newState->setID();
   newState->pushFrame(nullptr, kb->parent);
   newState->stackBalance = 0;
   newState->initPC = kb->instructions;
@@ -205,9 +200,7 @@ ExecutionState *ExecutionState::withKBlock(KBlock *kb) {
 }
 
 ExecutionState *ExecutionState::copy() const {
-  ExecutionState* newState = new ExecutionState(*this);
-  newState->setID();
-  return newState;
+  return new ExecutionState(*this);
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {

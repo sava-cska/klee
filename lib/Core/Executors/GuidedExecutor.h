@@ -15,6 +15,7 @@
 #pragma once
 
 #include "BaseExecutor.h"
+#include "../Tracker.h"
 
 namespace klee {
 
@@ -36,6 +37,7 @@ public:
 
 private:
   std::map<llvm::Function *, std::unordered_set<ExecutionState *>> targetableStates;
+  Tracker reachabilityTracker;
 
   ExecutionResult results;
 
@@ -62,6 +64,15 @@ private:
   // unpause state
   void unpauseState(ExecutionState &state);
 
+  void reachTarget(ExecutionState const &initialState, KBlock const &target, size_t lvl_bound);
+  void goFront(ExecutionState &state, std::queue<ExecutionState *> &forwardQueue);
+  void goBack(ExecutionState &state, ProofObligation &pob, std::deque<ProofObligation> &backwardQueue, ExecutionState const &entryPoint);
+
+  void markUnblocked(ExecutionState &state, ProofObligation &pob) const;
+
+  KBlock * getStartLocation(ExecutionState &state);
+  KBlock * getLastExecutedLocation(ExecutionState &state);
+  KBlock * getCurrentLocation(ExecutionState &state);
 protected:
   void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) override;
 

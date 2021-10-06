@@ -649,17 +649,9 @@ ConstraintSet compose(ExecutionState & state, ConstraintSet const & fromPob, Tim
 } // namespace
 
 void BidirectionalExecutor::goFront(ExecutionState & state, std::queue<ExecutionState *> & forwardQueue) {
+  auto current_location = getCurrentLocation(state);
   executeInstruction(state, state.pc);
-  for (auto const & newState : addedStates) {
-    forwardQueue.push(newState);
-    if (newState != &state) {
-      assert(newState->unblockedPobs.empty());
-      for (auto const & pob : state.unblockedPobs) {
-        assert(!pob->answered);
-        markUnblocked(*newState, *pob);
-      }
-    }
-  }
+  reachabilityTracker.notifyDueToExecution(state, addedStates, *current_location);
   assert(removedStates.empty());
 }
 
@@ -668,11 +660,7 @@ void BidirectionalExecutor::goBack(ExecutionState & state, ProofObligation & pob
   bool mayBeTrue;
   auto composedCondition = compose(state, pob.condition, *solver, mayBeTrue);
   if (mayBeTrue) {
-    pob.block(state);
-    state.block(pob);
-    auto nearestReachableParent = pob.propagateUnreachability();
-    assert(nearestReachableParent->isOriginPob() || !nearestReachableParent->isUnreachable());
-    if (nearestReachableParent->isOriginPob() && nearestReachableParent->isUnreachable()) {
+    if (nearestReachableParent->isOriginPob() && reachabilityTracker.isReachably(pob.location)) {
         // answer_no(...);
         // static_assert(false && "TODO");
     }
@@ -689,20 +677,25 @@ void BidirectionalExecutor::goBack(ExecutionState & state, ProofObligation & pob
   }
 
   auto lvl = state.multilevel.level();
-  auto newLocation = kmodule->functionMap[state.getInitPCBlock()->getParent()]->blockMap[state.getInitPCBlock()];
+  auto newLocation = getStartLocation(state);
   backwardQueue.push_back(pob.makeNewChild(*newLocation, lvl, std::move(composedCondition)));
 }
 
-bool BidirectionalExecutor::canReach(ExecutionState & state, ProofObligation & pob) const {
+bool BidirectionalExecutor::canReach(ExecutionState & state, KBlock const & location) const {
   // kmodule->getDistance(??);
-  static_assert(false && "TODO");
+  // static_assert(false && "TODO");
   return false;
 }
 
+void BidirectionalExecutor::subscribe(ExecutionState & state, KBlock & location) {
+  statesPassedThroughLocation[&location].insert(&state); // location to state subscribing
+  assert(state.level.count(location.basicBlock));        // state to location subscribing
+}
+
 void BidirectionalExecutor::markUnblocked(ExecutionState & state, ProofObligation & pob) const {
-  if (state.multilevel <= pob.current_lvl && canReach(state, pob)) {
+  if (state.multilevel <= pob.current_lvl && canReach(state, pob.location)) {
     pob.addAsUnblocked(state);
-    state.unblock(pob);
+    // state.unblock(pob);
   }
 }
 
@@ -719,10 +712,11 @@ void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBl
     auto action = searcher.selectState();
     switch (action.type) {
       case Action::Type::Init:
-        initializeRoot(initialState, action.location->parent->blockMap[action.state->getPCBlock()]);
+        initializeRoot(initialState, action.location->parent->blockMap[action.state->getPCBlock()]); // WTF???
         updateStates(nullptr);
+        reachabilityTracker.reindex(*action.state, *action.location);
         for (auto & pob : backwardQueue)
-          markUnblocked(*action.state, pob);
+          markUnblocked(*action.state, pob); // how? action.state is nullptr in Init
         break;
       case Action::Type::Forward:
         assert(forwardQueue.front() == action.state);
@@ -737,6 +731,18 @@ void BidirectionalExecutor::reachTarget(ExecutionState const & initialState, KBl
       default: assert(false && "unreachable");
     }
   }
+}
+
+KBlock * BidirectionalExecutor::getStartLocation(ExecutionState &state) {
+  return kmodule->functionMap[state.getInitPCBlock()->getParent()]->blockMap[state.getInitPCBlock()];
+}
+
+KBlock * BidirectionalExecutor::getLastExecutedLocation(ExecutionState &state) {
+  return kmodule->functionMap[state.getPrevPCBlock()->getParent()]->blockMap[state.getPrevPCBlock()];
+}
+
+KBlock * BidirectionalExecutor::getCurrentLocation(ExecutionState &state) {
+  return kmodule->functionMap[state.getPCBlock()->getParent()]->blockMap[state.getPCBlock()];
 }
 
 } // namespace klee

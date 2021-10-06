@@ -23,8 +23,8 @@ void ProofObligation::unblockTree(ProofObligation & node) {
 }
 
 void ProofObligation::unblock(ProofObligation & node) {
-  for (auto state : node.unblocked)
-    state->unblock(node);
+  // for (auto state : node.unblocked)
+  //   state->unblock(node);
   node.unblocked.clear();
 }
 

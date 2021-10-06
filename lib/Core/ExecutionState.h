@@ -161,7 +161,8 @@ struct BasicBlockPairHash {
 };
 
 /// @brief ExecutionState representing a path under exploration
-class ExecutionState {
+class ExecutionState : public Indexer<ExecutionState> {
+  using BaseIndexer = Indexer<ExecutionState>;
 #ifdef KLEE_UNITTEST
 public:
 #else
@@ -203,8 +204,6 @@ public:
   std::unordered_multiset<llvm::BasicBlock *> multilevel;
   std::unordered_set<llvm::BasicBlock *> level;
   std::unordered_set<Transition, BasicBlockPairHash> transitionLevel;
-
-  std::unordered_set<ProofObligation*> unblockedPobs;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
@@ -259,12 +258,6 @@ public:
   /// @brief Keep track of unwinding state while unwinding, otherwise empty
   std::unique_ptr<UnwindingInformation> unwindingInformation;
 
-  /// @brief the global state counter
-  static std::uint32_t nextID;
-
-  /// @brief the state id
-  std::uint32_t id {0};
-
   /// @brief Whether a new instruction was covered in this state
   bool coveredNew;
 
@@ -314,11 +307,6 @@ public:
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
 
-  void unblock(ProofObligation &pob) { unblockedPobs.insert(&pob); }
-  void block(ProofObligation &pob) { unblockedPobs.erase(&pob); }
-
-  std::uint32_t getID() const { return id; };
-  void setID() { id = nextID++; };
   llvm::BasicBlock *getInitPCBlock() const;
   llvm::BasicBlock *getPrevPCBlock() const;
   llvm::BasicBlock *getPCBlock() const;
@@ -334,7 +322,7 @@ public:
 
 struct ExecutionStateIDCompare {
   bool operator()(const ExecutionState *a, const ExecutionState *b) const {
-    return a->getID() < b->getID();
+    return a->id < b->id;
   }
 };
 }

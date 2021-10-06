@@ -7,17 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#pragma once
 #include "BidirectionalSearcher.h"
 
 namespace klee {
 
 Action SimpleBidirectionalSearcher::selectState() {
-  static_assert(false && "TODO");
+  // static_assert(false && "TODO");
+  return {Action::Type::Init, nullptr, nullptr, nullptr};
 }
 
 bool SimpleBidirectionalSearcher::empty() {
-  static_assert(false && "TODO");
+  // static_assert(false && "TODO");
   return true;
 }
 

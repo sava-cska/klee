@@ -48,6 +48,7 @@ void BidirectionalExecutor::addErroneousResult(ExecutionState &state) {
 
 void BidirectionalExecutor::addHistoryResult(ExecutionState &state) {
   results[state.getInitPCBlock()].history[state.getPrevPCBlock()].insert(state.level.begin(), state.level.end());
+  results[state.getInitPCBlock()].transitionHistory[state.getPrevPCBlock()].insert(state.transitionLevel.begin(), state.transitionLevel.end());
 }
 
 void BidirectionalExecutor::addTargetable(ExecutionState &state) {
@@ -59,8 +60,16 @@ void BidirectionalExecutor::removeTargetable(ExecutionState &state) {
   assert(state.isIsolated());
   std::unordered_set<ExecutionState *> &sts = targetableStates[state.getInitPCBlock()->getParent()];
   std::unordered_set<ExecutionState*>::iterator it = sts.find(&state);
-  if (it!=sts.end())
+  if (it!=sts.end()) {
     sts.erase(it);
+  }
+}
+
+bool BidirectionalExecutor::isTargetable(ExecutionState &state) {
+  assert(state.isIsolated());
+  std::unordered_set<ExecutionState *> &sts = targetableStates[state.getInitPCBlock()->getParent()];
+  std::unordered_set<ExecutionState*>::iterator it = sts.find(&state);
+  return it!=sts.end();
 }
 
 void BidirectionalExecutor::initializeRoot(ExecutionState &state, KBlock *kb) {
@@ -108,14 +117,17 @@ void BidirectionalExecutor::isolatedExecuteStep(ExecutionState &state) {
   assert(state.isIsolated());
   KInstruction *ki = state.pc;
 
-  if (state.isCriticalPC() ||
-      isa<ReturnInst>(ki->inst) || isa<CallInst>(ki->inst) || isa<InvokeInst>(ki->inst)) {
+  if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
     addTargetable(state);
     addCompletedResult(state);
     silentRemove(state);
-    updateStates(nullptr);
+    if (isa<ReturnInst>(ki->inst)) {
+      executeStep(state);
+    } else
+      updateStates(nullptr);
     return;
   }
+
   if (state.redundant) {
     pauseRedundantState(state);
     updateStates(nullptr);
@@ -146,41 +158,60 @@ bool BidirectionalExecutor::tryCoverStep(ExecutionState &state, ExecutionState &
   return true;
 }
 
-void BidirectionalExecutor::backwardStep(ExecutionState &state, ExecutionState &pobState) {
-  assert(state.pc == pobState.initPC);
-  ref<Expr> rebuildCond = ConstantExpr::create(true, Expr::Bool);
-  for (auto &constraint : pobState.constraints) {
-    ref<Expr> rebuildCond = AndExpr::create(rebuildCond, constraint);
+void BidirectionalExecutor::executeReturn(ExecutionState &state, KInstruction *ki) {
+  assert(isa<ReturnInst>(ki->inst));
+  ReturnInst *ri = cast<ReturnInst>(ki->inst);
+  KInstIterator kcaller = state.stack.back().caller;
+  Instruction *caller = kcaller ? kcaller->inst : 0;
+  bool isVoidReturn = (ri->getNumOperands() == 0);
+  ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
+  
+  if (!isVoidReturn) {
+    result = eval(ki, 0, state).value;
   }
-  for (auto &st : state.statesForRebuild) {
-    rebuildCond = Composer::rebuild(rebuildCond, st);
-  }
-  bool mayBeTrue;
-  if (!solver->mayBeTrue(state.constraints, rebuildCond, mayBeTrue,
-                         state.queryMetaData)) {
-    return;
-  }
-  if (mayBeTrue) {
-    // TODO: добавить новый pob с rebuildCond
+  if (state.stack.size() <= 1) {
+    assert(!caller && "caller set on initial stack frame");
+    --state.stackBalance;
+    bindLocal(ki, state, result);
+    state.pc = state.prevPC;
   } else {
-    // TODO: заблокировать state для query
+    state.stack.pop_back();
+
+    addHistoryResult(state);
+
+    if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
+      transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
+    } else {
+      state.pc = kcaller;
+      ++state.pc;
+      state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
+      BranchInst *bi = cast<BranchInst>(state.pc->inst);
+      assert(bi && bi->isUnconditional());
+      KInstruction *ki = state.pc;
+      stepInstruction(state);
+      executeInstruction(state, ki);
+    }
   }
 }
+
 
 /// TODO: remove?
 void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
   assert(lstate.isIntegrated());
-  if (lstate.pc->inst->isTerminator()) {
-    executeStep(lstate);
-    return;
-  }
   std::vector<ExecutionState *> result;
   for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
     for (auto rstate : blockstate.second) {
       ExecutionState *currentResult = nullptr;
       Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), currentResult);
       if (currentResult) {
-        removeTargetable(*rstate);
+        if (isTargetable(*rstate)) {
+          removeTargetable(*rstate);
+        }
+        if(isa<ReturnInst>(currentResult->pc->inst) && currentResult->stack.size() > 1) {
+          executeReturn(*currentResult, currentResult->pc);
+        }
+        addHistoryResult(*currentResult);
+
         result.push_back(currentResult);
       }
     }
@@ -191,12 +222,12 @@ void BidirectionalExecutor::composeStep(ExecutionState &lstate) {
       Composer::compose(&lstate, const_cast<ExecutionState*>(rstate), currentResult);
       if (currentResult) {
         removeTargetable(*rstate);
+        addHistoryResult(*currentResult);
         result.push_back(currentResult);
       }
     }
   }
   removedStates.push_back(&lstate);
-  addedStates.insert(addedStates.end(), result.begin(), result.end());
   updateStates(nullptr);
 }
 
@@ -234,6 +265,7 @@ void BidirectionalExecutor::targetedRun(ExecutionState &initialState, KBlock *ta
 KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
+  VisitedTransition &transitionHistory = results[initialBlock].transitionHistory;
   BasicBlock *bb = state.getPCBlock();
   KFunction *kf = kmodule->functionMap[bb->getParent()];
   KBlock *kb = kf->blockMap[bb];
@@ -245,21 +277,24 @@ KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
     kf = sfi->kf;
     std::map<KBlock*, unsigned int> &kbd = kf->getDistance(kb);
     for (auto &tstate : targetableStates[kf->function]) {
-      KBlock *currKB = kf->blockMap[tstate->getInitPCBlock()];
-      unsigned distance = kbd[currKB];
-      if (kbd.find(currKB) != kbd.end() && distance < minDistance) {
+      KBlock *currKB = kf->blockMap[tstate->getPCBlock()];
+      if (kbd.find(currKB) != kbd.end() && kbd[currKB] > 0 && kbd[currKB] < minDistance) {
         nearestBlock = currKB;
-        minDistance = distance;
+        minDistance = kbd[currKB];
       }
     }
+
+    if (nearestBlock) {
+      return nearestBlock;
+    }
+
     for (auto currKB : kf->finalKBlocks) {
-      unsigned distance = kbd[currKB];
-      if (kbd.find(currKB) != kbd.end() && distance < minDistance) {
+      if (kbd.find(currKB) != kbd.end() && kbd[currKB] > 0 && kbd[currKB] < minDistance) {
         if (history[currKB->basicBlock].size() != 0) {
-          std::vector<BasicBlock*> diff;
+          std::vector<Transition> diff;
           if (!newCov) {
-            std::set<BasicBlock*> left(state.level.begin(), state.level.end());
-            std::set<BasicBlock*> right(history[currKB->basicBlock].begin(), history[currKB->basicBlock].end());
+            std::set<Transition> left(state.transitionLevel.begin(), state.transitionLevel.end());
+            std::set<Transition> right(transitionHistory[currKB->basicBlock].begin(), transitionHistory[currKB->basicBlock].end());
             std::set_difference(left.begin(), left.end(),
                                 right.begin(), right.end(),
                                 std::inserter(diff, diff.begin()));
@@ -268,10 +303,11 @@ KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
           if (diff.empty()) {
             continue;
           }
-        } else
+        } else {
           newCov = true;
-      nearestBlock = currKB;
-      minDistance = distance;
+        }
+        nearestBlock = currKB;
+        minDistance = kbd[currKB];
       }
     }
 
@@ -383,7 +419,9 @@ void BidirectionalExecutor::addState(ExecutionState &state) {
 void BidirectionalExecutor::run(ExecutionState &state) {
   std::unique_ptr<ExecutionState> initialState(state.copy());
   initialState->stack.clear();
+  initialState->stackBalance = 0;
   initialState->isolated = true;
+  state.statesForRebuild.push_back(state.copy());
 
   // Delay init till now so that ticks don't accrue during optimization and such.
   timers.reset();
@@ -420,11 +458,8 @@ void BidirectionalExecutor::run(ExecutionState &state) {
   searcher.reset();
 
   doDumpStates();
+  results.clear();
   haltExecution = false;
-}
-
-void BidirectionalExecutor::silentRemove(ExecutionState &state) {
-  removedStates.push_back(&state);
 }
 
 void BidirectionalExecutor::pauseState(ExecutionState &state) {
@@ -471,177 +506,222 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
   clearGlobal();
 }
 
-//-----Composer-----//
-typedef std::pair<ref<const MemoryObject>, const Array *> symb;
-
-void Composer::compose(ExecutionState *state, ExecutionState *&result) {
-  assert(S1 && S2 && state && !S1->isEmpty() && !S2->isEmpty());
-  assert(state->pc == S2->initPC);
-  executor->getProcessForest()->attach(S1->ptreeNode, state, const_cast<ExecutionState *>(S1));
-  for (auto &constraint : S2->constraints) {
-    ref<Expr> rebuildConstraint = constraint;
-    for (auto &st : state->statesForRebuild) {
-      rebuildConstraint = Composer::rebuild(rebuildConstraint, st);
-    }
-    rebuildConstraint = Composer::rebuild(rebuildConstraint, state);
-    bool mayBeTrue;
-    if (!executor->getSolver()->mayBeTrue(state->constraints, rebuildConstraint, 
-                                          mayBeTrue, state->queryMetaData)) {
-      return;
-    }
-    if (mayBeTrue)
-      state->addConstraint(rebuildConstraint);
-    else
-      return;
-  }
-
-  state->statesForRebuild.push_back(S2);
-  state->prevPC = S2->prevPC;
-  state->pc = S2->pc;
-  state->incomingBBIndex = S2->incomingBBIndex;
-  state->steppedInstructions = state->steppedInstructions + S2->steppedInstructions;
-  state->depth = state->depth + S2->depth;
-  state->level.insert(S2->level.begin(), S2->level.end());
-  state->multilevel.insert(S2->multilevel.begin(), S2->multilevel.end());
-
-  auto & stateFrame = state->stack.back();
-  auto & newFrame = S2->stack.back();
-  assert(stateFrame.kf == newFrame.kf &&
-        "can not compose states from different functions");
-  for(unsigned i = 0; i < newFrame.kf->numRegisters; i++) {
-    ref<Expr> newVal = newFrame.locals[i].value;
-    if(!newVal.isNull()) {
-        for (auto &st : state->statesForRebuild) {
-          newVal = Composer::rebuild(newVal, st);
-        }
-        stateFrame.locals[i].value = newVal;
-    }
-  }
-
-  result = state;
-}
-
-
 //-----ComposeVisitor-----//
 
-ref<Expr> ComposeVisitor::shareUpdates(ObjectState & OS, const ReadExpr & re) {
-  std::stack < const UpdateNode* > forward{};
+bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
+  ExecutionState *S1 = caller->S1;
+  ExprHashMap<ref<Expr>> &derefCache = Composer::globalDerefCache[S1];
+  auto cachedDeref = derefCache.find(ptr);
+  if (cachedDeref != derefCache.end()) {
+    result = derefCache[ptr];
+    return true;
+  }
 
-  for(auto it = re.updates.head;
-           !it.isNull();
-           it = it->next) {
-      forward.push( it.get() );
+  ResolutionList rl;
+  Solver::Validity res = Solver::False;
+  S1->addressSpace.resolve(*S1, caller->executor->getSolver(), ptr, rl, true);
+
+  if (rl.empty() && isa<ConstantExpr>(ptr)) {
+    faultyPtr = ptr;
+    return false;
   }
-  // const bool doPrint = !forward.empty();
-  // auto out = [&doPrint](const auto & obj) { if(doPrint) llvm::errs() << obj << "\n"; };
-  while(!forward.empty()) {
-      const UpdateNode* UNode = forward.top();
-      forward.pop();
-      ref<Expr> newIndex = visit(UNode->index);
-      ref<Expr> newValue = visit(UNode->value);
-      OS.write(newIndex, newValue);
+
+  std::vector<std::pair<ref<Expr>, ref<Expr>>> results;
+  ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
+  for(auto op = rl.begin(), e = rl.end(); op != e; op++) {
+    const MemoryObject *mo = op->first;
+    const ObjectState *os = op->second;
+
+    ref<Expr> inBounds = mo->getBoundsCheckPointer(ptr, size);
+
+    time::Span timeout = caller->executor->getSolverTimeout();
+    TimingSolver *solver = caller->executor->getSolver();
+    solver->setTimeout(timeout);
+    solver->evaluate(S1->constraints, AndExpr::create(check, inBounds), res, S1->queryMetaData);
+    solver->setTimeout(time::Span());
+
+    if (res == Solver::True) {
+      ref<Expr> trueCase = op->second->read(op->first->getOffsetExpr(ptr), 8 * op->second->size);
+      results.push_back({
+        ConstantExpr::create(true, Expr::Bool), SExtExpr::create(trueCase, 8 * size)});
+      break;
+    } else if (res == Solver::False) {
+      continue;
+    } else {
+      check = AndExpr::create(check, Expr::createIsZero(inBounds));
+      ref<Expr> trueCase = op->second->read(op->first->getOffsetExpr(ptr), 8 * op->second->size);
+      results.push_back({inBounds, SExtExpr::create(trueCase, 8 * size)});
+    }
   }
-  ref<Expr> index = visit(re.index);
-  return OS.read(index, re.getWidth());
+
+  if (!isa<ConstantExpr>(ptr) && res != Solver::True) {
+    ObjectPair p = caller->executor->transparentLazyInstantiateVariable(
+      *S1, ptr, nullptr, size);
+    ref<Expr> trueCase = p.second->read(0, 8 * p.second->size);
+    results.push_back({ConstantExpr::create(true, Expr::Bool),
+                        SExtExpr::create(trueCase, 8 * size)});
+  }
+
+  assert(!results.empty());
+  if (results.size() == 1) {
+    result = results.back().second;
+  } else {
+    result = results.back().second;
+    results.pop_back();
+    for (auto cri = results.rbegin(), cre = results.rend(); cri != cre; ++cri) {
+      result = SelectExpr::create(cri->first, cri->second, result);
+      result = ConstraintManager::simplifyExpr(S1->constraints, result);
+    }
+  }
+
+  derefCache[ptr] = result;
+  return true;
 }
 
-ref<Expr> ComposeVisitor::processRead(const ReadExpr & re) {
-    ExecutionState *S1 = caller->S1;
-    assert(S1 && "no context passed");
-    const MemoryObject *object = re.updates.root->binding;
-    if(!object) return new ReadExpr(re);
-    ObjectState OS{object};
-    if(object->isLazyInstantiated()) {
-      auto cachedLIexpr = caller->liCache.find(object);
-      if(cachedLIexpr != caller->liCache.end()) {
-        OS.write(0, cachedLIexpr->second);
-        return shareUpdates(OS, re);
-      }
+ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
+  ref<Expr> refRe = new ReadExpr(re);
+  ExecutionState *S1 = caller->S1;
+  assert(S1 && "no context passed");
 
-      ResolutionList rl;
-      Solver::Validity res;
-      auto LI = visit(object->lazyInstantiatedSource);
-      S1->addressSpace.resolve(*S1, caller->executor->getSolver(), LI, rl);
-      assert(!rl.empty() && "should termitate state?");
+   std::map<const MemoryObject *, ref<Expr>> &readCache = Composer::globalReadCache[S1];
 
-      std::vector<std::pair<ref<Expr>, ref<Expr>>> results;
-      ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
-      for(auto op = rl.begin(), e = rl.end(); op != e; op++) {
-        const MemoryObject *mo = op->first;
-        const ObjectState *os = op->second;
-        ref<Expr> inBounds = mo->getBoundsCheckPointer(LI, OS.size);
+  ref<ObjectState> OS;
+  if(re.updates.root->isForeign ||
+     re.updates.root->isConstantArray()) {
+    OS = new ObjectState(re.updates.root, caller->executor->getMemoryManager());
+    ref<Expr> res = shareUpdates(OS, re);
+    return res;
+  }
 
-        time::Span timeout = caller->executor->getMaxSolvTime();
-        TimingSolver *solver = caller->executor->getSolver();
-        solver->setTimeout(timeout);
-        solver->evaluate(S1->constraints, AndExpr::create(check, inBounds), res, S1->queryMetaData);
-        solver->setTimeout(time::Span());
+  const MemoryObject *object = re.updates.root->binding ? re.updates.root->binding->getObject() : nullptr;
+  if(!object) {
+    return refRe;
+  }
 
-        if (res == Solver::True) {
-          ref<Expr> trueCase = op->second->read(0, 8 * op->second->size);
-          results.push_back({ConstantExpr::create(true, Expr::Bool),
-                             SExtExpr::create(trueCase, 8 * OS.size)});
-          break;
-        } else if (res == Solver::False) {
-          continue;
-        } else {
-          check = AndExpr::create(check, Expr::createIsZero(inBounds));
-          ref<Expr> trueCase = op->second->read(0, 8 * op->second->size);
-          results.push_back({inBounds, SExtExpr::create(trueCase, 8 * OS.size)});
-        }
-      }
+  OS = new ObjectState(object);
 
-      if (res != Solver::True) {
-        ObjectPair p = caller->executor->lazyInstantiateVariable(
-        *S1, LI, object->allocSite, object->size);
-        ref<Expr> trueCase = p.second->read(0, 8 * p.second->size);
-        results.push_back({ConstantExpr::create(true, Expr::Bool),
-                           SExtExpr::create(trueCase, 8 * OS.size)});
-      }
-
-      ref<Expr> result;
-
-      if (results.size() == 1) {
-        result = results.back().second;
-      } else {
-        result = results.back().second;
-        results.pop_back();
-        for (auto cri = results.rbegin(), cre = results.rend(); cri != cre; ++cri) {
-          result = SelectExpr::create(cri->first, cri->second, result);
-        }
-      }
-
-      caller->liCache[object] = result;
-      OS.write(0, result);
-      return shareUpdates(OS, re);
+  if(object->isLazyInstantiated()) {
+    auto cachedLIexpr = readCache.find(object);
+    if(cachedLIexpr != readCache.end()) {
+      ref<Expr> res = cachedLIexpr->second;
+      OS->write(0, res);
+      res = shareUpdates(OS, re);
+      return res;
     }
 
-    const llvm::Value *allocSite = object->allocSite;
-    if(!allocSite) return new ReadExpr(re);
+    auto LI = visit(object->lazyInstantiatedSource);
 
-    ref<Expr> prevVal;
-    if(isa<Argument>(allocSite)) {
-      const Argument *arg = cast<Argument>(allocSite);
-      const Function *f   = arg->getParent();
-      const KFunction *kf = caller->executor->getKFunction(f);
-      const unsigned argN = arg->getArgNo();
-      prevVal = caller->executor->getArgumentCell(*S1, kf, argN).value;
-    } else if(isa<Instruction>(allocSite)) {
-      const Instruction *inst = cast<Instruction>(allocSite);
-      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
-      if (isa<PHINode>(inst))
-        prevVal = caller->executor->eval(ki, S1->incomingBBIndex, *S1).value;
-      else
-        prevVal = caller->executor->getDestCell(*S1, ki).value;
+    ref<Expr> result;
+    if (tryDeref(LI, OS->size, result)) {
+      readCache[object] = result;
+      OS->write(0, result);
+      result = shareUpdates(OS, re);
+      return result;
     } else {
-      return new ReadExpr(re);
+      return refRe;
     }
+  }
 
-    if(prevVal.isNull() /*|| prevVal->isFalse()*/) {
-      return new ReadExpr(re);
+  auto cachedLIexpr = readCache.find(object);
+  if(cachedLIexpr != readCache.end()) {
+    ref<Expr> res = cachedLIexpr->second;
+    OS->write(0, res);
+    res = shareUpdates(OS, re);
+    return res;
+  }
+
+  ref<Expr> prevVal;
+
+  if((re.updates.root->index >= 0 && diffLevel > 0) ||
+    (re.updates.root->index > 0 && diffLevel < 0)) {
+    prevVal = reindexRead(re);
+    readCache[object] = prevVal;
+    OS->write(0, prevVal);
+    ref<Expr> res = shareUpdates(OS, re);
+    return res;
+  }
+
+  const llvm::Value *allocSite = object->allocSite;
+  if(!allocSite)
+    return new ReadExpr(re);
+
+  KFunction *kf1 = S1->stack.back().kf;
+  KBlock *pckb1 = kf1->blockMap[S1->getPCBlock()];
+
+  if(isa<Argument>(allocSite)) {
+    const Argument *arg = cast<Argument>(allocSite);
+    const Function *f   = arg->getParent();
+    const KFunction *kf = caller->executor->getKFunction(f);
+    const unsigned argN = arg->getArgNo();
+    prevVal =
+      kf->function == kf1->function ?
+        caller->executor->getArgumentCell(*S1, kf, argN).value : nullptr;
+  } else if(isa<Instruction>(allocSite)) {
+    const Instruction *inst = cast<Instruction>(allocSite);
+    const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
+    bool isFinalPCKb1 =
+      std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
+    if (isa<PHINode>(inst))
+      prevVal = caller->executor->eval(ki, S1->incomingBBIndex, *S1, false).value;
+    else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
+      Function *f =
+        isa<CallInst>(inst) ?
+          dyn_cast<CallInst>(inst)->getCalledFunction() :
+          dyn_cast<InvokeInst>(inst)->getCalledFunction();
+      prevVal =
+        isFinalPCKb1 && f == kf1->function ?
+          caller->executor->getDestCell(*S1, S1->prevPC).value : nullptr;
+    } else {
+      const Instruction *inst = cast<Instruction>(allocSite);
+      const Function *f = inst->getParent()->getParent();
+      const KFunction *kf = caller->executor->getKFunction(f);
+      prevVal =
+        kf->function == kf1->function ?
+          caller->executor->getDestCell(*S1, ki).value : nullptr;
     }
-    OS.write(0, prevVal);
-    return shareUpdates(OS, re);
+  } else {
+    return new ReadExpr(re);
+  }
+
+  if(prevVal.isNull()) {
+    return new ReadExpr(re);
+  }
+
+  readCache[object] = prevVal;
+  OS->write(0, prevVal);
+  ref<Expr> res = shareUpdates(OS, re);
+  return res;
+}
+
+ref<Expr> ComposeVisitor::processSelect(const SelectExpr &sexpr) {
+  ref<Expr> cond = visit(sexpr.cond);
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
+    return CE->isTrue() ? visit(sexpr.trueExpr) : visit(sexpr.falseExpr);
+  }
+  ref<Expr> trueExpr = visit(sexpr.trueExpr);
+  ref<Expr> falseExpr = visit(sexpr.falseExpr);
+  ref<Expr> result = SelectExpr::create(cond, trueExpr, falseExpr);
+  return result;
+}
+
+ref<Expr> ComposeVisitor::reindexRead(const ReadExpr & read) {
+  int reindex = read.updates.root->index + diffLevel;
+  ref<Expr> indexExpr = read.index;
+  const MemoryObject *mo = read.updates.root->binding ? read.updates.root->binding->getObject() : nullptr;
+  assert(mo && mo->isLocal);
+  const Array *root = caller->executor->getArrayManager()->CreateArray(read.updates.root, reindex);
+  if (mo && !root->binding) {
+    ref<Expr> liSource = mo->lazyInstantiatedSource;
+    const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocate(
+      mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
+    );
+
+    ObjectState *os = new ObjectState(reindexMO, root);
+
+    const_cast<Array*>(root)->binding = os;
+  }
+  ref<Expr> res = root->binding->read(0, 8 * root->binding->size);
+  return res;
 }
 //~~~~~ComposeVisitor~~~~~//
 

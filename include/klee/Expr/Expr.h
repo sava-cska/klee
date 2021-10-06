@@ -490,6 +490,13 @@ public:
   // FIXME: Not 64-bit clean.
   const unsigned size;
 
+  // Index of the array with same name and size.
+  const int index;
+
+  const bool isForeign;
+
+  ref<Expr> liSource;
+
   /// Domain is how many bits can be used to access the array [32 bits]
   /// Range is the size (in bits) of the number stored there (array of bytes -> 8)
   const Expr::Width domain, range;
@@ -500,7 +507,7 @@ public:
   const std::vector<ref<ConstantExpr> > constantValues;
 
   /// a binding to a symbolic object
-  const MemoryObject * binding = nullptr;
+  const ObjectState *binding = nullptr;
 
 private:
   unsigned hashValue;
@@ -521,6 +528,7 @@ private:
   /// not parse correctly since two arrays with the same name cannot be
   /// distinguished once printed.
   Array(const std::string &_name, uint64_t _size,
+        unsigned _index, bool _isForeign, ref<Expr> _liSource = ref<Expr>(),
         const ref<ConstantExpr> *constantValuesBegin = 0,
         const ref<ConstantExpr> *constantValuesEnd = 0,
         Expr::Width _domain = Expr::Int32, Expr::Width _range = Expr::Int8);
@@ -531,6 +539,7 @@ public:
 
   const std::string getName() const { return name; }
   unsigned getSize() const { return size; }
+  unsigned getIndex() const { return index; }
   Expr::Width getDomain() const { return domain; }
   Expr::Width getRange() const { return range; }
 

@@ -26,6 +26,7 @@
 #include "klee/ADT/DiscretePDF.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Expr/ArrayCache.h"
+#include "klee/Expr/ArrayManager.h"
 #include "klee/Expr/ArrayExprOptimizer.h"
 #include "klee/Module/Cell.h"
 #include "klee/Module/KInstruction.h"
@@ -145,6 +146,7 @@ protected:
   std::unique_ptr<MemoryManager> memory;
 
   std::set<ExecutionState *, ExecutionStateIDCompare> states;
+  std::vector<ExecutionState *> isolatedStates;
 
   std::unique_ptr<StatsTracker> statsTracker;
 
@@ -155,6 +157,7 @@ protected:
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
   ExprHashMap<std::pair<ref<Expr>, unsigned>> gepExprBases;
+  ExprHashMap<ObjectPair> liCache;
 
   /// Used to track states that have been added during the current
   /// instructions step.
@@ -228,7 +231,7 @@ protected:
   time::Span maxInstructionTime;
 
   /// Assumes ownership of the created array objects
-  ArrayCache arrayCache;
+  ArrayManager arrayManager;
 
   /// File to print executed instructions to
   std::unique_ptr<llvm::raw_ostream> debugInstFile;
@@ -294,7 +297,8 @@ protected:
       std::pair<const MemoryObject *, const ObjectState *>, ExecutionState *>>
       ExactResolutionList;
   void resolveExact(ExecutionState &state, ref<Expr> p,
-                    ExactResolutionList &results, const std::string &name);
+                    ExactResolutionList &results, const std::string &name,
+                    KInstruction *target = nullptr, unsigned bytes = 0);
 
   /// Allocate and bind a new object in a particular state. NOTE: This
   /// function may fork.
@@ -353,6 +357,9 @@ public:
   ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
                                      const llvm::Value *allocSite, uint64_t size);
 
+  ObjectPair transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
+                                     const llvm::Value *allocSite, uint64_t size);
+
 private:
   ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,
                              const MemoryObject *mo);
@@ -376,12 +383,14 @@ private:
   // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 
+public:
   /// Add the given (boolean) condition as a constraint on state. This
   /// function is a wrapper around the state's addConstraint function
   /// which also manages propagation of implied values,
   /// validity checks, and seed patching.
   void addConstraint(ExecutionState &state, ref<Expr> condition);
 
+private:
   // Called on [for now] concrete reads, replaces constant with a symbolic
   // Used for testing.
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
@@ -449,6 +458,7 @@ private:
 
 protected:
   virtual void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {}
+  virtual void actionAfterStateTerminating(ExecutionState &state) { delete &state; }
 
 // private:
   // remove state from queue and delete
@@ -474,6 +484,11 @@ protected:
     terminateStateOnError(state, message, Exec, NULL, info);
   }
 
+public:
+  // terminate state on out of bound pointer error
+  void terminateStateOnOutOfBound(ExecutionState &state, ref<Expr> ptr);
+
+protected:
   /// bindModuleConstants - Initialize the module constant table.
   void bindModuleConstants();
 
@@ -593,7 +608,7 @@ public:
 
   TimingSolver *getSolver();
 
-  time::Span getMaxSolvTime();
+  time::Span getSolverTimeout();
 
   KInstruction *getKInst(llvm::Instruction *ints);
 
@@ -603,11 +618,23 @@ public:
 
   PForest *getProcessForest();
 
+  ArrayManager *getArrayManager();
+
+  MemoryManager *getMemoryManager();
+
+  ExprOptimizer *getOptimizer();
+
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };
   const Array *makeArray(ExecutionState &state, const uint64_t size,
-                         const std::string &name);
+                         const std::string &name, bool isForeign,
+                         ref<Expr> liSource);
+  const Array *makeArray(ExecutionState &state, const uint64_t size,
+                         const std::string &name, bool isForeign);
+  const Array *makeArray(ExecutionState &state, const uint64_t size,
+                         const std::string &name, ref<Expr> liSource = ref<Expr>());
   void executeStep(ExecutionState &state);
+  void silentRemove(ExecutionState &state);
   bool isGEPExpr(ref<Expr> expr);
 };
 

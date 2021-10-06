@@ -87,6 +87,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     initPC(nullptr),
     pc(nullptr),
     prevPC(nullptr),
+    stackBalance(0),
     incomingBBIndex(-1),
     depth(0),
     ptreeNode(nullptr),
@@ -99,6 +100,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     redundant(false),
     target(nullptr) {
   pushFrame(nullptr, kf);
+  stackBalance = 0;
   setID();
 }
 
@@ -106,6 +108,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     initPC(kb->instructions),
     pc(initPC),
     prevPC(pc),
+    stackBalance(0),
     incomingBBIndex(-1),
     depth(0),
     ptreeNode(nullptr),
@@ -118,6 +121,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     redundant(false),
     target(nullptr) {
   pushFrame(nullptr, kf);
+  stackBalance = 0;
   setID();
 }
 
@@ -134,10 +138,12 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     pc(state.pc),
     prevPC(state.prevPC),
     stack(state.stack),
+    stackBalance(state.stackBalance),
     incomingBBIndex(state.incomingBBIndex),
     depth(state.depth),
     multilevel(state.multilevel),
     level(state.level),
+    transitionLevel(state.transitionLevel),
     addressSpace(state.addressSpace),
     constraints(state.constraints),
     pathOS(state.pathOS),
@@ -157,7 +163,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
     redundant(state.redundant),
-    target(state.target) {
+    target(state.target),
+    statesForRebuild(state.statesForRebuild) {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
 }
@@ -174,9 +181,11 @@ ExecutionState *ExecutionState::branch() {
 }
 
 ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
+  assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
   newState->setID();
   newState->pushFrame(nullptr, kf);
+  newState->stackBalance = 0;
   newState->initPC = kf->blockMap[&*kf->function->begin()]->instructions;
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
@@ -184,9 +193,11 @@ ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
 }
 
 ExecutionState *ExecutionState::withKBlock(KBlock *kb) {
+  assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
   newState->setID();
   newState->pushFrame(nullptr, kb->parent);
+  newState->stackBalance = 0;
   newState->initPC = kb->instructions;
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
@@ -201,6 +212,7 @@ ExecutionState *ExecutionState::copy() const {
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
   stack.emplace_back(StackFrame(caller, kf));
+  ++stackBalance;
 }
 
 void ExecutionState::popFrame() {
@@ -208,6 +220,7 @@ void ExecutionState::popFrame() {
   for (const auto * memoryObject : sf.allocas)
     addressSpace.unbindObject(memoryObject);
   stack.pop_back();
+  --stackBalance;
 }
 
 void ExecutionState::addSymbolic(const MemoryObject *mo, const Array *array) {
@@ -443,9 +456,10 @@ BasicBlock *ExecutionState::getPCBlock() const {
   return pc->inst->getParent();
 }
 
-void ExecutionState::addLevel(BasicBlock *bb) {
-  multilevel.insert(bb);
-  level.insert(bb);
+void ExecutionState::addLevel(BasicBlock *srcbb, BasicBlock *dstbb) {
+  multilevel.insert(srcbb);
+  level.insert(srcbb);
+  transitionLevel.insert(std::make_pair(srcbb, dstbb));
 }
 
 bool ExecutionState::isEmpty() const {
@@ -468,34 +482,6 @@ bool ExecutionState::isIntegrated() const {
 
 bool ExecutionState::isIsolated() const {
   return isolated;
-}
-
-
-bool ExecutionState::tryAddConstraint(ref<Expr> e, time::Span timeout, TimingSolver * solver) {
-  ref<Expr> simplified = ConstraintManager::simplifyExpr(constraints, e);
-  if( simplified->getWidth() == Expr::Bool) {
-    if(simplified->isFalse())
-      return false;
-    if(simplified->isTrue())
-      return true;
-  }
-  if(solver) {
-    bool mayBe;
-    solver->setTimeout(timeout);
-    bool success = solver->mayBeTrue(constraints, simplified, mayBe, queryMetaData);
-    solver->setTimeout(time::Span());
-    if(success) {
-      if(!mayBe)
-        return false;
-      addConstraint(simplified);
-      return true;
-    }
-  }
-  // no solver or no success
-  bool mayBe = true;
-  addConstraint(simplified, &mayBe);
-  if(!mayBe) return false;
-  return true;
 }
 
 void ExecutionState::printCompareList(const ExecutionState &fst, const ExecutionState &snd, 

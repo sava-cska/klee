@@ -21,14 +21,17 @@ namespace klee {
 class BidirectionalExecutor : public BaseExecutor {
 public:
   typedef std::pair<llvm::BasicBlock*,llvm::BasicBlock*> BasicBlockPair;
+  typedef std::pair<llvm::BasicBlock*, llvm::BasicBlock*> BasicBlockPair;
   typedef std::map<llvm::BasicBlock*, std::set<ExecutionState*, ExecutionStateIDCompare> > ExecutedInterval;
   typedef std::map<llvm::BasicBlock*, std::unordered_set<llvm::BasicBlock*> > VisitedBlock;
+  typedef std::map<llvm::BasicBlock*, std::unordered_set<Transition, BasicBlockPairHash>> VisitedTransition;
   struct ExecutionBlockResult {
     ExecutedInterval redundantStates;
     ExecutedInterval completedStates;
     ExecutedInterval pausedStates;
     ExecutedInterval erroneousStates;
     VisitedBlock history;
+    VisitedTransition transitionHistory;
   };
   typedef std::map<llvm::BasicBlock*, ExecutionBlockResult> ExecutionResult;
 
@@ -42,6 +45,7 @@ private:
   void addHistoryResult(ExecutionState &state);
   void addTargetable(ExecutionState &state);
   void removeTargetable(ExecutionState &state);
+  bool isTargetable(ExecutionState &state);
 
   void targetedRun(ExecutionState &initialState, KBlock *target);
   void guidedRun(ExecutionState &initialState);
@@ -53,7 +57,6 @@ private:
 
   void initializeRoot(ExecutionState &state, KBlock *kb);
 
-  void silentRemove(ExecutionState &state);
   // pause state
   void pauseState(ExecutionState &state);
   void pauseRedundantState(ExecutionState &state);
@@ -80,7 +83,7 @@ public:
   void isolatedExecuteStep(ExecutionState &state);
   bool tryCoverStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
-  void backwardStep(ExecutionState &state, ExecutionState &pobStates);
+  void executeReturn(ExecutionState &state, KInstruction *ki);
   KBlock *calculateCoverTarget(ExecutionState &state);
   KBlock *calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,

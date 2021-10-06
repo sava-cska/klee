@@ -14,7 +14,7 @@
 #include "MemoryManager.h"
 
 #include "klee/ADT/BitArray.h"
-#include "klee/Expr/ArrayCache.h"
+#include "klee/Expr/ArrayManager.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Support/OptionCategories.h"
 #include "klee/Solver/Solver.h"
@@ -82,16 +82,51 @@ ObjectState::ObjectState(const MemoryObject *mo)
     knownSymbolics(0),
     updates(0, 0),
     size(mo->size),
-    readOnly(false) {
+    readOnly(false),
+    manager(mo->parent) {
   if (!UseConstantArrays) {
     static unsigned id = 0;
     const Array *array =
-        getArrayCache()->CreateArray("tmp_arr" + llvm::utostr(++id), size);
+        getArrayManager()->CreateArray("tmp_arr" + llvm::utostr(++id), size);
     updates = UpdateList(array, 0);
   }
   memset(concreteStore, 0, size);
 }
 
+ObjectState::ObjectState(unsigned _size, MemoryManager *_manager)
+  : copyOnWriteOwner(0),
+    object(nullptr),
+    concreteStore(new uint8_t[_size]),
+    concreteMask(0),
+    flushMask(0),
+    knownSymbolics(0),
+    updates(0, 0),
+    size(_size),
+    readOnly(false),
+    manager(_manager) {
+  if (!UseConstantArrays) {
+    static unsigned id = 0;
+    const Array *array =
+        getArrayManager()->CreateArray("tmp_arr" + llvm::utostr(++id), size);
+    updates = UpdateList(array, 0);
+  }
+  memset(concreteStore, 0, size);
+}
+
+ObjectState::ObjectState(const Array *array, MemoryManager *_manager)
+  : copyOnWriteOwner(0),
+    object(nullptr),
+    concreteStore(new uint8_t[array->size]),
+    concreteMask(0),
+    flushMask(0),
+    knownSymbolics(0),
+    updates(array, 0),
+    size(array->size),
+    readOnly(false),
+    manager(_manager) {
+  makeSymbolic();
+  memset(concreteStore, 0, size);
+}
 
 ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
   : copyOnWriteOwner(0),
@@ -102,7 +137,23 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
     knownSymbolics(0),
     updates(array, 0),
     size(mo->size),
-    readOnly(false) {
+    readOnly(false),
+    manager(mo->parent) {
+  makeSymbolic();
+  memset(concreteStore, 0, size);
+}
+
+ObjectState::ObjectState(const MemoryObject *mo, UpdateList ul)
+  : copyOnWriteOwner(0),
+    object(mo),
+    concreteStore(new uint8_t[mo->size]),
+    concreteMask(0),
+    flushMask(0),
+    knownSymbolics(0),
+    updates(ul),
+    size(mo->size),
+    readOnly(false),
+    manager(mo->parent) {
   makeSymbolic();
   memset(concreteStore, 0, size);
 }
@@ -116,7 +167,8 @@ ObjectState::ObjectState(const ObjectState &os)
     knownSymbolics(0),
     updates(os.updates),
     size(os.size),
-    readOnly(false) {
+    readOnly(false),
+    manager(os.manager) {
   //assert(!os.readOnly && "no need to copy read only object?");
   if (os.knownSymbolics) {
     knownSymbolics = new ref<Expr>[size];
@@ -134,9 +186,9 @@ ObjectState::~ObjectState() {
   delete[] concreteStore;
 }
 
-ArrayCache *ObjectState::getArrayCache() const {
-  assert(object && "object was NULL");
-  return object->parent->getArrayCache();
+ArrayManager *ObjectState::getArrayManager() const {
+  assert(manager && "manager was NULL");
+  return manager->getArrayManager();
 }
 
 const Array *ObjectState::getArray() const {
@@ -183,7 +235,7 @@ const UpdateList &ObjectState::getUpdates() const {
     }
 
     static unsigned id = 0;
-    const Array *array = getArrayCache()->CreateArray(
+    const Array *array = getArrayManager()->CreateArray(
         "const_arr" + llvm::utostr(++id), size, &Contents[0],
         &Contents[0] + Contents.size());
     updates = UpdateList(array, 0);

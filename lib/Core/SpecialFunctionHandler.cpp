@@ -18,6 +18,7 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 
+#include "klee/Expr/Expr.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
 #include "klee/Solver/SolverCmdLine.h"
@@ -837,23 +838,24 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
     name = "unnamed";
     klee_warning("klee_make_symbolic: renamed empty name to \"unnamed\"");
   }
-  executor.prepareSymbolicRegister(state, state.stack.back(), target->operands[1]);
-  ref<Expr> arg = executor.eval(target, 1, state).value;
+
+  assert(isa<ConstantExpr>(arguments[1]) && "size of object must be constant");
+
   BaseExecutor::ExactResolutionList rl;
-  executor.resolveExact(state, arg, rl, "make_symbolic");
+  executor.resolveExact(state, arguments[0], rl, "make_symbolic", target, cast<ConstantExpr>(arguments[1])->getZExtValue());
   
   for (BaseExecutor::ExactResolutionList::iterator it = rl.begin(), 
          ie = rl.end(); it != ie; ++it) {
     const MemoryObject *mo = it->first.first;
     mo->setName(name);
-    
+
     const ObjectState *old = it->first.second;
     ExecutionState *s = it->second;
     
     if (old->readOnly) {
       executor.terminateStateOnError(*s, "cannot make readonly object symbolic",
                                      BaseExecutor::User);
-      return;
+      continue;
     } 
 
     // FIXME: Type coercion should be done consistently somewhere.
@@ -867,7 +869,7 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
     assert(success && "FIXME: Unhandled solver failure");
     
     if (res) {
-      executor.executeMakeSymbolic(*s, mo, name, false);
+      executor.executeMakeSymbolic(*s, mo, name, false, true);
     } else {      
       executor.terminateStateOnError(*s, 
                                      "wrong size given to klee_make_symbolic[_name]", 

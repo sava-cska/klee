@@ -9,6 +9,8 @@
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/ExprUtil.h"
+#include "PForest.h"
 #include "ExecutionState.h"
 #include "AddressSpace.h"
 #include "Executors/BidirectionalExecutor.h"
@@ -19,42 +21,57 @@
 #include <algorithm>
 
 using namespace klee;
-
-typedef std::pair<ref<const MemoryObject>, const Array *> symb;
-
+using namespace llvm;
 
 //---------ComposeVisitor---------//
-ExprVisitor::Action ComposeVisitor::visitRead(const ReadExpr & read) {
-    return Action::changeTo(processRead(read));
+std::map<const ExecutionState *, ExprVisitor::visited_ty, ExecutionStateIDCompare> ComposeVisitor::globalVisited;
+
+ExprVisitor::Action ComposeVisitor::visitRead(const ReadExpr &read) {
+  ref<Expr> result = processRead(read);
+  return faultyPtr.isNull() ? Action::changeTo(result) : Action::abort();
 }
+
+ExprVisitor::Action ComposeVisitor::visitSelect(const SelectExpr &select) {
+  ref<Expr> result = processSelect(select);
+    return faultyPtr.isNull() ? Action::changeTo(result) : Action::abort();
+}
+
+ref<Expr> ComposeVisitor::shareUpdates(ref<ObjectState> OS, const ReadExpr &re) {
+  std::stack < const UpdateNode* > forward{};
+
+  for(auto it = re.updates.head;
+           !it.isNull();
+           it = it->next) {
+    forward.push( it.get() );
+  }
+
+  while(!forward.empty()) {
+    const UpdateNode* UNode = forward.top();
+    forward.pop();
+    ref<Expr> newIndex = visit(UNode->index);
+    ref<Expr> newValue = visit(UNode->value);
+    OS->write(newIndex, newValue);
+  }
+
+  ref<Expr> index = visit(re.index);
+  return OS->read(index, re.getWidth());
+}
+
 //~~~~~~~~~ComposeVisitor~~~~~~~~~//
 
-
 //---------Composer---------//
-ref<Expr> Composer::rebuild(const ref<Expr> & expr) {
-    ComposeVisitor visitor(this);
-    return visitor.visit(expr);
-}
 
-bool Composer::addComposedConstraints(ExecutionState & result,
-                time::Span timeout, TimingSolver *solver)
-{
-    ConstraintSet toCheck = result.constraints;
-    for (auto & expr : S2->constraints) {
-        auto newExpr = rebuild(expr);
-        if(!result.tryAddConstraint(newExpr, timeout, solver)) {
-            return false;
-        }
-    }
-    // check if previous constraints became false
-    for (auto & expr : toCheck) {
-        auto simple = ConstraintManager::simplifyExpr(result.constraints, expr);
-        if( simple->getWidth() == Expr::Bool &&
-            simple->isFalse()) {
-            return false;
-        }
-    }
-    return true;
+std::map<const ExecutionState *, std::map<const MemoryObject *, ref<Expr>>, ExecutionStateIDCompare>
+Composer::globalReadCache;
+
+std::map<const ExecutionState *, ExprHashMap<ref<Expr>>, ExecutionStateIDCompare>
+Composer::globalDerefCache;
+
+bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
+  ComposeVisitor visitor(this, -S1->stackBalance);
+  res = visitor.visit(expr);
+  res = visitor.faultyPtr.isNull() ? res : visitor.faultyPtr;
+  return visitor.faultyPtr.isNull();
 }
 
 void Composer::compose(ExecutionState *S1,
@@ -74,41 +91,90 @@ void Composer::compose(ExecutionState *S1,
     Composer composer(S1, S2);
     
     ExecutionState *copy = S1->copy();
+    executor->addState(*copy);
+    executor->getProcessForest()->attach(S1->ptreeNode, copy, S1);
     composer.compose(copy, result);
 }
 
-ref<Expr> Composer::rebuild(const ref<Expr> expr, 
-                            ExecutionState *S1) {
+bool Composer::tryRebuild(const ref<Expr> expr,
+                          ExecutionState *S1,
+                          ref<Expr> &res) {
     Composer composer(S1, nullptr);
-    return composer.rebuild(expr);
+    return composer.tryRebuild(expr, res);
 }
+
+void Composer::compose(ExecutionState *state, ExecutionState *&result) {
+  assert(S1 && S2 && state && !S1->isEmpty() && !S2->isEmpty());
+  assert(state->pc == S2->initPC);
+
+  std::vector<ref<Expr>> rconstraints;
+  for (auto &constraint : S2->constraints) {
+    ref<Expr> rebuildConstraint = constraint;
+
+    bool success;
+    for (auto sti = state->statesForRebuild.rbegin(), ste = state->statesForRebuild.rend(); sti != ste; ++sti) {
+      ExecutionState *st = *sti;
+      success = Composer::tryRebuild(rebuildConstraint, st, rebuildConstraint);
+      if (!success) {
+        // TODO: образуется слишком много состояний с ошибками по сравнению с forward-режимом
+        executor->terminateStateOnOutOfBound(*state, rebuildConstraint);
+        return;
+      }
+      rebuildConstraint = ConstraintManager::simplifyExpr(st->constraints, rebuildConstraint);
+    }
+    rebuildConstraint = ConstraintManager::simplifyExpr(state->constraints, rebuildConstraint);
+
+    if (isa<ConstantExpr>(rebuildConstraint)) {
+      if (cast<ConstantExpr>(rebuildConstraint)->isTrue())
+        continue;
+      else {
+        executor->silentRemove(*state);
+        return;
+      }
+    }
+
+    rconstraints.push_back(rebuildConstraint);
+  }
+
+  ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
+  for (auto &rc : rconstraints) {
+    check = AndExpr::create(check, rc);
+  }
+  bool mayBeTrue;
+  bool success = executor->getSolver()->mayBeTrue(state->constraints, check,
+                                             mayBeTrue, state->queryMetaData);
+  assert(success && "FIXME: Unhandled solver failure");
+  if (mayBeTrue) {
+    for (auto &rc : rconstraints) {
+      executor->addConstraint(*state, rc);
+    }
+  } else {
+    // TODO: нужна нормальная обработка недостижимого состояния
+    executor->silentRemove(*state);
+    return;
+  }
+
+  assert(state->stack.back().kf == S2->stack.front().kf &&
+        "can not compose states from different functions");
+
+  if (S2->stack.size() > 1) {
+    for (unsigned n = 1; n < S2->stack.size(); ++n) {
+      state->stack.push_back(S2->stack[n]);
+    }
+  }
+
+  state->prevPC = S2->prevPC;
+  state->pc = S2->pc;
+  state->incomingBBIndex = S2->incomingBBIndex;
+  state->steppedInstructions = state->steppedInstructions + S2->steppedInstructions;
+  state->depth = state->depth + S2->depth;
+  state->coveredNew = S2->coveredNew;
+  state->level.insert(S2->level.begin(), S2->level.end());
+  state->multilevel.insert(S2->multilevel.begin(), S2->multilevel.end());
+  state->transitionLevel.insert(S2->transitionLevel.begin(), S2->transitionLevel.end());
+  state->statesForRebuild.push_back(S2);
+
+  result = state;
+}
+
 //~~~~~~~~~Composer~~~~~~~~~//
-
-
-const MemoryObject *klee::extractObject(const ref<Expr> expr) {
-    if(expr.isNull()) return nullptr;
-    if(isa<ReadExpr>(expr.get())) {
-        const ReadExpr *read = cast<const ReadExpr>(expr.get());
-        return read->updates.root->binding;
-    }
-    if(isa<ConcatExpr>(expr.get())) {
-        const ConcatExpr *conc = cast<const ConcatExpr>(expr.get());
-        const auto leftRet = extractObject(conc->getLeft());
-        const auto rightRet = extractObject(conc->getRight());
-        assert(leftRet == rightRet && "can just return 0 otherwise");
-        return leftRet;
-    }
-    return nullptr;
-}
-
-ref<Expr> klee::branchResolvePointer( const ObjectPair &op, 
-                                            const ref<Expr> pointer, 
-                                            ref<Expr> falseCase,
-                                            Expr::Width expectedW ) {
-    ref<Expr> address = op.first->getBaseExpr();
-    ref<Expr> eq = EqExpr::create(pointer, address);
-    ref<Expr> trueCase = op.second->read(0, 8*op.second->size);
-    trueCase = SExtExpr::create(trueCase, expectedW);
-    falseCase = SExtExpr::create(falseCase, expectedW);
-    return SelectExpr::create(eq, trueCase, falseCase);
-}

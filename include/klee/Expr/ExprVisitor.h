@@ -18,7 +18,7 @@ namespace klee {
     // typed variant, but non-virtual for efficiency
     class Action {
     public:
-      enum Kind { SkipChildren, DoChildren, ChangeTo };
+      enum Kind { SkipChildren, DoChildren, ChangeTo, Abort };
 
     private:
       //      Action() {}
@@ -38,11 +38,12 @@ namespace klee {
       }
       static Action doChildren() { return Action(DoChildren); }
       static Action skipChildren() { return Action(SkipChildren); }
+      static Action abort() { return Action(Abort); }
     };
 
   protected:
     explicit
-    ExprVisitor(bool _recursive=false) : recursive(_recursive) {}
+    ExprVisitor(bool _recursive=false) : visited(new ExprHashMap<ref<Expr>>()), recursive(_recursive), aborted(false) {}
     virtual ~ExprVisitor() {}
 
     virtual Action visitExpr(const Expr&);
@@ -80,10 +81,13 @@ namespace klee {
     virtual Action visitSgt(const SgtExpr&);
     virtual Action visitSge(const SgeExpr&);
 
+  protected:
+    typedef ExprHashMap<ref<Expr>> visited_ty;
+    visited_ty *visited;
+
   private:
-    typedef ExprHashMap< ref<Expr> > visited_ty;
-    visited_ty visited;
     bool recursive;
+    bool aborted;
 
     ref<Expr> visitActual(const ref<Expr> &e);
     

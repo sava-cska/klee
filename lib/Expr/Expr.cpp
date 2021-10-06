@@ -500,10 +500,12 @@ ref<Expr>  NotOptimizedExpr::create(ref<Expr> src) {
 /***/
 
 Array::Array(const std::string &_name, uint64_t _size,
+             unsigned _index, bool _isForeign, ref<Expr> _liSource,
              const ref<ConstantExpr> *constantValuesBegin,
              const ref<ConstantExpr> *constantValuesEnd, Expr::Width _domain,
              Expr::Width _range)
-    : name(_name), size(_size), domain(_domain), range(_range),
+    : name(_name), size(_size), index(_index), isForeign(_isForeign), liSource(_liSource),
+      domain(_domain), range(_range),
       constantValues(constantValuesBegin, constantValuesEnd) {
 
   assert((isSymbolicArray() || constantValues.size() == size) &&
@@ -518,6 +520,7 @@ Array::Array(const std::string &_name, uint64_t _size,
 }
 
 Array::~Array() {
+  delete binding;
 }
 
 unsigned Array::computeHash() {
@@ -525,6 +528,7 @@ unsigned Array::computeHash() {
   for (unsigned i = 0, e = name.size(); i != e; ++i)
     res = (res * Expr::MAGIC_HASH_CONSTANT) + name[i];
   res = (res * Expr::MAGIC_HASH_CONSTANT) + size;
+  res = (res * Expr::MAGIC_HASH_CONSTANT) + index;
   hashValue = res;
   return hashValue; 
 }

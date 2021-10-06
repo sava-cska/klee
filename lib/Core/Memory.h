@@ -26,7 +26,7 @@ namespace llvm {
 
 namespace klee {
 
-class ArrayCache;
+class ArrayManager;
 class BitArray;
 class ExecutionState;
 class MemoryManager;
@@ -129,27 +129,34 @@ public:
   bool isLazyInstantiated() const {
     return !lazyInstantiatedSource.isNull();
   }
+
   ref<Expr> getLazyInstantiatedSource() const {
     return this->lazyInstantiatedSource;
   }
+
   void setLazyInstantiatedSource(ref<Expr> source) {
     this->lazyInstantiatedSource = source;
   }
+
   ref<ConstantExpr> getBaseConstantExpr() const {
     return ConstantExpr::create(address, Context::get().getPointerWidth());
   }
+
   ref<Expr> getBaseExpr() const {
     if(lazyInstantiatedSource.isNull())
         return getBaseConstantExpr();
     else
         return lazyInstantiatedSource;
   }
+
   ref<ConstantExpr> getSizeExpr() const { 
     return ConstantExpr::create(size, Context::get().getPointerWidth());
   }
+
   ref<Expr> getOffsetExpr(ref<Expr> pointer) const {
     return SubExpr::create(pointer, getBaseExpr());
   }
+
   ref<Expr> getBoundsCheckPointer(ref<Expr> pointer) const {
     if (size!=0 && isa<ConstantExpr>(getBaseExpr())) {
       return EqExpr::create(pointer, getBaseExpr());
@@ -168,12 +175,13 @@ public:
 
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset) const {
     if (size==0) {
-      return EqExpr::create(offset, 
+      return EqExpr::create(offset,
                             ConstantExpr::alloc(0, Context::get().getPointerWidth()));
     } else {
       return UltExpr::create(offset, getSizeExpr());
     }
   }
+
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset, unsigned bytes) const {
     if (bytes<=size) {
       return UltExpr::create(offset, 
@@ -230,6 +238,8 @@ private:
   // mutable because we may need flush during read of const
   mutable UpdateList updates;
 
+  MemoryManager *manager;
+
 public:
   unsigned size;
 
@@ -241,9 +251,15 @@ public:
   /// responsibility to initialize the object contents appropriately.
   ObjectState(const MemoryObject *mo);
 
+  ObjectState(unsigned size, MemoryManager *manager);
+
+  ObjectState(const Array *array, MemoryManager *manager);
+
   /// Create a new object state for the given memory object with symbolic
   /// contents.
   ObjectState(const MemoryObject *mo, const Array *array);
+
+  ObjectState(const MemoryObject *mo, UpdateList ul);
 
   ObjectState(const ObjectState &os);
   ~ObjectState();
@@ -304,7 +320,7 @@ private:
   void markByteUnflushed(unsigned offset);
   void setKnownSymbolic(unsigned offset, Expr *value);
 
-  ArrayCache *getArrayCache() const;
+  ArrayManager *getArrayManager() const;
 public:
   const Array *getArray() const;
 };

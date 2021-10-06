@@ -29,6 +29,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace klee {
 class Array;
@@ -149,6 +150,14 @@ struct CleanupPhaseUnwindingInformation : public UnwindingInformation {
   }
 };
 
+typedef std::pair<llvm::BasicBlock *, llvm::BasicBlock *> Transition;
+
+struct BasicBlockPairHash {
+  std::size_t operator()(const Transition& p) const {
+    return reinterpret_cast<size_t>(p.first) * 31 + reinterpret_cast<size_t>(p.second);
+  }
+};
+
 /// @brief ExecutionState representing a path under exploration
 class ExecutionState {
 #ifdef KLEE_UNITTEST
@@ -177,6 +186,8 @@ public:
   /// @brief Stack representing the current instruction stream
   stack_ty stack;
 
+  int stackBalance;
+
   /// @brief Remember from which Basic Block control flow arrived
   /// (i.e. to select the right phi values)
   std::int32_t incomingBBIndex;
@@ -189,6 +200,7 @@ public:
   /// @brief Exploration level, i.e., number of times KLEE cycled for this state
   std::unordered_multiset<llvm::BasicBlock *> multilevel;
   std::unordered_set<llvm::BasicBlock *> level;
+  std::unordered_set<Transition, BasicBlockPairHash> transitionLevel;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
@@ -294,9 +306,6 @@ public:
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
   void addConstraint(ref<Expr> e, bool *sat = 0);
-  bool tryAddConstraint(ref<Expr> e, 
-                        time::Span timeout = time::Span::null, 
-                        TimingSolver * solver = nullptr);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
@@ -306,7 +315,7 @@ public:
   llvm::BasicBlock *getInitPCBlock() const;
   llvm::BasicBlock *getPrevPCBlock() const;
   llvm::BasicBlock *getPCBlock() const;
-  void addLevel(llvm::BasicBlock *bb);
+  void addLevel(llvm::BasicBlock *srcbb, llvm::BasicBlock *dstbb);
   bool isEmpty() const;
   bool isCriticalPC() const;
   bool isIntegrated() const;

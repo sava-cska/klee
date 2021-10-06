@@ -148,6 +148,8 @@ private:
       // FIXME: We need to do something (assert, mangle, etc.) so that printing
       // distinct arrays with the same name doesn't fail.
       PC << updates.root->name;
+      if (updates.root->index)
+        PC << "%" << updates.root->index;
       return;
     }
 
@@ -196,8 +198,9 @@ private:
 
     if (openedList)
       PC << ']';
-
     PC << " @ " << updates.root->name;
+    if (updates.root->index)
+      PC << "%" << updates.root->index;
   }
 
   void printWidth(PrintContext &PC, ref<Expr> e) {

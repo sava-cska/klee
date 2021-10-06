@@ -25,7 +25,7 @@ namespace klee {
   template<class T> class ref;
 
   typedef std::pair<const MemoryObject*, const ObjectState*> ObjectPair;
-  typedef std::vector<ObjectPair> ResolutionList;  
+  typedef std::vector<ObjectPair> ResolutionList;
 
   /// Function object ordering MemoryObject's by address.
   struct MemoryObjectLT {
@@ -97,9 +97,15 @@ namespace klee {
     bool resolve(const ExecutionState &state,
                  TimingSolver *solver,
                  ref<Expr> p,
-                 ResolutionList &rl, 
+                 ResolutionList &rl,
                  unsigned maxResolutions=0,
-                 time::Span timeout=time::Span()) const;
+                 time::Span timeout=time::Span(),
+                 bool skipGlobal = false) const;
+    bool resolve(const ExecutionState &state,
+                 TimingSolver *solver,
+                 ref<Expr> p,
+                 ResolutionList &rl,
+                 bool skipGlobal) const;
 
     /***/
 

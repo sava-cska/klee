@@ -22,20 +22,20 @@ class Value;
 
 namespace klee {
 class MemoryObject;
-class ArrayCache;
+class ArrayManager;
 
 class MemoryManager {
 private:
   typedef std::set<MemoryObject *> objects_ty;
   objects_ty objects;
-  ArrayCache *const arrayCache;
+  ArrayManager *const arrayManager;
 
   char *deterministicSpace;
   char *nextFreeSlot;
   size_t spaceSize;
 
 public:
-  MemoryManager(ArrayCache *arrayCache);
+  MemoryManager(ArrayManager *arrayManager);
   ~MemoryManager();
 
   /**
@@ -49,7 +49,7 @@ public:
                               const llvm::Value *allocSite);
   void deallocate(MemoryObject *mo);
   void markFreed(MemoryObject *mo);
-  ArrayCache *getArrayCache() const { return arrayCache; }
+  ArrayManager *getArrayManager() const { return arrayManager; }
 
   /*
    * Returns the size used by deterministic allocation in bytes

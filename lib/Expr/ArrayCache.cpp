@@ -18,11 +18,12 @@ ArrayCache::~ArrayCache() {
 
 const Array *
 ArrayCache::CreateArray(const std::string &_name, uint64_t _size,
+                        int _index, bool _isForeign, ref<Expr> _liSource,
                         const ref<ConstantExpr> *constantValuesBegin,
                         const ref<ConstantExpr> *constantValuesEnd,
                         Expr::Width _domain, Expr::Width _range) {
 
-  const Array *array = new Array(_name, _size, constantValuesBegin,
+  const Array *array = new Array(_name, _size, _index, _isForeign, _liSource, constantValuesBegin,
                                  constantValuesEnd, _domain, _range);
   if (array->isSymbolicArray()) {
     std::pair<ArrayHashMap::const_iterator, bool> success =
@@ -43,5 +44,13 @@ ArrayCache::CreateArray(const std::string &_name, uint64_t _size,
     concreteArrays.push_back(array); // For deletion later
     return array;
   }
+}
+
+const Array *
+ArrayCache::CreateArray(const std::string &_name, uint64_t _size,
+                        const ref<ConstantExpr> *constantValuesBegin,
+                        const ref<ConstantExpr> *constantValuesEnd,
+                        Expr::Width _domain, Expr::Width _range) {
+  return CreateArray(_name, _size, 0, false, ref<Expr>(), constantValuesBegin, constantValuesEnd, _domain, _range);
 }
 }

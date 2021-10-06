@@ -59,8 +59,8 @@ llvm::cl::opt<unsigned long long> DeterministicStartAddress(
 } // namespace
 
 /***/
-MemoryManager::MemoryManager(ArrayCache *_arrayCache)
-    : arrayCache(_arrayCache), deterministicSpace(0), nextFreeSlot(0),
+MemoryManager::MemoryManager(ArrayManager *_arrayManager)
+    : arrayManager(_arrayManager), deterministicSpace(0), nextFreeSlot(0),
       spaceSize(DeterministicAllocationSize.getValue() * 1024 * 1024) {
   if (DeterministicAllocation) {
     // Page boundary

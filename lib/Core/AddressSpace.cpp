@@ -224,7 +224,8 @@ int AddressSpace::checkPointerInObject(const ExecutionState &state,
 
 bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
                            ref<Expr> p, ResolutionList &rl,
-                           unsigned maxResolutions, time::Span timeout) const {
+                           unsigned maxResolutions, time::Span timeout,
+                           bool skipGlobal) const {
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(p)) {
     ObjectPair res;
     if (resolveOne(CE, res))
@@ -281,6 +282,8 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     while (oi != begin) {
       --oi;
       const MemoryObject *mo = oi->first;
+      if (skipGlobal && mo->isGlobal)
+        continue;
       if (timeout && timeout < timer.delta())
         return true;
 
@@ -303,6 +306,8 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     // search forwards
     for (oi = start; oi != end; ++oi) {
       const MemoryObject *mo = oi->first;
+      if (skipGlobal && mo->isGlobal)
+        continue;
       if (timeout && timeout < timer.delta())
         return true;
 
@@ -323,6 +328,12 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
   }
 
   return false;
+}
+
+bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
+                           ref<Expr> p, ResolutionList &rl,
+                           bool skipGlobal) const {
+  return AddressSpace::resolve(state, solver, p, rl, 0, time::Span(), skipGlobal);
 }
 
 // These two are pretty big hack so we can sort of pass memory back

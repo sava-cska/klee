@@ -388,13 +388,8 @@ private:
 
 public:
   const Cell &eval(const KInstruction *ki, unsigned index,
-                   const ExecutionState &state) const;
+                   ExecutionState &state, bool isSymbolic = true);
 
-private:
-  const Cell &symbolicEval(KInstruction *ki, unsigned index,
-                           ExecutionState &state);
-
-public:
   Cell &getArgumentCell(const ExecutionState &state, const KFunction *kf,
                         unsigned index) {
     return state.stack.back().locals[kf->getArgRegister(index)];

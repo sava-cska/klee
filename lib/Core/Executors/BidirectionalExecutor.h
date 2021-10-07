@@ -1,4 +1,4 @@
-//===-- GuidedExecutor.h ----------------------------------------------*- C++ -*-===//
+//===-- BidirectionalExecutor.h ----------------------------------------------*- C++ -*-===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -18,28 +18,27 @@
 #include "../Tracker.h"
 
 #include <queue>
+#include <deque>
 
 namespace klee {
 
-class GuidedExecutor : public BaseExecutor {
+class BidirectionalExecutor : public BaseExecutor {
 public:
-  typedef std::pair<llvm::BasicBlock*, llvm::BasicBlock*> BasicBlockPair;
+  typedef std::pair<llvm::BasicBlock*,llvm::BasicBlock*> BasicBlockPair;
   typedef std::map<llvm::BasicBlock*, std::set<ExecutionState*, ExecutionStateIDCompare> > ExecutedInterval;
   typedef std::map<llvm::BasicBlock*, std::unordered_set<llvm::BasicBlock*> > VisitedBlock;
-  typedef std::map<llvm::BasicBlock*, std::unordered_set<Transition, BasicBlockPairHash>> VisitedTransition;
   struct ExecutionBlockResult {
     ExecutedInterval redundantStates;
     ExecutedInterval completedStates;
     ExecutedInterval pausedStates;
     ExecutedInterval erroneousStates;
     VisitedBlock history;
-    VisitedTransition transitionHistory;
   };
   typedef std::map<llvm::BasicBlock*, ExecutionBlockResult> ExecutionResult;
 
 private:
   std::map<llvm::Function *, std::unordered_set<ExecutionState *>> targetableStates;
-  // std::unique_ptr<Tracker> reachabilityTracker;
+  std::unique_ptr<Tracker> reachabilityTracker;
 
   ExecutionResult results;
 
@@ -48,7 +47,6 @@ private:
   void addHistoryResult(ExecutionState &state);
   void addTargetable(ExecutionState &state);
   void removeTargetable(ExecutionState &state);
-  bool isTargetable(ExecutionState &state);
 
   void targetedRun(ExecutionState &initialState, KBlock *target);
   void guidedRun(ExecutionState &initialState);
@@ -58,29 +56,31 @@ private:
   void runGuided(ExecutionState &state);
   void runCovered(ExecutionState &state);
 
-  void initializeRoot(ExecutionState &state, KBlock *kb);
+  void initializeRoot(ExecutionState const &state, KBlock *kb);
 
+  void silentRemove(ExecutionState &state);
   // pause state
   void pauseState(ExecutionState &state);
   void pauseRedundantState(ExecutionState &state);
   // unpause state
   void unpauseState(ExecutionState &state);
 
-  // void reachTarget(ExecutionState const &initialState, KBlock const &target, size_t lvl_bound);
-  // void goFront(ExecutionState &state, std::queue<ExecutionState *> &forwardQueue);
-  // void goBack(ExecutionState &state, ProofObligation &pob, std::deque<ProofObligation> &backwardQueue, ExecutionState const &entryPoint);
 
-  // KBlock * getStartLocation(const ExecutionState &state);
-  // KBlock * getLastExecutedLocation(const ExecutionState &state);
-  // KBlock * getCurrentLocation(const ExecutionState &state);
+  void reachTarget(ExecutionState const &initialState, KBlock const &target, size_t lvl_bound);
+  void goFront(ExecutionState &state, std::queue<ExecutionState *> &forwardQueue);
+  void goBack(ExecutionState &state, ProofObligation &pob, std::deque<ProofObligation> &backwardQueue, ExecutionState const &entryPoint);
+
+  KBlock * getStartLocation(const ExecutionState &state);
+  KBlock * getLastExecutedLocation(const ExecutionState &state);
+  KBlock * getCurrentLocation(const ExecutionState &state);
 protected:
   void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) override;
 
 public:
-  GuidedExecutor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
+  BidirectionalExecutor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
       InterpreterHandler *ie);
 
-  virtual ~GuidedExecutor() = default;
+  virtual ~BidirectionalExecutor() = default;
 
   const InterpreterHandler& getHandler() {
     return *interpreterHandler;
@@ -91,9 +91,8 @@ public:
 
   bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
   void isolatedExecuteStep(ExecutionState &state);
-  bool tryExploreStep(ExecutionState &state, ExecutionState &initialState);
+  bool tryCoverStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
-  void executeReturn(ExecutionState &state, KInstruction *ki);
   KBlock *calculateCoverTarget(ExecutionState &state);
   KBlock *calculateTarget(ExecutionState &state);
   void calculateTargetedStates(llvm::BasicBlock *initialBlock,
@@ -103,4 +102,4 @@ public:
   void addState(ExecutionState &state);
 };
   
-} // namespace klee
+}

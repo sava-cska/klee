@@ -96,7 +96,6 @@ ExecutionState::ExecutionState(KFunction *kf) :
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
-  setID();
 }
 
 ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
@@ -118,7 +117,6 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
-  setID();
 }
 
 ExecutionState::~ExecutionState() {
@@ -160,8 +158,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     isolated(state.isolated),
     redundant(state.redundant),
     target(state.target),
-    statesForRebuild(state.statesForRebuild) {
-    target(state.target)
+    statesForRebuild(state.statesForRebuild)
 {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);

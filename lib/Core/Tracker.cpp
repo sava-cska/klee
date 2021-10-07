@@ -32,8 +32,8 @@ void dfs(Graph & cfg, std::vector<bool> & used, KBlock const * loc) {
             dfs(cfg, used, next_loc);
     }
 
-    if (loc->getKBlockType() == KBlockType::Call) {
-        auto const & func = dynamic_cast<KCallBlock const *>(loc)->calledFunction;
+    if (auto *KCB = dyn_cast<KCallBlock>(loc)) {
+        auto const & func = KCB->calledFunction;
         auto kmodule = loc->parent->parent;
         auto kfunc_iterator = kmodule->functionMap.find(func);
         if (kfunc_iterator == kmodule->functionMap.end()) {

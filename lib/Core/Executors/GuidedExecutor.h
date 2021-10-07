@@ -17,6 +17,8 @@
 #include "BaseExecutor.h"
 #include "../Tracker.h"
 
+#include <queue>
+
 namespace klee {
 
 class GuidedExecutor : public BaseExecutor {

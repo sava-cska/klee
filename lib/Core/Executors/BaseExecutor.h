@@ -147,7 +147,7 @@ protected:
 
   std::set<ExecutionState *, ExecutionStateIDCompare> states;
   std::vector<ExecutionState *> isolatedStates;
-
+  
   std::unique_ptr<StatsTracker> statsTracker;
 
   TreeStreamWriter *pathWriter, *symPathWriter;

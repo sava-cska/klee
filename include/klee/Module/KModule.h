@@ -89,12 +89,12 @@ namespace klee {
     explicit KCallBlock(KFunction*, llvm::BasicBlock*, KModule*,
                     std::map<llvm::Instruction*, unsigned>&, std::map<unsigned, KInstruction*>&,
                     llvm::Function*);
-    
+
     static bool classof(const KCallBlock *) { return true; }
-    static bool classof(const KBlock * E) {
+    static bool classof(const KBlock *E) {
       return E->getKBlockType() == KBlockType::Call;
     }
-    
+
     KBlockType getKBlockType() const override { return KBlockType::Call; };
   };
 

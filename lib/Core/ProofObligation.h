@@ -1,6 +1,6 @@
 #pragma once
-#include "klee/Module/KModule.h"
 #include "klee/Expr/Constraints.h"
+#include "klee/Module/KModule.h"
 
 #include <unordered_set>
 
@@ -9,47 +9,43 @@ namespace klee {
 class ExecutionState;
 
 class ProofObligation {
-  ProofObligation * parent;
-  std::unordered_set<ProofObligation*> children;
-  std::unordered_set<ExecutionState*> unblocked;
-  std::unordered_set<llvm::BasicBlock*> blocked;
 
-  ProofObligation(KBlock const & location, ProofObligation * parent, size_t lvl)
-    : parent(parent)
-    , location(location)
-    , current_lvl(lvl)
-    , answered(false)
-  {}
+  ProofObligation *parent;
+  std::unordered_set<ProofObligation *> children;
+
+  std::unordered_set<ExecutionState *> unblocked;
+  std::unordered_set<llvm::BasicBlock *> blocking_locs;
+
+  ProofObligation(KBlock const &location, ProofObligation *parent, size_t lvl)
+      : parent(parent), location(location), lvl(lvl), answered(false) {}
 
 public:
-  KBlock const & location;
+  KBlock const &location;
   ConstraintSet condition;
-  size_t current_lvl;
+  size_t lvl;
   bool answered;
 
-  ProofObligation(KBlock const & location)
-    : ProofObligation(location, nullptr, 0)
-  {}
+  ProofObligation(KBlock const &location)
+      : ProofObligation(location, nullptr, 0) {}
 
-  ProofObligation makeNewChild(KBlock const & location, size_t lvl, ConstraintSet && condition) {
+  ProofObligation makeChild(KBlock const &location, size_t lvl,
+                               ConstraintSet &&condition) {
     ProofObligation child(location, this, lvl);
     child.condition = std::move(condition);
     return child;
   }
 
-  void addAsUnblocked(ExecutionState & state);
+  void addAsUnblocked(ExecutionState &state);
 
-  void block(ExecutionState & state);
+  void block(ExecutionState &state);
 
   bool isUnreachable() const noexcept {
     return unblocked.empty() && children.empty();
   }
 
-  bool isOriginPob() const noexcept {
-    return !parent;
-  }
+  bool isOriginPob() const noexcept { return !parent; }
 
-  ProofObligation * propagateUnreachability() {
+  ProofObligation *propagateUnreachability() {
     auto current_pob = this;
     while (isUnreachable() && parent) {
       parent->children.erase(current_pob);
@@ -59,7 +55,7 @@ public:
     return current_pob;
   }
 
-  ProofObligation * propagateReachability() {
+  ProofObligation *propagateReachability() {
     auto current_pob = this;
     while (current_pob->parent)
       current_pob = current_pob->parent;
@@ -68,9 +64,9 @@ public:
   }
 
 private:
-  void unblockTree(ProofObligation & node);
+  void unblockTree(ProofObligation &node);
 
-  void unblock(ProofObligation & node);
+  void unblock(ProofObligation &node);
 };
 
 } // namespace klee

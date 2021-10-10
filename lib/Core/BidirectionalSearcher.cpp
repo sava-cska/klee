@@ -11,12 +11,12 @@
 
 namespace klee {
 
-Action SimpleBidirectionalSearcher::selectState() {
+Action BidirectionalSearcher::selectState() {
   // static_assert(false && "TODO");
   return {Action::Type::Init, nullptr, nullptr, nullptr};
 }
 
-bool SimpleBidirectionalSearcher::empty() {
+bool BidirectionalSearcher::empty() {
   // static_assert(false && "TODO");
   return true;
 }

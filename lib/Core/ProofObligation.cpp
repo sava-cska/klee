@@ -11,7 +11,7 @@ void ProofObligation::block(ExecutionState & state) {
   auto it = unblocked.find(&state);
   assert(it != unblocked.end());
   unblocked.erase(it);
-  blocked.insert(state.getInitPCBlock());
+  blocking_locs.insert(state.getInitPCBlock());
 }
 
 void ProofObligation::unblockTree(ProofObligation & node) {

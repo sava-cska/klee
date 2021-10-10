@@ -15,7 +15,7 @@ namespace klee {
 class ExecutionState;
 
 struct Action {
-  enum class Type { Init, Forward, Backward };
+  enum class Type { Init, Forward, Backward, None };
   
   Type type;
   ExecutionState* state; // Forward, Backward
@@ -23,14 +23,11 @@ struct Action {
   ProofObligation* pob;  // Backward
 };
 
-/// A BidirectionalSearcher implements an exploration strategy for the Executor by selecting
-/// states for further exploration using different strategies or heuristics.
-class BidirectionalSearcher {
-public:
-  virtual ~BidirectionalSearcher() = default;
 
-  /// Selects a state for further exploration.
-  /// \return The selected state.
+class BaseBidirectionalSearcher {
+public:
+  virtual ~BaseBidirectionalSearcher() = default;
+
   virtual Action selectState() = 0;
 
   // /// Notifies BidirectionalSearcher about new or deleted states.
@@ -41,7 +38,6 @@ public:
   //                     const std::vector<ExecutionState *> &addedStates,
   //                     const std::vector<ExecutionState *> &removedStates) = 0;
 
-  /// \return True if no state left for exploration, False otherwise
   virtual bool empty() = 0;
 
   // /// Prints name of BidirectionalSearcher as a `klee_message()`.
@@ -49,9 +45,9 @@ public:
   // virtual void printName(llvm::raw_ostream &os) = 0;
 };
 
-class SimpleBidirectionalSearcher : public BidirectionalSearcher {
+class BidirectionalSearcher : public BaseBidirectionalSearcher {
 public:
-  virtual ~SimpleBidirectionalSearcher() = default;
+  virtual ~BidirectionalSearcher() = default;
   Action selectState() override;
   bool empty() override;
 };

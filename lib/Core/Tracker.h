@@ -1,3 +1,5 @@
+#pragma once
+
 #include "ExecutionState.h"
 #include "klee/Module/KModule.h"
 

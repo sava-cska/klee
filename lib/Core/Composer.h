@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-
 namespace klee {
 class ComposeVisitor;
 
@@ -29,7 +28,7 @@ class Composer {
   Composer(ExecutionState *S1, ExecutionState *S2) : S1(S1), S2(S2) {
     assert(S1);
   }
-  
+
   ~Composer() = default;
 
   void compose(ExecutionState *state, ExecutionState *&result);
@@ -48,40 +47,40 @@ private:
   static std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
                   ExecutionStateIDCompare>
       globalDerefCache;
-  
+
   ExecutionState *S1;
   ExecutionState *S2;
 
 public:
   static BidirectionalExecutor *executor;
-};
+  };
 
-class ComposeVisitor : public ExprVisitor {
-  friend class klee::Composer;
+  class ComposeVisitor : public ExprVisitor {
+    friend class klee::Composer;
 
-public:
-  ComposeVisitor() = delete;
-  explicit ComposeVisitor(Composer *_caller, int diff)
-      : ExprVisitor(false), caller(_caller), diffLevel(diff) {
-    assert(caller && caller->S1);
-    visited = &globalVisited[caller->S1];
-  }
+  public:
+    ComposeVisitor() = delete;
+    explicit ComposeVisitor(Composer *_caller, int diff)
+        : ExprVisitor(false), caller(_caller), diffLevel(diff) {
+      assert(caller && caller->S1);
+      visited = &globalVisited[caller->S1];
+    }
 
-private:
-  ref<Expr> faultyPtr;
-  static std::map<const ExecutionState *, visited_ty, ExecutionStateIDCompare>
-      globalVisited;
+  private:
+    ref<Expr> faultyPtr;
+    static std::map<const ExecutionState *, visited_ty, ExecutionStateIDCompare>
+        globalVisited;
 
-  bool tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result);
-  ExprVisitor::Action visitRead(const ReadExpr &);
-  ExprVisitor::Action visitSelect(const SelectExpr &);
-  ref<Expr> shareUpdates(ref<ObjectState>, const ReadExpr &);
-  ref<Expr> processRead(const ReadExpr &);
-  ref<Expr> processSelect(const SelectExpr &);
-  ref<Expr> reindexRead(const ReadExpr &read);
-  Composer *caller;
-  int diffLevel;
-};
+    bool tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result);
+    ExprVisitor::Action visitRead(const ReadExpr &);
+    ExprVisitor::Action visitSelect(const SelectExpr &);
+    ref<Expr> shareUpdates(ref<ObjectState>, const ReadExpr &);
+    ref<Expr> processRead(const ReadExpr &);
+    ref<Expr> processSelect(const SelectExpr &);
+    ref<Expr> reindexRead(const ReadExpr &read);
+    Composer *caller;
+    int diffLevel;
+  };
 } // namespace klee
 
 #endif // KLEE_COMPOSITION_H

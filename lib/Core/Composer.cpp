@@ -1,5 +1,6 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "AddressSpace.h"
 #include "Composer.h"
@@ -18,6 +19,15 @@
 
 using namespace klee;
 using namespace llvm;
+
+cl::OptionCategory
+    ComposerCat("State-composition-related options",
+                "These options affect the behavior of the composer.");
+
+cl::opt<bool> ComposerDebug(
+    "debug-composer", cl::init(false),
+    cl::desc("Turn on expression composition debug trace (default=false)"),
+    cl::cat(ComposerCat));
 
 BidirectionalExecutor* Composer::executor = nullptr;
 
@@ -67,6 +77,14 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
   ComposeVisitor visitor(this, -S1->stackBalance);
   res = visitor.visit(expr);
+  if(ComposerDebug) {
+    errs() << "--<-------------------------------------->--\n";
+    errs() << "Expression before rebuild:\n";
+    expr->dump();
+    errs() << "Expression after rebuild:\n";
+    if(res.isNull()) errs() << "No expression\n";
+    else res->dump();
+  }
   res = visitor.faultyPtr.isNull() ? res : visitor.faultyPtr;
   return visitor.faultyPtr.isNull();
 }
@@ -101,6 +119,9 @@ bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *S1,
 void Composer::compose(ExecutionState *state, ExecutionState *&result) {
   assert(S1 && S2 && state && !S1->isEmpty() && !S2->isEmpty());
   assert(state->pc == S2->initPC);
+  if (ComposerDebug) {
+    errs() << "COMPOSING DEBUG: Composing begins\n";    
+  }
 
   std::vector<ref<Expr>> rconstraints;
   for (auto &constraint : S2->constraints) {
@@ -116,6 +137,9 @@ void Composer::compose(ExecutionState *state, ExecutionState *&result) {
         // TODO: образуется слишком много состояний с ошибками по сравнению с
         // forward-режимом
         executor->terminateStateOnOutOfBound(*state, rebuildConstraint);
+        if (ComposerDebug) {
+          errs() << "COMPOSING DEBUG: Composing ends, State out of bound\n";
+        }
         return;
       }
       rebuildConstraint =
@@ -129,6 +153,9 @@ void Composer::compose(ExecutionState *state, ExecutionState *&result) {
         continue;
       else {
         executor->silentRemove(*state);
+        if (ComposerDebug) {
+          errs() << "COMPOSING DEBUG: Composing ends, state unreachable\n";
+        }
         return;
       }
     }
@@ -150,6 +177,9 @@ void Composer::compose(ExecutionState *state, ExecutionState *&result) {
     }
   } else {
     // TODO: нужна нормальная обработка недостижимого состояния
+    if (ComposerDebug) {
+      errs() << "COMPOSING DEBUG: Composing ends, state unreachable\n";
+    }
     executor->silentRemove(*state);
     return;
   }
@@ -177,4 +207,7 @@ void Composer::compose(ExecutionState *state, ExecutionState *&result) {
   state->statesForRebuild.push_back(S2);
 
   result = state;
+  if (ComposerDebug) {
+    errs() << "COMPOSING DEBUG: Composing ends\n";
+  }
 }

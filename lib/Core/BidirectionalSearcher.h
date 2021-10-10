@@ -9,47 +9,62 @@
 
 #pragma once
 #include "ProofObligation.h"
+#include "Searcher.h"
+#include <unordered_set>
 
 namespace klee {
 
 class ExecutionState;
 
 struct Action {
-  enum class Type { Init, Forward, Backward, None };
+  enum class Type { Init, Forward, Backward };
   
   Type type;
-  ExecutionState* state; // Forward, Backward
+  ExecutionState* state; // Forward, Backward, Init
   KBlock* location;      // Init
   ProofObligation* pob;  // Backward
 };
 
-
-class BaseBidirectionalSearcher {
+// Так мало информации?
+class ForwardSearcher {
 public:
-  virtual ~BaseBidirectionalSearcher() = default;
+  Action selectAction();
+  void update(/*?*/);
 
-  virtual Action selectState() = 0;
-
-  // /// Notifies BidirectionalSearcher about new or deleted states.
-  // /// \param current The currently selected state for exploration.
-  // /// \param addedStates The newly branched states with `current` as common ancestor.
-  // /// \param removedStates The states that will be terminated.
-  // virtual void update(ExecutionState *current,
-  //                     const std::vector<ExecutionState *> &addedStates,
-  //                     const std::vector<ExecutionState *> &removedStates) = 0;
-
-  virtual bool empty() = 0;
-
-  // /// Prints name of BidirectionalSearcher as a `klee_message()`.
-  // // TODO: could probably made prettier or more flexible
-  // virtual void printName(llvm::raw_ostream &os) = 0;
+private:
+  
+};
+  
+// Слишком много концептуально разных вещей с названием Searcher...
+class BranchSearcher {
+public:
+  Action selectAction();
+  void setTargets(ExecutionState* from, std::unordered_set<KBlock*> to);
+  std::unordered_set<ExecutionState*> update(/*?*/);
+  
+private:
+  std::vector<std::pair<ExecutionState*, KBlock*>> destinations;
 };
 
-class BidirectionalSearcher : public BaseBidirectionalSearcher {
+class BackwardSearcher {
 public:
-  virtual ~BidirectionalSearcher() = default;
-  Action selectState() override;
-  bool empty() override;
+  Action selectAction();
+  std::unordered_set<ProofObligation*> addBranch(ExecutionState* state);
+  void update(/*?*/);
 };
 
-} // klee namespace
+
+class BidirectionalSearcher {
+public:
+  Action selectAction();
+  // updatePobs
+  // updateStates
+private:
+  ForwardSearcher forwardSearcher;
+  BranchSearcher branchSearcher;
+  BackwardSearcher backwardSearcher;
+
+};
+
+} // namespace klee
+

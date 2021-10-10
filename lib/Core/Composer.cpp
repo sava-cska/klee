@@ -19,6 +19,7 @@
 using namespace klee;
 using namespace llvm;
 
+BidirectionalExecutor* Composer::executor = nullptr;
 
 std::map<const ExecutionState *, ExprVisitor::visited_ty,
          ExecutionStateIDCompare>

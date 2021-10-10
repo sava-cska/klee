@@ -58,7 +58,6 @@ public:
   void pauseState(ExecutionState &state);
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
-  void silentRemove(ExecutionState &state);
 
   void reachTarget(ExecutionState const &initialState, KBlock const &target,
                    size_t lvl_bound);

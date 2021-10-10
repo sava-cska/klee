@@ -24,7 +24,9 @@ cl::opt<unsigned long long> MaxCycles(
 BidirectionalExecutor::BidirectionalExecutor(LLVMContext &ctx,
                                      const InterpreterOptions &opts,
                                      InterpreterHandler *ih)
-    : BaseExecutor(ctx, opts, ih) {}
+    : BaseExecutor(ctx, opts, ih) {
+  Composer::executor = this;
+}
 
 
 void BidirectionalExecutor::addCompletedResult(ExecutionState &state) {

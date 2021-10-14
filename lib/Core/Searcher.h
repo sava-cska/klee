@@ -21,6 +21,7 @@
 #include <map>
 #include <queue>
 #include <set>
+#include <unordered_set>
 #include <vector>
 
 namespace llvm {
@@ -130,6 +131,7 @@ namespace klee {
 
   private:
     std::unique_ptr<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>> states;
+    // Мб более общий TargetSearcher? 
     KBlock *target;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
 
@@ -157,6 +159,8 @@ namespace klee {
   private:
     std::unique_ptr<Searcher> baseSearcher;
     std::map<KBlock*, std::unique_ptr<TargetedSearcher>> targetedSearchers;
+    // Мб так?
+    // std::map<KBlock*, std::unordered_set<ExecutionState*>> paths;
     unsigned index {1};
     void addTarget(KBlock *target);
 

@@ -35,3 +35,5 @@ autom4te.cache/
 test/
 examples/
 .vscode
+klee-*
+/ex/bitcode/

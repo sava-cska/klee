@@ -387,6 +387,7 @@ void GuidedSearcher::printName(llvm::raw_ostream &os) {
   os << "GuidedSearcher";
 }
 
+// Предпологается, что такой цели нет?
 void GuidedSearcher::addTarget(KBlock *target) {
   targetedSearchers[target] = std::make_unique<TargetedSearcher>(target);
 }

@@ -76,11 +76,12 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
 
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
   ComposeVisitor visitor(this, -S1->stackBalance);
+  auto res_o = expr;
   res = visitor.visit(expr);
   if(ComposerDebug) {
     errs() << "--<-------------------------------------->--\n";
     errs() << "Expression before rebuild:\n";
-    expr->dump();
+    res_o->dump();
     errs() << "Expression after rebuild:\n";
     if(res.isNull()) errs() << "No expression\n";
     else res->dump();

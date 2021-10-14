@@ -8,17 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "BidirectionalSearcher.h"
+#include "ExecutionState.h"
+#include <vector>
 
 namespace klee {
-
-Action BidirectionalSearcher::selectState() {
-  // static_assert(false && "TODO");
-  return {Action::Type::Init, nullptr, nullptr, nullptr};
-}
-
-bool BidirectionalSearcher::empty() {
-  // static_assert(false && "TODO");
-  return true;
-}
-
-} // klee namespace
+  
+} // namespace klee

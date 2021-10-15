@@ -39,6 +39,7 @@ struct BranchMetadata : ActionMetadata {
   }
 
   GuidedSearcher* searcher;
+  BranchMetadata(GuidedSearcher* _s) : searcher(_s) {}
 };
 
 struct Action {
@@ -91,8 +92,8 @@ public:
   update(ForwardResult) = 0;
 
   virtual std::vector<ExecutionState *>
-  updateGoals(const std::vector<KBlock *> &addedGoals,
-              const std::vector<KBlock *> &removedGoals) = 0;
+  updateTargets(const std::vector<KBlock *> &addedTargets,
+              const std::vector<KBlock *> &removedTargets) = 0;
 };
 
 class IBranchSearcher {
@@ -139,8 +140,8 @@ public:
   update(ForwardResult result) override;
 
   std::vector<ExecutionState *>
-  updateGoals(const std::vector<KBlock *> &addedGoals,
-              const std::vector<KBlock *> &removedGoals) override;
+  updateTargets(const std::vector<KBlock *> &addedTargets,
+              const std::vector<KBlock *> &removedTargets) override;
 
 private:
   // Нужно держать +- все состояния? Вдруг прошли через то куда пришел
@@ -151,12 +152,12 @@ private:
 class GuidedBranchSearcher : IBranchSearcher {
 public:
   Action selectAction() override;
-  
-  virtual void setTargets(ExecutionState *from,
-                          std::unordered_set<KBlock *> to) override;
 
   virtual std::unordered_set<ExecutionState *>
   update(ForwardResult result) override;
+
+  virtual void setTargets(ExecutionState *from,
+                          std::unordered_set<KBlock *> to) override;
 
 private:
   // Нужно передавать владение ExecutionState to BranchSearcher

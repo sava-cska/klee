@@ -1,12 +1,11 @@
-//===-- BidirectionalSearcher.h -------------------------*- C++ -*-===//
+//===-- BidirectionalSearcher.h ---------------------------------*- C++ -*-===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===--------------------------------------------------------------===//
-
+//===----------------------------------------------------------------------===//
 #pragma once
 #include "ProofObligation.h"
 #include "Searcher.h"
@@ -18,82 +17,39 @@ namespace klee {
 
 class ExecutionState;
 
-struct ActionMetadata {
-  enum class ActionMetadataType {
-    Base,
-    Branch
-  };  
-  static bool classof(const ActionMetadata*) { return true; }
-  virtual ActionMetadataType getType() const {
-    return ActionMetadataType::Base;
-  }
-};
-
-struct BranchMetadata : ActionMetadata {
-  static bool classof(const BranchMetadata*) { return true; }
-  static bool classof(const ActionMetadata *_m) {
-    return _m->getType() == ActionMetadataType::Branch;
-  }
-  ActionMetadataType getType() const override {
-    return ActionMetadataType::Branch;
-  }
-
-  GuidedSearcher* searcher;
-  BranchMetadata(GuidedSearcher* _s) : searcher(_s) {}
-};
-
 struct Action {
-  enum class Type { Init, Forward, Backward };
+  enum class Type { Init, Forward, Backward, None };
 
   Type type;
-  ExecutionState &state; // Forward, Backward, Init
+  ExecutionState* state; // Forward, Backward, Init
   KBlock *location;      // Init
   ProofObligation *pob;  // Backward
-  ActionMetadata* metadata;
-  // Метаданные? Они будут просто формироваться и передаваться
-  // обратно к Searchers, легче чем хранить в каждом Searcher
-  // дополнительные структуры. Можно использовать базовый
-  // класс и LLVM RTTI.
-  // (Привести пример с Branch, про выбранный Guided)
 };
 
-struct ActionResult {
-  ActionMetadata* metadata;
-  ActionResult(ActionMetadata* _m) : metadata(_m) {};
+struct ForwardResult {
+  ExecutionState *current;
+  std::vector<ExecutionState *> &addedStates;
+  std::vector<ExecutionState *> &removedStates;
+  ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
+                std::vector<ExecutionState *> &r)
+      : current(_s), addedStates(a), removedStates(r){};
 };
 
-struct ForwardResult : ActionResult {
-  ExecutionState* current;
-  const std::vector<ExecutionState *> &addedStates;
-  const std::vector<ExecutionState *> &removedStates;
-  ForwardResult(ActionMetadata* _m, ExecutionState* _s,
-                const std::vector<ExecutionState *> &a,
-                const std::vector<ExecutionState *> &r)
-    : ActionResult(_m), current(_s), addedStates(a), removedStates(r) {};
+struct BackwardResult {
+  ProofObligation *newPob;
+  ProofObligation *oldPob;
+  BackwardResult(ProofObligation *_newPob, ProofObligation *_oldPob)
+      : newPob(_newPob), oldPob(_oldPob) {}
 };
-
-struct BackwardResult : ActionResult {
-  ProofObligation* newPob;
-  ProofObligation* oldPob;
-  BackwardResult(ActionMetadata *_m, ProofObligation *_newPob,
-                 ProofObligation *_oldPob)
-      : ActionResult(_m), newPob(_newPob), oldPob(_oldPob) {}
-};
-
-// Можно комбинировать фичи и строить тактики через
-// через множественное наследование (возможно, виртуальное)
 
 class IForwardSearcher {
 public:
   virtual Action selectAction() = 0;
 
-  virtual std::vector<ExecutionState *>
-  // Что за removedStates если removed максимум current?
+  virtual std::unordered_set<ExecutionState *>
   update(ForwardResult) = 0;
 
-  virtual std::vector<ExecutionState *>
-  updateTargets(const std::vector<KBlock *> &addedTargets,
-              const std::vector<KBlock *> &removedTargets) = 0;
+  virtual void updateTarget(KBlock *target, KBlock *from, KBlock *remove) = 0;
 };
 
 class IBranchSearcher {
@@ -113,13 +69,10 @@ class IBackwardSearcher {
 public:
   virtual Action selectAction() = 0;
 
-  virtual std::unordered_set<ProofObligation *>
-  addBranch(ExecutionState *state) = 0;
+  virtual void addBranch(ExecutionState *state) = 0;
 
   virtual void update(BackwardResult) = 0;
 };
-
-
 
 class BidirectionalSearcher {
 public:
@@ -136,33 +89,42 @@ class GuidedForwardSearcher : IForwardSearcher {
 public:
   Action selectAction() override;
 
-  std::vector<ExecutionState *>
+  std::unordered_set<ExecutionState *>
   update(ForwardResult result) override;
 
-  std::vector<ExecutionState *>
-  updateTargets(const std::vector<KBlock *> &addedTargets,
-              const std::vector<KBlock *> &removedTargets) override;
+  void updateTarget(KBlock *target, KBlock *from, KBlock *remove) override;
 
 private:
-  // Нужно держать +- все состояния? Вдруг прошли через то куда пришел
-  // BackwardSearcher
   GuidedSearcher searcher;
+  KBlock* EP; // Хотим иногда снова стартануть из начального состояния
 };
 
 class GuidedBranchSearcher : IBranchSearcher {
 public:
   Action selectAction() override;
 
-  virtual std::unordered_set<ExecutionState *>
-  update(ForwardResult result) override;
+  std::unordered_set<ExecutionState *> update(ForwardResult result) override;
 
-  virtual void setTargets(ExecutionState *from,
-                          std::unordered_set<KBlock *> to) override;
+  void setTargets(ExecutionState *from,
+                  std::unordered_set<KBlock *> to) override;
 
 private:
-  // Нужно передавать владение ExecutionState to BranchSearcher
-  std::set<GuidedSearcher*> searchers;
+  GuidedSearcher searcher;
+};
+
+class BFSBackwardSearcher : IBackwardSearcher {
+public:
+  Action selectAction() override;
+
+  void addBranch(ExecutionState *state) override;
+
+  void update(BackwardResult) override;
   
+private:
+  std::unordered_set<ProofObligation*> pobs;
+  std::queue<std::pair<ProofObligation*, ExecutionState*>> backpropQueue;
+  std::unordered_set<KBlock*> initializedLocs;
+  KModule* module;
 };
 
 } // namespace klee

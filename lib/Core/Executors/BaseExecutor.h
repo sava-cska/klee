@@ -141,6 +141,7 @@ protected:
 
   std::unique_ptr<ExternalDispatcher> externalDispatcher;
 
+  // Не актуально в BidirectionalExecutor
   std::unique_ptr<TimingSolver> solver;
 
   std::unique_ptr<MemoryManager> memory;

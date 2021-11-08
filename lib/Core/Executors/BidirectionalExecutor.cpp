@@ -5,6 +5,7 @@
 #include "../Searcher.h"
 #include "../StatsTracker.h"
 #include "../Composer.h"
+#include "klee/Core/Interpreter.h"
 
 #include <stack>
 
@@ -147,7 +148,7 @@ bool BidirectionalExecutor::tryExploreStep(ExecutionState &state,
       initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
       updateStates(nullptr);
     } else {
-      if (!state.target &&
+      if (state.targets.empty() &&
           state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
         return false;
       else
@@ -403,12 +404,12 @@ void BidirectionalExecutor::guidedRun(ExecutionState &initialState) {
   while (!states.empty() && !haltExecution) {
     while (!searcher->empty() && !haltExecution) {
       ExecutionState &state = searcher->selectState();
-      if (state.target)
+      if (!state.targets.empty())
         executeStep(state);
       else if (!tryBoundedExecuteStep(state, MaxCycles - 1)) {
         KBlock *target = calculateTarget(state);
         if (target) {
-          state.target = target;
+          state.targets.insert(target);
         } else {
           pauseState(state);
           updateStates(nullptr);
@@ -460,7 +461,7 @@ void BidirectionalExecutor::run(ExecutionState &state) {
     if (!tryExploreStep(es, *initialState)) {
       KBlock *target = calculateCoverTarget(es);
       if (target) {
-        es.target = target;
+        es.targets.insert(target);
         updateStates(&es);
       } else {
         pauseState(es);
@@ -519,6 +520,57 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
   memory = std::make_unique<MemoryManager>(nullptr);
   clearGlobal();
 }
+
+ExecutionState* BidirectionalExecutor::initBranch(KBlock* loc) {
+  ExecutionState* state = new ExecutionState(loc->parent, loc);
+  states.insert(state);
+  return state;
+}
+
+ForwardResult BidirectionalExecutor::goForward(ExecutionState* state) {
+  KInstruction *ki = state->pc;
+
+  stepInstruction(*state);
+
+  executeInstruction(*state, ki);
+
+  timers.invoke();
+  // if (::dumpStates) dumpStates();
+  // if (::dumpPForest) dumpPForest();
+  ForwardResult ret(state,addedStates,removedStates);
+  
+  states.insert(addedStates.begin(), addedStates.end());
+  addedStates.clear();
+
+  for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
+                                               ie = removedStates.end();
+       it != ie; ++it) {
+    ExecutionState *es = *it;
+    std::set<ExecutionState*>::iterator it2 = states.find(es);
+    assert(it2!=states.end());
+    states.erase(it2);
+    std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 = 
+      seedMap.find(es);
+    if (it3 != seedMap.end())
+      seedMap.erase(it3);
+    processForest->remove(es->ptreeNode);
+    if (es->isIntegrated()) {
+      delete es;
+    } else {
+      isolatedStates.push_back(es);
+    }
+  }
+  removedStates.clear();
+
+  return ret;
+}
+
+BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,
+                                                 ProofObligation *pob) {
+  
+}
+
+
 
 bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
   ExecutionState *S1 = caller->S1;

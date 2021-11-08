@@ -92,7 +92,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
-    target(nullptr)
+    targets()
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
@@ -113,7 +113,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
-    target(nullptr)
+    targets()
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
@@ -157,7 +157,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
     redundant(state.redundant),
-    target(state.target),
+    targets(state.targets),
     statesForRebuild(state.statesForRebuild)
 {
   for (const auto &cur_mergehandler: openMergeStack)

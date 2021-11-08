@@ -3,6 +3,10 @@
 
 #include "BaseExecutor.h"
 #include "../Tracker.h"
+#include "ForwardExecutor.h"
+#include "klee/Core/Interpreter.h"
+
+#include "../BidirectionalSearcher.h"
 
 #include <queue>
 
@@ -59,14 +63,19 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  void reachTarget(ExecutionState const &initialState, KBlock const &target,
-                   size_t lvl_bound);
-  void goFront(ExecutionState &state,
-               std::queue<ExecutionState *> &forwardQueue);
-  void goBack(ExecutionState &state, ProofObligation &pob,
-              std::deque<ProofObligation> &backwardQueue,
-              ExecutionState const &entryPoint);
+  // void reachTarget(ExecutionState const &initialState, KBlock const &target,
+  //                  size_t lvl_bound);
+  // void goFront(ExecutionState &state,
+  //              std::queue<ExecutionState *> &forwardQueue);
+  // void goBack(ExecutionState &state, ProofObligation &pob,
+  //             std::deque<ProofObligation> &backwardQueue,
+  //             ExecutionState const &entryPoint);
 
+  ExecutionState* initBranch(KBlock* loc);
+  ForwardResult goForward(ExecutionState* state);
+  BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
+
+  
   KBlock *getStartLocation(const ExecutionState &state);
   KBlock *getLastExecutedLocation(const ExecutionState &state);
   KBlock *getCurrentLocation(const ExecutionState &state);

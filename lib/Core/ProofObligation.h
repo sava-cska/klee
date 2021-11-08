@@ -16,19 +16,19 @@ class ProofObligation {
   std::unordered_set<ExecutionState *> unblocked;
   std::unordered_set<llvm::BasicBlock *> blocking_locs;
 
-  ProofObligation(KBlock const &location, ProofObligation *parent, size_t lvl)
+  ProofObligation(KBlock* location, ProofObligation *parent, size_t lvl)
       : parent(parent), location(location), lvl(lvl), answered(false) {}
 
 public:
-  KBlock const &location;
+  KBlock* location;
   ConstraintSet condition;
   size_t lvl;
   bool answered;
 
-  ProofObligation(KBlock const &location)
+  ProofObligation(KBlock* location)
       : ProofObligation(location, nullptr, 0) {}
 
-  ProofObligation makeChild(KBlock const &location, size_t lvl,
+  ProofObligation makeChild(KBlock * location, size_t lvl,
                                ConstraintSet &&condition) {
     ProofObligation child(location, this, lvl);
     child.condition = std::move(condition);

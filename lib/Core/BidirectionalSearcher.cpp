@@ -9,58 +9,105 @@
 
 #include "BidirectionalSearcher.h"
 #include "ExecutionState.h"
+#include "klee/Core/Interpreter.h"
+#include <unordered_set>
 #include <vector>
 
 #include <cstdlib>
-
-template<typename S>
-auto select_random(const S &s) {
-  auto r = rand() % s.size();
-  auto it = std::begin(s);
-  std::advance(it,r);
-  return *it;
-}
 
 namespace klee {
 
 Action GuidedForwardSearcher::selectAction() {
   auto& state = searcher.selectState();
-  return Action{Action::Type::Forward, state, nullptr, nullptr, nullptr};
+  return Action{Action::Type::Forward, &state, nullptr, nullptr};
 }
 
-std::vector<ExecutionState *>
+std::unordered_set<ExecutionState *>
 GuidedForwardSearcher::update(ForwardResult result) {
-  // Searcher.update(...) надо возвращать больше информации
+  searcher.update(result.current, result.addedStates, result.removedStates);
+  return searcher.collectReached();
 }
 
-std::vector<ExecutionState *>
-updateTargets(const std::vector<KBlock *> &addedTargets,
-            const std::vector<KBlock *> &removedTargets) {
-  // Searcher.addTarget() Searcher.removeTarget()
+void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
+                                  KBlock *remove) {
+  searcher.updateTarget(target,from,remove);
 }
 
 Action GuidedBranchSearcher::selectAction() {
-  auto searcher = select_random(searchers);
-  auto& state = searcher->selectState();
-  BranchMetadata* metadata = new BranchMetadata(searcher);
-  return Action{Action::Type::Forward, state, nullptr, nullptr, metadata};
+  if(searcher.empty()) return Action{Action::Type::None, nullptr, nullptr, nullptr};
+  
+  auto& state = searcher.selectState();
+  return Action{Action::Type::Forward, &state, nullptr, nullptr};
 }
 
 std::unordered_set<ExecutionState *>
 GuidedBranchSearcher::update(ForwardResult result) {
-  if(auto metadata = dyn_cast<BranchMetadata>(result.metadata)) {
-    auto searcher = searchers.find(metadata->searcher);
-    if(searcher != searchers.end()) {
-      // update this Searcher
-    }
-  } else assert(false);
+  searcher.update(result.current, result.addedStates, result.removedStates);
+  return searcher.collectReached();
 }
 
 void GuidedBranchSearcher::setTargets(ExecutionState *from,
                                       std::unordered_set<KBlock *> to) {
-  // GuidedSearcher* searcher = new GuidedSearcher(from);
-  // for(auto i : to) searcher.addTarget(i);
-  // searchers.insert(searcher);
+  for(auto i : to) {
+    from->targets.insert(i);
+  }
+  searcher.update(nullptr, {from}, {});
+}
+
+Action BFSBackwardSearcher::selectAction() {
+  if(!backpropQueue.empty()) {
+    auto a = backpropQueue.front();
+    backpropQueue.pop();
+    return Action{Action::Type::Backward, a.second,  nullptr, a.first};
+  }
+  for(auto i : pobs) {
+    auto loc = i->location;
+    auto distmap = loc->parent->getBackwardDistance(loc);
+    for(auto j: distmap) {
+      if(initializedLocs.count(j.first)) continue;
+      initializedLocs.insert(j.first);
+      return Action{Action::Type::Init, nullptr, j.first, nullptr};
+    }
+    auto fdistmap = loc->parent->parent->getBackwardDistance(loc->parent);
+    for(auto j : fdistmap) {
+      if(initializedLocs.count(j.first->entryKBlock)) continue;
+      initializedLocs.insert(j.first->entryKBlock);
+      return Action{Action::Type::Init, nullptr, j.first->entryKBlock, nullptr};
+    }
+  }
+  return Action{Action::Type::None, nullptr, nullptr, nullptr};
+}
+
+void BFSBackwardSearcher::addBranch(ExecutionState* state) {
+  for(auto i : pobs) {
+    if(i->location->basicBlock == state->getPCBlock()) {
+      backpropQueue.push(std::make_pair(i, state));
+    }
+  }
+}
+
+void BFSBackwardSearcher::update(BackwardResult result) {
+  pobs.insert(result.newPob);
+}
+
+Action BidirectionalSearcher::selectAction() {
+  while (true) {
+    int choice = rand() % 3;
+    if (choice == 0) {
+      return forwardSearcher->selectAction();
+    }
+    if (choice == 1) {
+      Action a = branchSearcher->selectAction();
+      if (a.type != Action::Type::None)
+        return a;
+    }
+    if(choice == 2) {
+      Action a = backwardSearcher->selectAction();
+      if (a.type != Action::Type::None)
+        return a;
+    }
+  }
+  // Что-то адекватное сюда
 }
 
 } // namespace klee

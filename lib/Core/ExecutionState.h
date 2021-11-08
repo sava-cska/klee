@@ -269,7 +269,7 @@ public:
   bool redundant;
 
   /// @brief The target basic block that the state must achieve
-  KBlock *target;
+  std::unordered_set<KBlock*> targets;
 
   /// @brief Еhe sequence of states, to be used to fill the expressions
   std::vector<ExecutionState *> statesForRebuild;

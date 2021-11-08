@@ -13,12 +13,14 @@
 #include "ExecutionState.h"
 #include "PForest.h"
 #include "klee/ADT/RNG.h"
+#include "klee/Module/KModule.h"
 #include "klee/System/Time.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <map>
+#include <memory>
 #include <queue>
 #include <set>
 #include <unordered_set>
@@ -130,9 +132,10 @@ namespace klee {
     };
 
   private:
-    std::unique_ptr<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>> states;
-    // Мб более общий TargetSearcher? 
-    KBlock *target;
+    std::unique_ptr<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>>
+        states;
+
+    KBlock* target;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
@@ -143,7 +146,8 @@ namespace klee {
     WeightResult tryGetWeight(ExecutionState* es, double &weight);
 
   public:
-    ExecutionState *result = nullptr;
+    std::unordered_set<ExecutionState*> reachedOnLastUpdate;
+    std::unordered_set<ExecutionState*> states_set;
     TargetedSearcher(KBlock *targetBB);
     ~TargetedSearcher() override = default;
     ExecutionState &selectState() override;
@@ -159,8 +163,6 @@ namespace klee {
   private:
     std::unique_ptr<Searcher> baseSearcher;
     std::map<KBlock*, std::unique_ptr<TargetedSearcher>> targetedSearchers;
-    // Мб так?
-    // std::map<KBlock*, std::unordered_set<ExecutionState*>> paths;
     unsigned index {1};
     void addTarget(KBlock *target);
 
@@ -171,6 +173,11 @@ namespace klee {
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
+
+    void updateTarget(KBlock *target, KBlock *from, KBlock *remove);
+
+    std::unordered_set<ExecutionState*> collectReached();
+    
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
   };

@@ -9,7 +9,10 @@
 
 #include "BidirectionalSearcher.h"
 #include "ExecutionState.h"
+#include "MergeHandler.h"
+#include "UserSearcher.h"
 #include "klee/Core/Interpreter.h"
+#include <memory>
 #include <unordered_set>
 #include <vector>
 
@@ -18,32 +21,44 @@
 namespace klee {
 
 Action GuidedForwardSearcher::selectAction() {
-  auto& state = searcher.selectState();
-  return Action{Action::Type::Forward, &state, nullptr, nullptr};
+  auto& state = searcher->selectState();
+  return Action{Action::Type::Forward, Action::SearcherType::Forward, &state,
+                nullptr, nullptr,{}};
 }
 
 std::unordered_set<ExecutionState *>
 GuidedForwardSearcher::update(ForwardResult result) {
-  searcher.update(result.current, result.addedStates, result.removedStates);
-  return searcher.collectReached();
+  searcher->update(result.current, result.addedStates, result.removedStates);
+  return searcher->collectReached();
 }
 
 void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
                                   KBlock *remove) {
-  searcher.updateTarget(target,from,remove);
+  searcher->updateTarget(target,from,remove);
 }
 
 Action GuidedBranchSearcher::selectAction() {
-  if(searcher.empty()) return Action{Action::Type::None, nullptr, nullptr, nullptr};
-  
-  auto& state = searcher.selectState();
-  return Action{Action::Type::Forward, &state, nullptr, nullptr};
+  if (searcher->empty())
+    return Action{Action::Type::None,
+                  Action::SearcherType::Branch,
+                  nullptr,
+                  nullptr,
+                  nullptr,
+                  {}};
+
+  auto& state = searcher->selectState();
+  return Action{Action::Type::Forward,
+                Action::SearcherType::Branch,
+                &state,
+                nullptr,
+                nullptr,
+                {}};
 }
 
 std::unordered_set<ExecutionState *>
 GuidedBranchSearcher::update(ForwardResult result) {
-  searcher.update(result.current, result.addedStates, result.removedStates);
-  return searcher.collectReached();
+  searcher->update(result.current, result.addedStates, result.removedStates);
+  return searcher->collectReached();
 }
 
 void GuidedBranchSearcher::setTargets(ExecutionState *from,
@@ -51,14 +66,19 @@ void GuidedBranchSearcher::setTargets(ExecutionState *from,
   for(auto i : to) {
     from->targets.insert(i);
   }
-  searcher.update(nullptr, {from}, {});
+  searcher->update(nullptr, {from}, {});
 }
 
 Action BFSBackwardSearcher::selectAction() {
   if(!backpropQueue.empty()) {
     auto a = backpropQueue.front();
     backpropQueue.pop();
-    return Action{Action::Type::Backward, a.second,  nullptr, a.first};
+    return Action{Action::Type::Backward,
+                  Action::SearcherType::Backward,
+                  a.second,
+                  nullptr,
+                  a.first,
+                  {}};
   }
   for(auto i : pobs) {
     auto loc = i->location;
@@ -66,16 +86,23 @@ Action BFSBackwardSearcher::selectAction() {
     for(auto j: distmap) {
       if(initializedLocs.count(j.first)) continue;
       initializedLocs.insert(j.first);
-      return Action{Action::Type::Init, nullptr, j.first, nullptr};
+      return Action{Action::Type::Init, Action::SearcherType::Backward, nullptr,
+        j.first, nullptr, targets};
     }
     auto fdistmap = loc->parent->parent->getBackwardDistance(loc->parent);
     for(auto j : fdistmap) {
       if(initializedLocs.count(j.first->entryKBlock)) continue;
       initializedLocs.insert(j.first->entryKBlock);
-      return Action{Action::Type::Init, nullptr, j.first->entryKBlock, nullptr};
+      return Action{Action::Type::Init, Action::SearcherType::Backward, nullptr,
+        j.first->entryKBlock, nullptr, targets};
     }
   }
-  return Action{Action::Type::None, nullptr, nullptr, nullptr};
+  return Action{Action::Type::None,
+                Action::SearcherType::Backward,
+                nullptr,
+                nullptr,
+                nullptr,
+                {}};
 }
 
 void BFSBackwardSearcher::addBranch(ExecutionState* state) {
@@ -88,6 +115,23 @@ void BFSBackwardSearcher::addBranch(ExecutionState* state) {
 
 void BFSBackwardSearcher::update(BackwardResult result) {
   pobs.insert(result.newPob);
+}
+
+
+BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
+  GuidedSearcher *f = new
+    GuidedSearcher(constructUserSearcher(*(BaseExecutor*)cfg.executor));
+  
+  forwardSearcher = std::make_unique<GuidedForwardSearcher>(f);
+  cfg.initial_state->targets = cfg.targets;
+  forwardSearcher->update(ForwardResult(nullptr,{cfg.initial_state},{}));
+
+  GuidedSearcher *b =
+      new GuidedSearcher(constructUserSearcher(*(BaseExecutor *)cfg.executor));
+
+  branchSearcher = std::make_unique<GuidedBranchSearcher>(b);
+
+  backwardSearcher = std::make_unique<BFSBackwardSearcher>(cfg.targets);
 }
 
 Action BidirectionalSearcher::selectAction() {
@@ -108,6 +152,11 @@ Action BidirectionalSearcher::selectAction() {
     }
   }
   // Что-то адекватное сюда
+}
+
+bool BidirectionalSearcher::empty() {
+  return forwardSearcher->empty();
+  // И сюда
 }
 
 } // namespace klee

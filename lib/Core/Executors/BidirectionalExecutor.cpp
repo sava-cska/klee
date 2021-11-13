@@ -6,8 +6,11 @@
 #include "../StatsTracker.h"
 #include "../Composer.h"
 #include "klee/Core/Interpreter.h"
+#include "klee/Expr/Expr.h"
 
+#include <memory>
 #include <stack>
+#include <unordered_set>
 
 
 using namespace llvm;
@@ -269,6 +272,54 @@ void BidirectionalExecutor::targetedRun(ExecutionState &initialState,
   haltExecution = false;
 }
 
+void BidirectionalExecutor::bidirectionalRun() {
+  while (!bisearcher->empty() && !haltExecution) {
+    auto action = bisearcher->selectAction();
+    if (action.type == Action::Type::Forward) {
+      auto result = goForward(action.state);
+      std::unordered_set<ExecutionState *> reached;
+      if (action.searcher == Action::SearcherType::Forward) {
+        reached = bisearcher->forwardSearcher->update(result);
+      } else {
+        reached = bisearcher->branchSearcher->update(result);
+      }
+      for (auto state : reached) {
+        bisearcher->backwardSearcher->addBranch(state);
+      }
+    } else if (action.type == Action::Type::Backward) {
+      auto result = goBackward(action.state, action.pob);
+      bisearcher->backwardSearcher->update(result);
+      // Forward, Branch reroute?
+    } else {
+      auto result = initBranch(action.location);
+      bisearcher->branchSearcher->setTargets(result, action.targets);
+    }
+  }
+}
+
+void BidirectionalExecutor::bidirectionalRunWrapper(ExecutionState& state) {
+  initialState = state.copy();
+  initialState->stack.clear();
+  initialState->isolated = true;
+
+  timers.reset();
+  states.insert(&state);
+
+  SearcherConfig cfg;
+  cfg.initial_state = &state;
+  cfg.targets = {};
+  cfg.executor = this;
+  
+  bisearcher = new BidirectionalSearcher(cfg);
+
+  bidirectionalRun();
+  
+  // Все или только из начальной точки?
+  doDumpStates();
+  results.clear();
+  haltExecution = false;
+}
+
 KBlock *BidirectionalExecutor::calculateCoverTarget(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
@@ -432,49 +483,49 @@ void BidirectionalExecutor::addState(ExecutionState &state) {
 }
 
 void BidirectionalExecutor::run(ExecutionState &state) {
-  std::unique_ptr<ExecutionState> initialState(state.copy());
-  initialState->stack.clear();
-  initialState->stackBalance = 0;
-  initialState->isolated = true;
-  state.statesForRebuild.push_back(state.copy());
+  bidirectionalRunWrapper(state);
+  // std::unique_ptr<ExecutionState> initialState(state.copy());
+  // initialState->stack.clear();
+  // initialState->stackBalance = 0;
+  // initialState->isolated = true;
+  // state.statesForRebuild.push_back(state.copy());
 
-  // Delay init till now so that ticks don't accrue during optimization and such.
-  timers.reset();
+  // // Delay init till now so that ticks don't accrue during optimization and such.
+  // timers.reset();
 
-  states.insert(&state);
+  // states.insert(&state);
 
-  if (usingSeeds)
-    seed(state);
+  // if (usingSeeds)
+  //   seed(state);
 
   ExecutionStateIsolationRank rank;
   searcher = std::make_unique<BinaryRankedSearcher>(
-        rank,
-        constructUserSearcher(*this),
-        std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
+      rank, constructUserSearcher(*this),
+      std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
 
-  std::vector<ExecutionState *> newStates(states.begin(), states.end());
-  searcher->update(0, newStates, std::vector<ExecutionState *>());
+  // std::vector<ExecutionState *> newStates(states.begin(), states.end());
+  // searcher->update(0, newStates, std::vector<ExecutionState *>());
 
-  // main interpreter loop
-  while (!searcher->empty() && !haltExecution) {
-    ExecutionState &es = searcher->selectState();
-    if (!tryExploreStep(es, *initialState)) {
-      KBlock *target = calculateCoverTarget(es);
-      if (target) {
-        es.targets.insert(target);
-        updateStates(&es);
-      } else {
-        pauseState(es);
-        updateStates(nullptr);
-      }
-    }
-  }
+  // // main interpreter loop
+  // while (!searcher->empty() && !haltExecution) {
+  //   ExecutionState &es = searcher->selectState();
+  //   if (!tryExploreStep(es, *initialState)) {
+  //     KBlock *target = calculateCoverTarget(es);
+  //     if (target) {
+  //       es.targets.insert(target);
+  //       updateStates(&es);
+  //     } else {
+  //       pauseState(es);
+  //       updateStates(nullptr);
+  //     }
+  //   }
+  // }
 
-  searcher.reset();
+  // searcher.reset();
 
-  doDumpStates();
-  results.clear();
-  haltExecution = false;
+  // doDumpStates();
+  // results.clear();
+  // haltExecution = false;
 }
 
 void BidirectionalExecutor::pauseState(ExecutionState &state) {
@@ -512,6 +563,7 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
                                  char **argv,
                                  char **envp) {
   ExecutionState *state = formState(mainFn, argc, argv, envp);
+  initialState = state->copy();
   bindModuleConstants();
   KFunction *kf = kmodule->functionMap[mainFn];
   KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
@@ -522,7 +574,8 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
 }
 
 ExecutionState* BidirectionalExecutor::initBranch(KBlock* loc) {
-  ExecutionState* state = new ExecutionState(loc->parent, loc);
+  ExecutionState* state = initialState->withKBlock(loc);
+  // prepareSymbolicargs?
   states.insert(state);
   return state;
 }
@@ -567,7 +620,31 @@ ForwardResult BidirectionalExecutor::goForward(ExecutionState* state) {
 
 BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,
                                                  ProofObligation *pob) {
+  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
+  for(auto constraint : pob->condition) {
+    ref<Expr> rebuilt_constraint;
+    bool success = Composer::tryRebuild(constraint, state, rebuilt_constraint);
+    // if(!success)
+    newPob->condition.push_back(rebuilt_constraint);
+  }
   
+  ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
+  for(auto constraint: newPob->condition) {
+    check = AndExpr::create(check, constraint);
+  }
+  bool mayBeTrue;
+  bool success = getSolver()->mayBeTrue(state->constraints, check, mayBeTrue,
+                                        state->queryMetaData);
+  
+  // if(!success) У первого и второго success одно значение?
+
+  if (mayBeTrue) {
+    for (auto constraint : state->constraints) {
+      newPob->condition.push_back(constraint);
+    }
+  }
+  return BackwardResult{newPob, pob};
+  // TODO: ERROR HANDLING
 }
 
 

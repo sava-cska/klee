@@ -174,7 +174,7 @@ ExecutionState *ExecutionState::branch() {
   return falseState;
 }
 
-ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
+ExecutionState *ExecutionState::withKFunction(KFunction *kf) const {
   assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
   newState->pushFrame(nullptr, kf);
@@ -185,7 +185,7 @@ ExecutionState *ExecutionState::withKFunction(KFunction *kf) {
   return newState;
 }
 
-ExecutionState *ExecutionState::withKBlock(KBlock *kb) {
+ExecutionState *ExecutionState::withKBlock(KBlock *kb) const {
   assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
   newState->pushFrame(nullptr, kb->parent);

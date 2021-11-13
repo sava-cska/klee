@@ -292,8 +292,8 @@ public:
   ~ExecutionState();
 
   ExecutionState *branch();
-  ExecutionState *withKFunction(KFunction *kf);
-  ExecutionState *withKBlock(KBlock *kb);
+  ExecutionState *withKFunction(KFunction *kf) const;
+  ExecutionState *withKBlock(KBlock *kb) const;
   ExecutionState *empty();
   ExecutionState *copy() const;
 

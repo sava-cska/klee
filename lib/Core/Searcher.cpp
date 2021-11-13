@@ -385,7 +385,8 @@ void GuidedSearcher::update(ExecutionState *current,
     }
   }
 
-  for(auto i : current->targets) targets.insert(i);
+  if(current)
+    for(auto i : current->targets) targets.insert(i);
 
   for (auto target : targets) {
     ExecutionState *currTState =

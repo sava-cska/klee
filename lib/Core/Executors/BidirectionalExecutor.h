@@ -7,12 +7,18 @@
 #include "klee/Core/Interpreter.h"
 
 #include "../BidirectionalSearcher.h"
+#include "klee/Expr/Expr.h"
 
 #include <queue>
 
 namespace klee {
 
 class BidirectionalExecutor : public BaseExecutor {
+
+  ExecutionState* initialState;
+
+  BidirectionalSearcher* bisearcher;
+  
 public:
   typedef std::pair<llvm::BasicBlock *, llvm::BasicBlock *> BasicBlockPair;
   typedef std::map<llvm::BasicBlock *,
@@ -52,6 +58,9 @@ public:
 
   void targetedRun(ExecutionState &initialState, KBlock *target);
   void guidedRun(ExecutionState &initialState);
+  
+  void bidirectionalRun();
+  void bidirectionalRunWrapper(ExecutionState& state);
 
   void run(ExecutionState &initialState) override;
   void runWithTarget(ExecutionState &state, KBlock *target);
@@ -62,14 +71,6 @@ public:
   void pauseState(ExecutionState &state);
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
-
-  // void reachTarget(ExecutionState const &initialState, KBlock const &target,
-  //                  size_t lvl_bound);
-  // void goFront(ExecutionState &state,
-  //              std::queue<ExecutionState *> &forwardQueue);
-  // void goBack(ExecutionState &state, ProofObligation &pob,
-  //             std::deque<ProofObligation> &backwardQueue,
-  //             ExecutionState const &entryPoint);
 
   ExecutionState* initBranch(KBlock* loc);
   ForwardResult goForward(ExecutionState* state);

@@ -286,6 +286,7 @@ void BidirectionalExecutor::bidirectionalRun() {
       for (auto state : reached) {
         bisearcher->backwardSearcher->addBranch(state);
       }
+      clearAfterForward();
     } else if (action.type == Action::Type::Backward) {
       auto result = goBackward(action.state, action.pob);
       bisearcher->backwardSearcher->update(result);
@@ -309,7 +310,8 @@ void BidirectionalExecutor::bidirectionalRunWrapper(ExecutionState& state) {
   cfg.initial_state = &state;
   cfg.targets = {};
   cfg.executor = this;
-  
+
+  processForest->addRoot(&state);
   bisearcher = new BidirectionalSearcher(cfg);
 
   bidirectionalRun();
@@ -498,10 +500,10 @@ void BidirectionalExecutor::run(ExecutionState &state) {
   // if (usingSeeds)
   //   seed(state);
 
-  ExecutionStateIsolationRank rank;
-  searcher = std::make_unique<BinaryRankedSearcher>(
-      rank, constructUserSearcher(*this),
-      std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
+  // ExecutionStateIsolationRank rank;
+  // searcher = std::make_unique<BinaryRankedSearcher>(
+  //     rank, constructUserSearcher(*this),
+  //     std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
 
   // std::vector<ExecutionState *> newStates(states.begin(), states.end());
   // searcher->update(0, newStates, std::vector<ExecutionState *>());
@@ -576,6 +578,7 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
 ExecutionState* BidirectionalExecutor::initBranch(KBlock* loc) {
   ExecutionState* state = initialState->withKBlock(loc);
   // prepareSymbolicargs?
+  processForest->addRoot(state);
   states.insert(state);
   return state;
 }
@@ -593,6 +596,11 @@ ForwardResult BidirectionalExecutor::goForward(ExecutionState* state) {
   ForwardResult ret(state,addedStates,removedStates);
   
   states.insert(addedStates.begin(), addedStates.end());
+
+  return ret;
+}
+
+void BidirectionalExecutor::clearAfterForward() {
   addedStates.clear();
 
   for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
@@ -614,8 +622,6 @@ ForwardResult BidirectionalExecutor::goForward(ExecutionState* state) {
     }
   }
   removedStates.clear();
-
-  return ret;
 }
 
 BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,

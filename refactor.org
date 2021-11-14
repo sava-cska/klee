@@ -50,3 +50,6 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 ** TODO Refactor base searchers to return Action and accept Result.
 
 * TODO Provide capabilities to choose execution targets.
+
+* Why cannot PForest support more than %d RandomPathSearchers?
+- [[./lib/Core/PForest.h::36]]

@@ -76,6 +76,8 @@ public:
   ForwardResult goForward(ExecutionState* state);
   BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
 
+  void clearAfterForward();
+
   
   KBlock *getStartLocation(const ExecutionState &state);
   KBlock *getLastExecutedLocation(const ExecutionState &state);

@@ -31,6 +31,11 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 
 ** TODO Define Action and Result classes (or hierarchies).
 
+** TODO Come up with ways to set initial targets.
+- Random?
+- Ends/Beginnings of functions
+- Allow instrumenting with a special function?
+
 * Executor
 - Should only provide means to execute, not a class that changes often. The
   execution is driven by the chosen searcher. (Correct? What about PDR?)
@@ -54,3 +59,5 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 * Why cannot PForest support more than %d RandomPathSearchers?
 - [[./lib/Core/PForest.h]]
 - Line 36
+
+* TODO [#A] Check the Statistics

@@ -7,6 +7,7 @@
 #include "../Composer.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include <memory>
 #include <stack>
@@ -308,7 +309,7 @@ void BidirectionalExecutor::bidirectionalRunWrapper(ExecutionState& state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  cfg.targets = {};
+  cfg.targets.insert(state.stack.back().kf->finalKBlocks.back());
   cfg.executor = this;
 
   processForest->addRoot(&state);
@@ -576,8 +577,11 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
 }
 
 ExecutionState* BidirectionalExecutor::initBranch(KBlock* loc) {
+  // correct?
   ExecutionState* state = initialState->withKBlock(loc);
-  // prepareSymbolicargs?
+  prepareSymbolicArgs(*state, loc->parent);
+  if (statsTracker)
+    statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
   states.insert(state);
   return state;
@@ -627,7 +631,7 @@ void BidirectionalExecutor::clearAfterForward() {
 BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,
                                                  ProofObligation *pob) {
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
-  for(auto constraint : pob->condition) {
+  for(auto& constraint : pob->condition) {
     ref<Expr> rebuilt_constraint;
     bool success = Composer::tryRebuild(constraint, state, rebuilt_constraint);
     // if(!success)
@@ -635,7 +639,7 @@ BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,
   }
   
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
-  for(auto constraint: newPob->condition) {
+  for(auto& constraint: newPob->condition) {
     check = AndExpr::create(check, constraint);
   }
   bool mayBeTrue;
@@ -645,7 +649,7 @@ BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,
   // if(!success) У первого и второго success одно значение?
 
   if (mayBeTrue) {
-    for (auto constraint : state->constraints) {
+    for (auto& constraint : state->constraints) {
       newPob->condition.push_back(constraint);
     }
   }

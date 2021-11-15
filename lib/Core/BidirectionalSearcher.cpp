@@ -12,6 +12,8 @@
 #include "MergeHandler.h"
 #include "UserSearcher.h"
 #include "klee/Core/Interpreter.h"
+#include "klee/Support/ErrorHandling.h"
+#include <llvm/ADT/StringExtras.h>
 #include <memory>
 #include <unordered_set>
 #include <vector>
@@ -108,7 +110,8 @@ Action BFSBackwardSearcher::selectAction() {
 void BFSBackwardSearcher::addBranch(ExecutionState* state) {
   for(auto i : pobs) {
     if(i->location->basicBlock == state->getPCBlock()) {
-      backpropQueue.push(std::make_pair(i, state));
+      auto state_copy = state->copy();
+      backpropQueue.push(std::make_pair(i, state_copy));
     }
   }
 }
@@ -142,13 +145,15 @@ Action BidirectionalSearcher::selectAction() {
     }
     if (choice == 1) {
       Action a = branchSearcher->selectAction();
-      if (a.type != Action::Type::None)
+      if (a.type != Action::Type::None) {
         return a;
+      }
     }
     if(choice == 2) {
       Action a = backwardSearcher->selectAction();
-      if (a.type != Action::Type::None)
+      if (a.type != Action::Type::None) {
         return a;
+      }
     }
   }
   // Что-то адекватное сюда

@@ -390,8 +390,10 @@ void GuidedSearcher::update(ExecutionState *current,
 
   for (auto target : targets) {
     ExecutionState *currTState =
-        current->targets.find(target) != current->targets.end() ? current
-                                                                : nullptr;
+        current && current->targets.find(target) != current->targets.end()
+            ? current
+            : nullptr;
+    
     if (targetedSearchers.count(target) == 0)
       addTarget(target);
     targetedSearchers[target]->update(currTState, addedTStates[target], removedTStates[target]);

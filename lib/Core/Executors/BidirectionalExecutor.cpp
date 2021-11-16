@@ -291,6 +291,10 @@ void BidirectionalExecutor::bidirectionalRun() {
     } else if (action.type == Action::Type::Backward) {
       auto result = goBackward(action.state, action.pob);
       bisearcher->backwardSearcher->update(result);
+      if (result.newPob->location->basicBlock ==
+          initialState->getInitPCBlock()) {
+        klee_message("yeah"); // Yep. Now generate tests from that.
+      }
       // Forward, Branch reroute?
     } else {
       auto result = initBranch(action.location);

@@ -37,3 +37,4 @@ examples/
 .vscode
 klee-*
 /ex/bitcode/
+/launch.json

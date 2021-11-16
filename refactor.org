@@ -60,4 +60,8 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 - [[./lib/Core/PForest.h]]
 - Line 36
 
-* TODO [#A] Check the Statistics
+* TODO Learn the codebase
+
+* TODO Integrate KTestJSON
+
+* TODO Write pob-based test generation

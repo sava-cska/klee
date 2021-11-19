@@ -1,23 +1,23 @@
-* ExecutionState
+* ~ExecutionState~
 - Execution state itself
-- Owned and mutated by Executor
-- Given a pointer to to Searcher, searchers should not ideally mutate an ES.
+- Owned and mutated by ~Executor~
+- Given a pointer to to ~Searcher~, searchers should not ideally mutate an ES.
 - Can have multiple targets so searchers can base their choice on that
-- Targets set and unset by Executor
+- Targets set and unset by ~Executor~
 - Can be isolated ???
 
 ** TODO Clearly define ways to produce clean states at arbitrary execution points.
-** TODO Group ExecutionState attributes according to entities that modify them.
+** TODO Group ~ExecutionState~ attributes according to entities that modify them.
 
-* (Meta)Searcher
-- Multiple searcher approach replaces regular Searcher, Bidirectional searcher
+* ~(Meta)Searcher~
+- Multiple searcher approach replaces regular ~Searcher~, ~BidirectionalSearcher~
   is a special case of that.  
 - Subsearchers are designed to be independent, it is the metasearcher's job
   to decide what to do.
-- Guided subsearchers must be in sync with the targets of an ExecutionState,
-  maybe decouple targets and ExecutionStates?
+- Guided subsearchers must be in sync with the targets of an ~ExecutionState~,
+  maybe decouple targets and ~ExecutionStates~?
 
-** TODO Refactor Searcher into multisearcher approach.
+** TODO Refactor ~Searcher~ into multisearcher approach.
 To do that, the searcher has to return Action and accept Result from the
 executor. As of now, Action has 3 options: Forward, Backward, Init. The
 searcher  (metasearcher) uses its subsearchers to make a decision and return
@@ -29,30 +29,30 @@ subcomponents, it would allow for Executor to focus only on things regarding
 execution, as it seems to be now. Also, ExecutionState contains targets,
 and targets must be managed by the searcher. (Need to find a solution here.))
 
-** TODO Define Action and Result classes (or hierarchies).
+** TODO Define ~Action~ and ~Result~ classes (or hierarchies).
 
 ** TODO Come up with ways to set initial targets.
 - Random?
 - Ends/Beginnings of functions
 - Allow instrumenting with a special function?
 
-* Executor
+* ~Executor~
 - Should only provide means to execute, not a class that changes often. The
   execution is driven by the chosen searcher. (Correct? What about PDR?)
 - Do we even need seeds if we have function summaries?
 
-** TODO Refactor Executor according to the refactor of Searcher.
+** TODO Refactor ~Executor~ according to the refactor of ~Searcher~.
 - Replace the searcher attribute in the executor by using
   a generalized (meta)searcher.
 
-** TODO Inspect BidirectionalExecutor and leave out what is not needed.
+** TODO Inspect ~BidirectionalExecutor~ and leave out what is not needed.
 - Consider breaking it into subtools to make reasoning simpler.
-- Replace BaseExecutor with this.
+- Replace ~BaseExecutor~ with this.
 
-** TODO Inspect main and transfer some of the logic into Executor.
+** TODO Inspect main and transfer some of the logic into ~Executor~.
 
 * Searcher
-** TODO Refactor base searchers to return Action and accept Result.
+** TODO Refactor base searchers to return ~Action~ and accept ~Result~.
 
 * TODO Provide capabilities to choose execution targets.
 
@@ -64,10 +64,12 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 
 * DONE Integrate ~KTestJSON~
 
-* TODO Write pob-based test generation
+* VERIFY Write pob-based test generation
 
 * TODO Check statistics
 - Some stats might be broken due to instructions being executed in isolation
 
 * FEEDBACK Fix and integrate ~isReadFromSymbolicArray~
 - Discuss second use of ~isReadFromSymbolicArray~
+
+* TODO Gather tests

@@ -4123,7 +4123,7 @@ void BaseExecutor::resolveExact(ExecutionState &state,
   ExecutionState *unbound = &state;
   for (ResolutionList::iterator it = rl.begin(), ie = rl.end(); 
        it != ie; ++it) {
-    const MemoryObject *mo = it->first;
+    const MemoryObject *mo = it->first; 
     ref<Expr> inBounds = EqExpr::create(p, it->first->getBaseExpr());
 
     StatePair branches = fork(*unbound, inBounds, true);

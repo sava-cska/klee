@@ -85,6 +85,7 @@ public:
   virtual void addBranch(ExecutionState *state) = 0;
 
   virtual void update(BackwardResult) = 0;
+  virtual void remove(ProofObligation* pob) = 0;
 };
 
 class GuidedForwardSearcher : IForwardSearcher {
@@ -127,6 +128,7 @@ public:
   void addBranch(ExecutionState *state) override;
 
   void update(BackwardResult) override;
+  void remove(ProofObligation* pob) override;
 
   BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
     for (auto location : locations) {

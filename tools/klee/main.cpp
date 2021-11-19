@@ -42,6 +42,7 @@
 
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Signals.h"
+#include <llvm/ADT/StringExtras.h>
 
 #if LLVM_VERSION_CODE >= LLVM_VERSION(4, 0)
 #include <llvm/Bitcode/BitcodeReader.h>
@@ -680,7 +681,6 @@ void KleeHandler::processTestCase(ExecutionState &state,
     if (WriteKTestFiles && success && lazy_instantiation_resolved == 0) {
       writeTestCaseKTest(assignments, test_id);
     }
-    
     if (success && lazy_instantiation_resolved != -1) {
       writeTestCasePlain(assignments, test_id);
       if(WriteStates) {

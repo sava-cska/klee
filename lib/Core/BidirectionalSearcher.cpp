@@ -10,6 +10,7 @@
 #include "BidirectionalSearcher.h"
 #include "ExecutionState.h"
 #include "MergeHandler.h"
+#include "ProofObligation.h"
 #include "UserSearcher.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Support/ErrorHandling.h"
@@ -118,6 +119,10 @@ void BFSBackwardSearcher::addBranch(ExecutionState* state) {
 
 void BFSBackwardSearcher::update(BackwardResult result) {
   pobs.insert(result.newPob);
+}
+
+void BFSBackwardSearcher::remove(ProofObligation* pob) {
+  pobs.erase(pob);
 }
 
 

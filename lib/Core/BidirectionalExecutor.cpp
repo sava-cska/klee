@@ -1,5 +1,6 @@
 #include "BidirectionalExecutor.h"
 
+#include "ExecutionState.h"
 #include "MemoryManager.h"
 #include "PForest.h"
 #include "Searcher.h"
@@ -290,10 +291,20 @@ void BidirectionalExecutor::bidirectionalRun() {
       clearAfterForward();
     } else if (action.type == Action::Type::Backward) {
       auto result = goBackward(action.state, action.pob);
-      bisearcher->backwardSearcher->update(result);
-      if (result.newPob->location->basicBlock ==
-          initialState->getInitPCBlock()) {
-        klee_message("yeah"); // Yep. Now generate tests from that.
+      if (result.newPob->location->instructions[0]->inst ==
+          initialState->initPC->inst) {
+
+        ExecutionState* state = initialState->copy();
+        for(auto& constraint : result.newPob->condition) {
+          state->constraints.push_back(constraint);
+        }
+
+        interpreterHandler->processTestCase(*state,0,0);
+
+        delete state;
+        
+      } else {
+        bisearcher->backwardSearcher->update(result);
       }
       // Forward, Branch reroute?
     } else {
@@ -581,7 +592,6 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
 }
 
 ExecutionState* BidirectionalExecutor::initBranch(KBlock* loc) {
-  // correct?
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
   if (statsTracker)

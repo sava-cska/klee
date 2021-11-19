@@ -56,15 +56,18 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 
 * TODO Provide capabilities to choose execution targets.
 
-* Why cannot PForest support more than %d RandomPathSearchers?
+* Why cannot ~PForest~ support more than %d RandomPathSearchers?
 - [[./lib/Core/PForest.h]]
 - Line 36
 
 * TODO Learn the codebase
 
-* TODO Integrate KTestJSON
+* DONE Integrate ~KTestJSON~
 
 * TODO Write pob-based test generation
 
 * TODO Check statistics
 - Some stats might be broken due to instructions being executed in isolation
+
+* FEEDBACK Fix and integrate ~isReadFromSymbolicArray~
+- Discuss second use of ~isReadFromSymbolicArray~

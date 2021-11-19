@@ -4315,6 +4315,13 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
     } else if (LazyInstantiation && (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isGEPExpr(address)))) {
+
+      if(!isReadFromSymbolicArray(base)) {
+        terminateStateEarly(*unbound, "Instantiation source contains read "
+                                      "from concrete array");
+        return;
+      }
+      
       ObjectPair p = lazyInstantiateVariable(*unbound, base, target ? target->inst : nullptr, size);
       assert(p.first && p.second);
 

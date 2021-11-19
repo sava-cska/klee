@@ -14,9 +14,9 @@ klee_add_component(kleeCore
   Context.cpp
   CoreStats.cpp
   ExecutionState.cpp
-  Executors/BaseExecutor.cpp
-  Executors/ForwardExecutor.cpp
-  Executors/BidirectionalExecutor.cpp
+  BaseExecutor.cpp
+  ForwardExecutor.cpp
+  BidirectionalExecutor.cpp
   ExecutorUtil.cpp
   Interpreter.cpp
   ExternalDispatcher.cpp
@@ -49,6 +49,7 @@ set(LLVM_COMPONENTS
 klee_get_llvm_libs(LLVM_LIBS ${LLVM_COMPONENTS})
 target_link_libraries(kleeCore PUBLIC ${LLVM_LIBS} ${SQLITE3_LIBRARIES})
 target_link_libraries(kleeCore PRIVATE
+  kleeADT
   kleeBasic
   kleeModule
   kleaverSolver

@@ -1,7 +1,7 @@
 #include "klee/Core/Interpreter.h"
 
-#include "Executors/ForwardExecutor.h"
-#include "Executors/BidirectionalExecutor.h"
+#include "ForwardExecutor.h"
+#include "BidirectionalExecutor.h"
 
 namespace klee {
 

@@ -11,7 +11,7 @@
 
 #include "CoreStats.h"
 #include "ExecutionState.h"
-#include "Executors/BaseExecutor.h"
+#include "BaseExecutor.h"
 #include "MergeHandler.h"
 #include "PTree.h"
 #include "StatsTracker.h"

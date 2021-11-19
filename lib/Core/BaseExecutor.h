@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include "../ExecutionState.h"
-#include "../UserSearcher.h"
-#include "../ExternalDispatcher.h"
-#include "../SpecialFunctionHandler.h"
-#include "../MemoryManager.h"
-#include "../SeedInfo.h"
-#include "../StatsTracker.h"
+#include "ExecutionState.h"
+#include "UserSearcher.h"
+#include "ExternalDispatcher.h"
+#include "SpecialFunctionHandler.h"
+#include "MemoryManager.h"
+#include "SeedInfo.h"
+#include "StatsTracker.h"
 
 #include "klee/ADT/RNG.h"
 #include "klee/ADT/DiscretePDF.h"
@@ -592,11 +592,15 @@ public:
   getConstraintLog(const ExecutionState &state, std::string &res,
                    Interpreter::LogType logFormat = Interpreter::STP) override;
 
-  bool getSymbolicSolution(
-      const ExecutionState &state,
-      std::vector<std::pair<std::string, std::vector<unsigned char>>> &res)
-      override;
+  int resolveLazyInstantiation(ExecutionState& state) override;
 
+  void setInstantiationGraph(ExecutionState& state, TestCase& tc) override;
+  
+  void logState(ExecutionState &state, int id,
+                std::unique_ptr<llvm::raw_fd_ostream> &f) override;
+
+  bool getSymbolicSolution(const ExecutionState &state, TestCase &res) override;
+  
   void getCoveredLines(
       const ExecutionState &state,
       std::map<const std::string *, std::set<unsigned>> &res) override;

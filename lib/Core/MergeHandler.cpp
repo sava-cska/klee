@@ -11,7 +11,7 @@
 
 #include "CoreStats.h"
 #include "ExecutionState.h"
-#include "Executors/BaseExecutor.h"
+#include "BaseExecutor.h"
 #include "Searcher.h"
 
 namespace klee {

@@ -1,7 +1,7 @@
 #ifndef KLEE_COMPOSER_H
 #define KLEE_COMPOSER_H
 
-#include "Executors/BidirectionalExecutor.h"
+#include "BidirectionalExecutor.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Module/KModule.h"
@@ -11,7 +11,7 @@
 #include "ExecutionState.h"
 #include "Memory.h"
 #include "TimingSolver.h"
-#include "../lib/Core/Executors/BaseExecutor.h"
+#include "../lib/Core/BaseExecutor.h"
 
 #include <chrono>
 #include <map>

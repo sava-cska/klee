@@ -9,7 +9,7 @@
 
 #include "UserSearcher.h"
 
-#include "Executors/BaseExecutor.h"
+#include "BaseExecutor.h"
 #include "MergeHandler.h"
 #include "Searcher.h"
 

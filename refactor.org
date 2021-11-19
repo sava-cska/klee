@@ -65,3 +65,6 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 * TODO Integrate KTestJSON
 
 * TODO Write pob-based test generation
+
+* TODO Check statistics
+- Some stats might be broken due to instructions being executed in isolation

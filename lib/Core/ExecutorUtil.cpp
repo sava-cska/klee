@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Context.h"
-#include "Executors/BaseExecutor.h"
+#include "BaseExecutor.h"
 
 #include "klee/Config/Version.h"
 #include "klee/Core/Interpreter.h"

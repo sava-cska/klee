@@ -54,8 +54,6 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 * Searcher
 ** TODO Refactor base searchers to return ~Action~ and accept ~Result~.
 
-* TODO Provide capabilities to choose execution targets.
-
 * Why cannot ~PForest~ support more than %d RandomPathSearchers?
 - [[./lib/Core/PForest.h]]
 - Line 36
@@ -66,10 +64,8 @@ and targets must be managed by the searcher. (Need to find a solution here.))
 
 * VERIFY Write pob-based test generation
 
-* TODO Check statistics
+* FEEDBACK Check statistics
 - Some stats might be broken due to instructions being executed in isolation
 
 * FEEDBACK Fix and integrate ~isReadFromSymbolicArray~
 - Discuss second use of ~isReadFromSymbolicArray~
-
-* TODO Gather tests

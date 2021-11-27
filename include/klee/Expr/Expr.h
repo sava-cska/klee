@@ -211,14 +211,16 @@ public:
 
   virtual Kind getKind() const = 0;
   virtual Width getWidth() const = 0;
-  
+
   virtual unsigned getNumKids() const = 0;
   virtual ref<Expr> getKid(unsigned i) const = 0;
-    
+
   virtual void print(llvm::raw_ostream &os) const;
 
   /// dump - Print the expression to stderr.
   void dump() const;
+
+  std::string toString() const;
 
   /// Returns the pre-computed hash of the current expression
   virtual unsigned hash() const { return hashValue; }
@@ -226,7 +228,7 @@ public:
   /// (Re)computes the hash of the current expression.
   /// Returns the hash value. 
   virtual unsigned computeHash();
-  
+
   /// Compares `b` to `this` Expr for structural equivalence.
   ///
   /// This method effectively defines a total order over all Expr.

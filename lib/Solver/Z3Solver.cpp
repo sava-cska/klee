@@ -43,6 +43,11 @@ llvm::cl::opt<bool> Z3ValidateModels(
     llvm::cl::desc("When generating Z3 models validate these against the query"),
     llvm::cl::cat(klee::SolvingCat));
 
+llvm::cl::opt<bool> Z3ProduceUnsatCores(
+    "produce-unsat-cores", llvm::cl::init(true),
+    llvm::cl::desc("Produce unsat cores"),
+    llvm::cl::cat(klee::SolvingCat));
+
 llvm::cl::opt<unsigned>
     Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
                      llvm::cl::desc("Z3 verbosity level (default=0)"),
@@ -62,7 +67,10 @@ private:
   ::Z3_params solverParameters;
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
+  ::Z3_symbol unsatCoreParamStrSymbol;
+  uint count = 0u;
 
+  void assertAndTrack(Z3_context c, Z3_solver s, Z3ASTHandle a, std::string name);
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
@@ -82,6 +90,9 @@ public:
       timeoutInMilliSeconds = UINT_MAX;
     Z3_params_set_uint(builder->ctx, solverParameters, timeoutParamStrSymbol,
                        timeoutInMilliSeconds);
+  }
+  void enableUnsatCore() {
+    Z3_params_set_bool(builder->ctx, solverParameters, unsatCoreParamStrSymbol, Z3_L_TRUE);
   }
 
   bool computeTruth(const Query &, bool &isValid);
@@ -110,6 +121,10 @@ Z3SolverImpl::Z3SolverImpl()
   Z3_params_inc_ref(builder->ctx, solverParameters);
   timeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "timeout");
   setCoreSolverTimeout(timeout);
+  if (Z3ProduceUnsatCores) {
+    unsatCoreParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "unsat_core");
+    enableUnsatCore();
+  }
 
   if (!Z3QueryDumpFile.empty()) {
     std::string error;
@@ -244,6 +259,15 @@ bool Z3SolverImpl::computeInitialValues(
   return internalRunSolver(query, &objects, &values, hasSolution);
 }
 
+void Z3SolverImpl::assertAndTrack(Z3_context c, Z3_solver s, Z3ASTHandle a, std::string name) {
+  if (count++ < 1) {
+    Z3_solver_assert(c, s, a);
+  } else {
+    Z3ASTHandle p = builder->buildFreshBoolConst(name.c_str());
+    Z3_solver_assert_and_track(c, s, a, p);
+  }
+}
+
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
@@ -263,7 +287,11 @@ bool Z3SolverImpl::internalRunSolver(
 
   ConstantArrayFinder constant_arrays_in_query;
   for (auto const &constraint : query.constraints) {
-    Z3_solver_assert(builder->ctx, theSolver, builder->construct(constraint));
+    if (Z3ProduceUnsatCores) {
+      assertAndTrack(builder->ctx, theSolver, builder->construct(constraint), constraint->toString());
+    } else {
+      Z3_solver_assert(builder->ctx, theSolver, builder->construct(constraint));
+    }
     constant_arrays_in_query.visit(constraint);
   }
   ++stats::queries;
@@ -279,7 +307,11 @@ bool Z3SolverImpl::internalRunSolver(
            "Constant array found in query, but not handled by Z3Builder");
     for (auto const &arrayIndexValueExpr :
          builder->constant_array_assertions[constant_array]) {
-      Z3_solver_assert(builder->ctx, theSolver, arrayIndexValueExpr);
+      // if (enableUnsatCore) {
+      //   assertAndTrack(builder->ctx, theSolver, arrayIndexValueExpr, arrayIndexValueExpr->toString());
+      // } else {
+        Z3_solver_assert(builder->ctx, theSolver, arrayIndexValueExpr);
+      // }
     }
   }
 
@@ -288,9 +320,13 @@ bool Z3SolverImpl::internalRunSolver(
   // but Z3 works in terms of satisfiability so instead we ask the
   // negation of the equivalent i.e.
   // ∃ X Constraints(X) ∧ ¬ query(X)
-  Z3_solver_assert(
-      builder->ctx, theSolver,
-      Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx));
+  Z3ASTHandle z3NotQueryExpr = Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx);
+  if (Z3ProduceUnsatCores) {
+    std::string s = "not " + query.expr->toString();
+    assertAndTrack(builder->ctx, theSolver, z3NotQueryExpr, s);
+  } else {
+    Z3_solver_assert(builder->ctx, theSolver, z3NotQueryExpr);
+  }
 
   if (dumpedQueriesFile) {
     *dumpedQueriesFile << "; start Z3 query\n";
@@ -304,6 +340,28 @@ bool Z3SolverImpl::internalRunSolver(
   ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, theSolver);
   runStatusCode = handleSolverResponse(theSolver, satisfiable, objects, values,
                                        hasSolution);
+  if (Z3ProduceUnsatCores && satisfiable == Z3_L_FALSE) {
+    Z3_ast_vector unsatCore = Z3_solver_get_unsat_core(builder->ctx, theSolver);
+    Z3_ast_vector_inc_ref(builder->ctx, unsatCore);
+
+    unsigned size = Z3_ast_vector_size(builder->ctx, unsatCore);
+    Z3_ast_vector assertions = Z3_solver_get_assertions(builder->ctx, theSolver);
+    unsigned assertionsCount = Z3_ast_vector_size(builder->ctx, assertions);
+
+    llvm::errs() << "Unsat core info.\n";
+    llvm::errs() << "Number of all assertions:" << assertionsCount << "\n";
+    llvm::errs() << "Size: " << size << "\n";
+    // for (unsigned index = 0; index < size; ++index) {
+    //   Z3ASTHandle constraint = Z3ASTHandle(
+    //       Z3_ast_vector_get(builder->ctx, unsatCore, index), builder->ctx);
+
+    //     constraint.dump();
+    //     llvm::errs() << "\n";
+    // }
+    llvm::errs() << "\n";
+
+    Z3_ast_vector_dec_ref(builder->ctx, unsatCore);
+  }
 
   Z3_solver_dec_ref(builder->ctx, theSolver);
   // Clear the builder's cache to prevent memory usage exploding.

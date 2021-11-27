@@ -164,6 +164,7 @@ private:
   Z3ASTHandle buildArray(const char *name, unsigned indexWidth,
                          unsigned valueWidth);
 
+  Z3SortHandle getBoolSort();
   Z3SortHandle getBvSort(unsigned width);
   Z3SortHandle getArraySort(Z3SortHandle domainSort, Z3SortHandle rangeSort);
   bool autoClearConstructCache;
@@ -178,6 +179,7 @@ public:
 
   Z3ASTHandle getTrue();
   Z3ASTHandle getFalse();
+  Z3ASTHandle buildFreshBoolConst (const char *name);
   Z3ASTHandle getInitialRead(const Array *os, unsigned index);
 
   Z3ASTHandle construct(ref<Expr> e) {

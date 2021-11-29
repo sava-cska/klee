@@ -1,9 +1,11 @@
 #ifdef EXTERNAL
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <assert.h>
-#include <stdlib.h>
-#include "klee.h"
+#include <stdbool.h>
+#include "klee/klee.h"
 #else
 void klee_make_symbolic(void *addr, unsigned int nbytes, const char *name);
 void klee_assume(_Bool condition);
@@ -159,3 +161,13 @@ void __VERIFIER_error(void) {
   assert(0 && "Failure");
   #endif
 }
+
+#ifdef EXTERNAL
+void abort(void) {
+  exit(1);
+}
+
+void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function) {
+  exit(1);
+}
+#endif

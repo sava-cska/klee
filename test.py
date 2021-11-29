@@ -74,6 +74,8 @@ class TestRunner(object):
         # Add common arguments
         cmd += ["-output-dir=" + os.path.join(self.klee_output_dir, os.path.splitext(source)[0])]
         cmd += ["--max-time=" + str(self.timeout) + "s"]
+        cmd += ["--libc=uclibc"]
+        cmd += ["--posix-runtime"]
         cmd += [compiled_file]
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -82,7 +84,7 @@ class TestRunner(object):
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + "o")
         source = os.path.join(instance_dir, source)
-        cmd = ["g++", "-I", self.include_path, "-L", self.lib_path]
+        cmd = ["gcc", "-I", self.include_path, "-L", self.lib_path]
         cmd += ["-DEXTERNAL"]
         cmd += ['-lkleeRuntest', '-fprofile-arcs', '-ftest-coverage']
         cmd += ["-o", compiled_file, source]

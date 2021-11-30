@@ -1786,6 +1786,10 @@ int main(int argc, char **argv, char **envp) {
     *theStatisticManager->getStatisticByName("QueriesCEX");
   uint64_t queryConstructs =
     *theStatisticManager->getStatisticByName("QueryConstructs");
+  uint64_t unsatQueriesAssertionsCount =
+    *theStatisticManager->getStatisticByName("UnsatQueriesAssertionsCount");
+  uint64_t unsatCoresSize =
+    *theStatisticManager->getStatisticByName("UnsatCoresSize");
   uint64_t instructions =
     *theStatisticManager->getStatisticByName("Instructions");
   uint64_t forks =
@@ -1804,6 +1808,8 @@ int main(int argc, char **argv, char **envp) {
     << "KLEE: done: total queries = " << queries << "\n"
     << "KLEE: done: valid queries = " << queriesValid << "\n"
     << "KLEE: done: invalid queries = " << queriesInvalid << "\n"
+    << "KLEE: done: count of unsat assertions = " << unsatQueriesAssertionsCount << "\n"
+    << "KLEE: done: size of unsat cores = " << unsatCoresSize << "\n"
     << "KLEE: done: query cex = " << queryCounterexamples << "\n";
 
   std::stringstream stats;

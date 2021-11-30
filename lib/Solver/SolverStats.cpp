@@ -21,6 +21,8 @@ Statistic stats::queryCexCacheHits("QueryCexCacheHits", "QCexHits") ;
 Statistic stats::queryCexCacheMisses("QueryCexCacheMisses", "QCexMisses");
 Statistic stats::queryConstructs("QueryConstructs", "QB");
 Statistic stats::queryCounterexamples("QueriesCEX", "Qcex");
+Statistic stats::unsatQueriesAssertionsCount("UnsatQueriesAssertionsCount", "UQACount");
+Statistic stats::unsatCoresSize("UnsatCoresSize", "UCSize");
 Statistic stats::queryTime("QueryTime", "Qtime");
 
 #ifdef KLEE_ARRAY_DEBUG

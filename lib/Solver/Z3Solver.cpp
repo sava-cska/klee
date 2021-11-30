@@ -348,17 +348,8 @@ bool Z3SolverImpl::internalRunSolver(
     Z3_ast_vector assertions = Z3_solver_get_assertions(builder->ctx, theSolver);
     unsigned assertionsCount = Z3_ast_vector_size(builder->ctx, assertions);
 
-    llvm::errs() << "Unsat core info.\n";
-    llvm::errs() << "Number of all assertions:" << assertionsCount << "\n";
-    llvm::errs() << "Size: " << size << "\n";
-    // for (unsigned index = 0; index < size; ++index) {
-    //   Z3ASTHandle constraint = Z3ASTHandle(
-    //       Z3_ast_vector_get(builder->ctx, unsatCore, index), builder->ctx);
-
-    //     constraint.dump();
-    //     llvm::errs() << "\n";
-    // }
-    llvm::errs() << "\n";
+    stats::unsatQueriesAssertionsCount += stats::unsatQueriesAssertionsCount + assertionsCount;
+    stats::unsatCoresSize += stats::unsatCoresSize + size;
 
     Z3_ast_vector_dec_ref(builder->ctx, unsatCore);
   }

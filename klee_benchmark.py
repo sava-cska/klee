@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-import argparse
 
+import argparse
 import os
 import subprocess
 import sys
 import shutil
 import tempfile
+import time
+
 
 class TestRunner(object):
 
@@ -47,10 +49,12 @@ class TestRunner(object):
 
 
     def compile(self, source):
+        print(f"Compiling {source}")
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         os.mkdir(instance_dir)
         shutil.copy(os.path.join(self.source_directory, source), instance_dir)
         source = os.path.join(instance_dir, source)
+        
         compiler_options = ["-O0", "-Xclang", "-disable-O0-optnone"]
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + '.bc')
         cmd = ["clang", "-I", self.include_path, "-c", "-Wno-everything",  "-g", "-emit-llvm", "-o", compiled_file, source] + compiler_options
@@ -66,20 +70,23 @@ class TestRunner(object):
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def run(self, source):
+        print(f"Running KLEE on {source}")
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + '.bc')
         # Add different options for KLEE
         cmd = [self.klee_path]
 
         # Add common arguments
-        cmd += ["-output-dir=" + os.path.join(self.klee_output_dir, os.path.splitext(source)[0])]
+        cmd += ["--output-dir=" + os.path.join(self.klee_output_dir, os.path.splitext(source)[0])]
         cmd += ["--max-time=" + str(self.timeout) + "s"]
+        cmd += ["--max-solver-time=" + str(self.timeout) + "s"]
         cmd += ["--libc=uclibc"]
         cmd += ["--posix-runtime"]
         cmd += [compiled_file]
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def compile_coverage(self, source):
+        print(f"Compiling {source} for coverage")
         os.environ['LD_LIBRARY_PATH'] = f"{self.lib_path}"
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + "o")
@@ -93,12 +100,20 @@ class TestRunner(object):
         subprocess.check_call(cmd, env=os.environ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def run_coverage(self, source):
+        print(f"Running {source} on generated tests")
+        t_end = time.time() + 10
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + "o")
         for filename in os.listdir(os.path.join(self.klee_output_dir, os.path.splitext(source)[0])):
+            if time.time() > t_end:
+                print(f"Stopping running generated tests after 10 seconds, some tests have not run.")
+                break
             if filename.endswith(".ktestjson"):
                 os.environ["KTEST_FILE"] = os.path.join(self.klee_output_dir, os.path.splitext(source)[0] ,filename)
-                subprocess.run([compiled_file], env=os.environ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try:
+                    subprocess.run([compiled_file], env=os.environ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
 
     def save_gcov(self):
         subprocess.check_call(["gcovr", "-r", self.tmp, "--html-details" ,"GCOV_coverage"], cwd=self.tmp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -114,17 +129,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("source", help='source directory')
     parser.add_argument("--t", default=30, help='timeout in seconds, default: 30')
-    parser.add_argument("--klee_output", default=None, help='where to keep klee output, default: not to keep')
+    parser.add_argument("--klee-output", default=None, help='where to keep klee output, default: not to keep')
     parser.add_argument("--output", required=True, help="where to keep coverage output, required")
     parser.add_argument("--builddir", default=None, help="build directory, default: build")
     args = parser.parse_args()
 
     wrapper = TestRunner(args.source, args.t, args.klee_output, args.output, args.builddir)
+    count = 1;
+    num_sources = len([name for name in os.listdir(args.source)])
+    print(f"{num_sources} total.")
     for filename in os.listdir(args.source):
+        print(f"Source {count}/{num_sources}")
         wrapper.compile(filename)
         wrapper.run(filename)
         wrapper.compile_coverage(filename)
         wrapper.run_coverage(filename)
+        count += 1
     wrapper.save_gcov()
     shutil.rmtree(wrapper.tmp)
 

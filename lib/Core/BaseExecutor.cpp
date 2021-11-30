@@ -3454,8 +3454,9 @@ void BaseExecutor::doDumpStates() {
     return;
 
   klee_message("halting execution, dumping remaining states");
-  for (const auto &state : states)
-    terminateStateEarly(*state, "Execution halting.");
+  for (const auto &state : states) {
+      terminateStateEarly(*state, "Execution halting.");
+  }
   updateStates(nullptr);
   for (auto es : isolatedStates) {
     delete es;
@@ -4314,7 +4315,7 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
   if (unbound) {
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
-    } else if (LazyInstantiation && (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isGEPExpr(address)))) {
+    } else if (LazyInstantiation && !isa<ConstantExpr>(address) && (isa<ReadExpr>(address) || isa<ConcatExpr>(address) || (UseGEPExpr && isGEPExpr(address)))) {
 
       if(!isReadFromSymbolicArray(base)) {
         terminateStateEarly(*unbound, "Instantiation source contains read "

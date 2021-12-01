@@ -8,10 +8,13 @@
 #include "Composer.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
 
+#include <chrono>
 #include <memory>
 #include <stack>
+#include <string>
 #include <unordered_set>
 
 
@@ -278,6 +281,27 @@ void BidirectionalExecutor::bidirectionalRun() {
   while (!bisearcher->empty() && !haltExecution) {
     auto action = bisearcher->selectAction();
     if (action.type == Action::Type::Forward) {
+      if (action.state->targets.empty() &&
+          action.state->multilevel.count(action.state->getPCBlock()) >
+          MaxCycles - 1) {
+        KBlock* target = calculateCoverTarget(*action.state);
+        if(target) {
+          action.state->targets.insert(target);
+          ForwardResult calc_res(action.state,{},{});
+          if (action.searcher == Action::SearcherType::Forward) {
+            bisearcher->forwardSearcher->update(calc_res);
+          } else {
+            bisearcher->branchSearcher->update(calc_res);
+          }
+        } else {
+          ForwardResult calc_res(nullptr,{},{action.state});
+          if (action.searcher == Action::SearcherType::Forward) {
+            bisearcher->forwardSearcher->update(calc_res);
+          } else {
+            bisearcher->branchSearcher->update(calc_res);
+          }
+        }
+      }
       auto result = goForward(action.state);
       std::unordered_set<ExecutionState *> reached;
       if (action.searcher == Action::SearcherType::Forward) {
@@ -324,7 +348,7 @@ void BidirectionalExecutor::bidirectionalRunWrapper(ExecutionState& state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  cfg.targets.insert(state.stack.back().kf->finalKBlocks.back());
+  // cfg.targets.insert();
   cfg.executor = this;
 
   processForest->addRoot(&state);
@@ -592,6 +616,7 @@ void BidirectionalExecutor::runMainWithTarget(Function *mainFn,
 }
 
 ExecutionState* BidirectionalExecutor::initBranch(KBlock* loc) {
+  timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
   if (statsTracker)
@@ -644,6 +669,7 @@ void BidirectionalExecutor::clearAfterForward() {
 
 BackwardResult BidirectionalExecutor::goBackward(ExecutionState *state,
                                                  ProofObligation *pob) {
+  timers.invoke();
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   for(auto& constraint : pob->condition) {
     ref<Expr> rebuilt_constraint;

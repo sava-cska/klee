@@ -143,24 +143,25 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
 }
 
 Action BidirectionalSearcher::selectAction() {
-  while (true) {
-    int choice = rand() % 3;
-    if (choice == 0) {
-      return forwardSearcher->selectAction();
-    }
-    if (choice == 1) {
-      Action a = branchSearcher->selectAction();
-      if (a.type != Action::Type::None) {
-        return a;
-      }
-    }
-    if(choice == 2) {
-      Action a = backwardSearcher->selectAction();
-      if (a.type != Action::Type::None) {
-        return a;
-      }
-    }
-  }
+  // while (true) {
+  //   int choice = rand() % 3;
+  //   if (choice == 0) {
+  //     return forwardSearcher->selectAction();
+  //   }
+  //   if (choice == 1) {
+  //     Action a = branchSearcher->selectAction();
+  //     if (a.type != Action::Type::None) {
+  //       return a;
+  //     }
+  //   }
+  //   if(choice == 2) {
+  //     Action a = backwardSearcher->selectAction();
+  //     if (a.type != Action::Type::None) {
+  //       return a;
+  //     }
+  //   }
+  // }
+  return forwardSearcher->selectAction();
   // Что-то адекватное сюда
 }
 

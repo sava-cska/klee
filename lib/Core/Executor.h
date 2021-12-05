@@ -680,30 +680,16 @@ public:
   void removeTargetable(ExecutionState &state);
   bool isTargetable(ExecutionState &state);
 
-  void targetedRun(ExecutionState &initialState, KBlock *target);
-  void guidedRun(ExecutionState &initialState);
-  
-  void bidirectionalRun();
-  void bidirectionalRunWrapper(ExecutionState& state);
-
-  void runWithTarget(ExecutionState &state, KBlock *target);
-  void runGuided(ExecutionState &state);
-  void runCovered(ExecutionState &state);
-
-  void initializeRoot(ExecutionState &state, KBlock *kb);
   void pauseState(ExecutionState &state);
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  ForwardResult initBranch(KBlock* loc);
+  // _-_ Weird void
+  void initBranch(KBlock* loc);
   ForwardResult goForward(ExecutionState* state);
   BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
 
   ActionResult executeAction(Action a);
-
-
-  void clearAfterForward();
-
   
   KBlock *getStartLocation(const ExecutionState &state);
   KBlock *getLastExecutedLocation(const ExecutionState &state);

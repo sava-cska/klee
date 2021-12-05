@@ -5188,94 +5188,67 @@ bool Executor::isTargetable(ExecutionState &state) {
   return it != sts.end();
 }
 
-void Executor::initializeRoot(ExecutionState &state, KBlock *kb) {
-  ExecutionState *root = state.withKBlock(kb);
-  prepareSymbolicArgs(*root, kb->parent);
-  if (statsTracker)
-    statsTracker->framePushed(*root, 0);
-  processForest->addRoot(root);
-  addedStates.push_back(root);
-}
+// bool Executor::tryBoundedExecuteStep(ExecutionState &state,
+//                                            unsigned bound) {
+//   KInstruction *prevKI = state.prevPC;
 
-// void Executor::runWithTarget(ExecutionState &state, KBlock *target) {
-//   if (pathWriter)
-//     state.pathOS = pathWriter->open();
-//   if (symPathWriter)
-//     state.symPathOS = symPathWriter->open();
+//   if (prevKI->inst->isTerminator()) {
+//     addHistoryResult(state);
+//     if (state.multilevel.count(state.getPCBlock()) > bound) {
+//       return false;
+//     }
+//   }
 
-//   if (statsTracker)
-//     statsTracker->framePushed(state, 0);
-
-//   processForest = std::make_unique<PForest>();
-//   processForest->addRoot(&state);
-//   targetedRun(state, target);
-//   processForest = nullptr;
-
-//   if (statsTracker)
-//     statsTracker->done();
+//   executeStep(state);
+//   return true;
 // }
 
-bool Executor::tryBoundedExecuteStep(ExecutionState &state,
-                                           unsigned bound) {
-  KInstruction *prevKI = state.prevPC;
+// void Executor::isolatedExecuteStep(ExecutionState &state) {
+//   assert(state.isIsolated());
+//   KInstruction *ki = state.pc;
 
-  if (prevKI->inst->isTerminator()) {
-    addHistoryResult(state);
-    if (state.multilevel.count(state.getPCBlock()) > bound) {
-      return false;
-    }
-  }
+//   if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
+//     addTargetable(state);
+//     addCompletedResult(state);
+//     silentRemove(state);
+//     if (isa<ReturnInst>(ki->inst)) {
+//       executeStep(state);
+//     } else
+//       updateStates(ForwardResult(nullptr,addedStates,removedStates));
+//     return;
+//   }
 
-  executeStep(state);
-  return true;
-}
+//   if (state.redundant) {
+//     pauseRedundantState(state);
+//     updateStates(ForwardResult(nullptr,addedStates,removedStates));
+//     return;
+//   }
 
-void Executor::isolatedExecuteStep(ExecutionState &state) {
-  assert(state.isIsolated());
-  KInstruction *ki = state.pc;
+//   executeStep(state);
+// }
 
-  if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
-    addTargetable(state);
-    addCompletedResult(state);
-    silentRemove(state);
-    if (isa<ReturnInst>(ki->inst)) {
-      executeStep(state);
-    } else
-      updateStates(ForwardResult(nullptr,addedStates,removedStates));
-    return;
-  }
-
-  if (state.redundant) {
-    pauseRedundantState(state);
-    updateStates(ForwardResult(nullptr,addedStates,removedStates));
-    return;
-  }
-
-  executeStep(state);
-}
-
-// Was named tryCoverStep
-bool Executor::tryExploreStep(ExecutionState &state,
-                                    ExecutionState &initialState) {
-  KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
-  if (state.isIntegrated() && state.isCriticalPC()) {
-    if (results.find(state.getPCBlock()) == results.end()) {
-      initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
-      updateStates(ForwardResult(nullptr,addedStates,removedStates));
-    } else {
-      if (state.targets.empty() &&
-          state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
-        return false;
-      else
-        composeStep(state);
-    }
-  } else if (state.isIsolated()) {
-    isolatedExecuteStep(state);
-  } else {
-    executeStep(state);
-  }
-  return true;
-}
+// // Was named tryCoverStep
+// bool Executor::tryExploreStep(ExecutionState &state,
+//                                     ExecutionState &initialState) {
+//   KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
+//   if (state.isIntegrated() && state.isCriticalPC()) {
+//     if (results.find(state.getPCBlock()) == results.end()) {
+//       initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
+//       updateStates(ForwardResult(nullptr,addedStates,removedStates));
+//     } else {
+//       if (state.targets.empty() &&
+//           state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
+//         return false;
+//       else
+//         composeStep(state);
+//     }
+//   } else if (state.isIsolated()) {
+//     isolatedExecuteStep(state);
+//   } else {
+//     executeStep(state);
+//   }
+//   return true;
+// }
 
 // Absent in Bidir
 void Executor::executeReturn(ExecutionState &state, KInstruction *ki) {
@@ -5352,38 +5325,6 @@ void Executor::composeStep(ExecutionState &lstate) {
   updateStates(ForwardResult(nullptr,addedStates,removedStates));
 }
 
-// void Executor::targetedRun(ExecutionState &initialState,
-//                                     KBlock *target) {
-//   // Delay init till now so that ticks don't accrue during optimization and
-//   // such.
-//   timers.reset();
-//   states.insert(&initialState);
-
-//   auto targetedSearcher = new TargetedForwardSearcher(target);
-//   searcher.reset(targetedSearcher);
-//   searcher->update(0, {states.begin(), states.end()}, {});
-
-//   // main interpreter loop
-//   KInstruction *terminator = (target ? target->getLastInstruction() : nullptr);
-//   while (!searcher->empty() && !haltExecution) {
-//     ExecutionState &state = searcher->selectState();
-//     KInstruction *ki = state.pc;
-
-//     executeStep(state);
-
-//     if (ki == terminator) {
-//       terminateStateEarly(state, "The target has been found!");
-//       updateStates(&state);
-//       break;
-//     }
-//   }
-
-//   searcher.reset();
-
-//   doDumpStates();
-//   haltExecution = false;
-// }
-
 ActionResult Executor::executeAction(Action a) {
   switch(a.type) {
   case Action::Type::Forward:
@@ -5391,41 +5332,10 @@ ActionResult Executor::executeAction(Action a) {
   case Action::Type::Backward:
     return goBackward(a.state, a.pob);
   case Action::Type::Init:
-    return initBranch(a.location);
+    // Dumb
+    initBranch(a.location);
+    return nullptr;
   }
-}
-
-void Executor::bidirectionalRun() {
-  while (!searcher->empty() && !haltExecution) {
-    auto action = searcher->selectAction();
-    auto result = executeAction(action);
-    updateStates(result);
-    // TODO testgen
-  }
-}
-
-void Executor::bidirectionalRunWrapper(ExecutionState& state) {
-  initialState = state.copy();
-  initialState->stack.clear();
-  initialState->isolated = true;
-
-  timers.reset();
-  states.insert(&state);
-
-  SearcherConfig cfg;
-  cfg.initial_state = &state;
-  // cfg.targets.insert();
-  cfg.executor = this;
-
-  processForest->addRoot(&state);
-  searcher = std::make_unique<ForwardBidirSearcher>(cfg);
-
-  bidirectionalRun();
-  
-  // Все или только из начальной точки?
-  doDumpStates();
-  results.clear();
-  haltExecution = false;
 }
 
 KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
@@ -5541,99 +5451,37 @@ KBlock *Executor::calculateTarget(ExecutionState &state) {
   return nearestBlock;
 }
 
-// void Executor::guidedRun(ExecutionState &initialState) {
-//   // Delay init till now so that ticks don't accrue during optimization and
-//   // such.
-//   timers.reset();
-
-//   states.clear();
-//   addedStates.clear();
-//   removedStates.clear();
-//   states.insert(&initialState);
-
-//   if (usingSeeds) {
-//     seed(initialState);
-//   }
-
-//   searcher = std::make_unique<GuidedForwardSearcher>(constructUserSearcher(*this));
-
-//   std::vector<ExecutionState *> newStates(states.begin(), states.end());
-//   searcher->update(0, newStates, std::vector<ExecutionState *>());
-//   // main interpreter loop
-//   while (!states.empty() && !haltExecution) {
-//     while (!searcher->empty() && !haltExecution) {
-//       ExecutionState &state = searcher->selectState();
-//       if (!state.targets.empty())
-//         executeStep(state);
-//       else if (!tryBoundedExecuteStep(state, MaxCycles - 1)) {
-//         KBlock *target = calculateTarget(state);
-//         if (target) {
-//           state.targets.insert(target);
-//         } else {
-//           pauseState(state);
-//           updateStates(nullptr);
-//         }
-//       }
-//     }
-
-//     if (searcher->empty())
-//       haltExecution = true;
-//   }
-
-//   searcher.reset();
-
-//   doDumpStates();
-//   haltExecution = false;
-// }
-
 void Executor::addState(ExecutionState &state) {
   addedStates.push_back(&state);
 }
 
 void Executor::run(ExecutionState &state) {
-  bidirectionalRunWrapper(state);
-  // std::unique_ptr<ExecutionState> initialState(state.copy());
-  // initialState->stack.clear();
-  // initialState->stackBalance = 0;
-  // initialState->isolated = true;
-  // state.statesForRebuild.push_back(state.copy());
+  initialState = state.copy();
+  initialState->stack.clear();
+  initialState->isolated = true;
 
-  // // Delay init till now so that ticks don't accrue during optimization and such.
-  // timers.reset();
+  timers.reset();
+  states.insert(&state);
 
-  // states.insert(&state);
+  SearcherConfig cfg;
+  cfg.initial_state = &state;
+  // cfg.targets.insert();
+  cfg.executor = this;
 
-  // if (usingSeeds)
-  //   seed(state);
+  processForest->addRoot(&state);
+  searcher = std::make_unique<ForwardBidirSearcher>(cfg);
 
-  // ExecutionStateIsolationRank rank;
-  // searcher = std::make_unique<BinaryRankedSearcher>(
-  //     rank, constructUserSearcher(*this),
-  //     std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
+  while (!searcher->empty() && !haltExecution) {
+    auto action = searcher->selectAction();
+    auto result = executeAction(action);
+    updateStates(result);
+    // TODO testgen
+  }
 
-  // std::vector<ExecutionState *> newStates(states.begin(), states.end());
-  // searcher->update(0, newStates, std::vector<ExecutionState *>());
-
-  // // main interpreter loop
-  // while (!searcher->empty() && !haltExecution) {
-  //   ExecutionState &es = searcher->selectState();
-  //   if (!tryExploreStep(es, *initialState)) {
-  //     KBlock *target = calculateCoverTarget(es);
-  //     if (target) {
-  //       es.targets.insert(target);
-  //       updateStates(&es);
-  //     } else {
-  //        pauseState(es);
-  //        updateStates(nullptr);
-  //     }
-  //   }
-  // }
-
-  // searcher.reset();
-
-  // doDumpStates();
-  // results.clear();
-  // haltExecution = false;
+  // Все или только из начальной точки?
+  doDumpStates();
+  results.clear();
+  haltExecution = false;
 }
 
 void Executor::pauseState(ExecutionState &state) {
@@ -5664,32 +5512,14 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-/// TODO: remove?
-// void Executor::runMainWithTarget(Function *mainFn,
-//                                  BasicBlock *target,
-//                                  int argc,
-//                                  char **argv,
-//                                  char **envp) {
-//   ExecutionState *state = formState(mainFn, argc, argv, envp);
-//   initialState = state->copy();
-//   bindModuleConstants();
-//   KFunction *kf = kmodule->functionMap[mainFn];
-//   KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
-//   runWithTarget(*state, kb);
-//   // hack to clear memory objects
-//   memory = std::make_unique<MemoryManager>(nullptr);
-//   clearGlobal();
-// }
-
-ForwardResult Executor::initBranch(KBlock* loc) {
+void Executor::initBranch(KBlock* loc) {
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
   if (statsTracker)
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
-  states.insert(state);
-  return ForwardResult(state);
+  addedStates.push_back(state);
 }
 
 ForwardResult Executor::goForward(ExecutionState* state) {
@@ -5700,8 +5530,8 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   executeInstruction(*state, ki);
 
   timers.invoke();
-  // if (::dumpStates) dumpStates();
-  // if (::dumpPForest) dumpPForest();
+  if (::dumpStates) dumpStates();
+  if (::dumpPForest) dumpPForest();;
   ForwardResult ret(state,addedStates,removedStates);
   
   states.insert(addedStates.begin(), addedStates.end());

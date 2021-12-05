@@ -310,7 +310,11 @@ private:
   void initializeGlobalObjects(ExecutionState &state);
 
   void stepInstruction(ExecutionState &state);
-  void updateStates(ExecutionState *current);
+  // Refactor _-_
+  void updateStates(ActionResult);
+public:
+  void updateStates(ExecutionState* state);
+private:
   void transferToBasicBlock(llvm::BasicBlock *dst, llvm::BasicBlock *src,
                             ExecutionState &state);
 
@@ -691,7 +695,7 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  InitResult initBranch(KBlock* loc);
+  ForwardResult initBranch(KBlock* loc);
   ForwardResult goForward(ExecutionState* state);
   BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
 

@@ -27,8 +27,6 @@ public:
   virtual void update(ActionResult) = 0;
   
   virtual bool empty() = 0;
-  
-  virtual ~IBidirectionalSearcher() = 0;
 };
 
 class ForwardBidirSearcher : public IBidirectionalSearcher {

@@ -19,6 +19,7 @@
 #include "Memory.h"
 #include "PForest.h"
 #include "ForwardSearcher.h"
+#include "SearcherUtil.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
 
@@ -57,6 +58,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include <memory>
+#include <variant>
 #if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
 #endif
@@ -3310,33 +3312,40 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
-void Executor::updateStates(ExecutionState *current) {
+// TODO: Refactor
+void Executor::updateStates(ActionResult r) {
   if (searcher) {
-    searcher->update(current, addedStates, removedStates);
+    searcher->update(r);
   }
 
-  states.insert(addedStates.begin(), addedStates.end());
-  addedStates.clear();
+  if (std::holds_alternative<ForwardResult>(r)) {
+    states.insert(addedStates.begin(), addedStates.end());
+    addedStates.clear();
 
-  for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
-                                               ie = removedStates.end();
-       it != ie; ++it) {
-    ExecutionState *es = *it;
-    std::set<ExecutionState*>::iterator it2 = states.find(es);
-    assert(it2!=states.end());
-    states.erase(it2);
-    std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 = 
-      seedMap.find(es);
-    if (it3 != seedMap.end())
-      seedMap.erase(it3);
-    processForest->remove(es->ptreeNode);
-    if (es->isIntegrated()) {
-      delete es;
-    } else {
-      isolatedStates.push_back(es);
+    for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
+                                                 ie = removedStates.end();
+         it != ie; ++it) {
+      ExecutionState *es = *it;
+      std::set<ExecutionState *>::iterator it2 = states.find(es);
+      assert(it2 != states.end());
+      states.erase(it2);
+      std::map<ExecutionState *, std::vector<SeedInfo>>::iterator it3 =
+          seedMap.find(es);
+      if (it3 != seedMap.end())
+        seedMap.erase(it3);
+      processForest->remove(es->ptreeNode);
+      if (es->isIntegrated()) {
+        delete es;
+      } else {
+        isolatedStates.push_back(es);
+      }
     }
+    removedStates.clear();
   }
-  removedStates.clear();
+}
+// ultra bad
+void Executor::updateStates(ExecutionState* state) {
+  updateStates(ForwardResult(state));
 }
 
 template <typename SqType, typename TypeIt>
@@ -3468,7 +3477,7 @@ void Executor::doDumpStates() {
   for (const auto &state : states) {
       terminateStateEarly(*state, "Execution halting.");
   }
-  updateStates(nullptr);
+  updateStates(ForwardResult(nullptr, addedStates, removedStates));
   for (auto es : isolatedStates) {
     delete es;
   }
@@ -3503,7 +3512,7 @@ void Executor::seed(ExecutionState &initialState) {
     timers.invoke();
     if (::dumpStates) dumpStates();
     if (::dumpPForest) dumpPForest();
-    updateStates(&state);
+    updateStates(ForwardResult(&state,addedStates,removedStates));
 
     if ((stats::instructions % 1000) == 0) {
       int numSeeds = 0, numStates = 0;
@@ -3548,11 +3557,11 @@ void Executor::executeStep(ExecutionState &state) {
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
 
-  updateStates(&state);
+  updateStates(ForwardResult(&state,addedStates,removedStates));
 
   if (!checkMemoryUsage()) {
     // update searchers when states were terminated early due to memory pressure
-    updateStates(nullptr);
+    updateStates(ForwardResult(nullptr,addedStates,removedStates));
   }
 }
 
@@ -5188,23 +5197,23 @@ void Executor::initializeRoot(ExecutionState &state, KBlock *kb) {
   addedStates.push_back(root);
 }
 
-void Executor::runWithTarget(ExecutionState &state, KBlock *target) {
-  if (pathWriter)
-    state.pathOS = pathWriter->open();
-  if (symPathWriter)
-    state.symPathOS = symPathWriter->open();
+// void Executor::runWithTarget(ExecutionState &state, KBlock *target) {
+//   if (pathWriter)
+//     state.pathOS = pathWriter->open();
+//   if (symPathWriter)
+//     state.symPathOS = symPathWriter->open();
 
-  if (statsTracker)
-    statsTracker->framePushed(state, 0);
+//   if (statsTracker)
+//     statsTracker->framePushed(state, 0);
 
-  processForest = std::make_unique<PForest>();
-  processForest->addRoot(&state);
-  targetedRun(state, target);
-  processForest = nullptr;
+//   processForest = std::make_unique<PForest>();
+//   processForest->addRoot(&state);
+//   targetedRun(state, target);
+//   processForest = nullptr;
 
-  if (statsTracker)
-    statsTracker->done();
-}
+//   if (statsTracker)
+//     statsTracker->done();
+// }
 
 bool Executor::tryBoundedExecuteStep(ExecutionState &state,
                                            unsigned bound) {
@@ -5232,13 +5241,13 @@ void Executor::isolatedExecuteStep(ExecutionState &state) {
     if (isa<ReturnInst>(ki->inst)) {
       executeStep(state);
     } else
-      updateStates(nullptr);
+      updateStates(ForwardResult(nullptr,addedStates,removedStates));
     return;
   }
 
   if (state.redundant) {
     pauseRedundantState(state);
-    updateStates(nullptr);
+    updateStates(ForwardResult(nullptr,addedStates,removedStates));
     return;
   }
 
@@ -5252,7 +5261,7 @@ bool Executor::tryExploreStep(ExecutionState &state,
   if (state.isIntegrated() && state.isCriticalPC()) {
     if (results.find(state.getPCBlock()) == results.end()) {
       initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
-      updateStates(nullptr);
+      updateStates(ForwardResult(nullptr,addedStates,removedStates));
     } else {
       if (state.targets.empty() &&
           state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
@@ -5340,7 +5349,7 @@ void Executor::composeStep(ExecutionState &lstate) {
     }
   }
   removedStates.push_back(&lstate);
-  updateStates(nullptr);
+  updateStates(ForwardResult(nullptr,addedStates,removedStates));
 }
 
 // void Executor::targetedRun(ExecutionState &initialState,
@@ -5390,7 +5399,8 @@ void Executor::bidirectionalRun() {
   while (!searcher->empty() && !haltExecution) {
     auto action = searcher->selectAction();
     auto result = executeAction(action);
-    searcher->update(result);
+    updateStates(result);
+    // TODO testgen
   }
 }
 
@@ -5655,23 +5665,23 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 }
 
 /// TODO: remove?
-void Executor::runMainWithTarget(Function *mainFn,
-                                 BasicBlock *target,
-                                 int argc,
-                                 char **argv,
-                                 char **envp) {
-  ExecutionState *state = formState(mainFn, argc, argv, envp);
-  initialState = state->copy();
-  bindModuleConstants();
-  KFunction *kf = kmodule->functionMap[mainFn];
-  KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
-  runWithTarget(*state, kb);
-  // hack to clear memory objects
-  memory = std::make_unique<MemoryManager>(nullptr);
-  clearGlobal();
-}
+// void Executor::runMainWithTarget(Function *mainFn,
+//                                  BasicBlock *target,
+//                                  int argc,
+//                                  char **argv,
+//                                  char **envp) {
+//   ExecutionState *state = formState(mainFn, argc, argv, envp);
+//   initialState = state->copy();
+//   bindModuleConstants();
+//   KFunction *kf = kmodule->functionMap[mainFn];
+//   KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
+//   runWithTarget(*state, kb);
+//   // hack to clear memory objects
+//   memory = std::make_unique<MemoryManager>(nullptr);
+//   clearGlobal();
+// }
 
-InitResult Executor::initBranch(KBlock* loc) {
+ForwardResult Executor::initBranch(KBlock* loc) {
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5679,7 +5689,7 @@ InitResult Executor::initBranch(KBlock* loc) {
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
   states.insert(state);
-  return InitResult(state);
+  return ForwardResult(state);
 }
 
 ForwardResult Executor::goForward(ExecutionState* state) {
@@ -5697,30 +5707,6 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   states.insert(addedStates.begin(), addedStates.end());
 
   return ret;
-}
-
-void Executor::clearAfterForward() {
-  addedStates.clear();
-
-  for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
-                                               ie = removedStates.end();
-       it != ie; ++it) {
-    ExecutionState *es = *it;
-    std::set<ExecutionState*>::iterator it2 = states.find(es);
-    assert(it2!=states.end());
-    states.erase(it2);
-    std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 = 
-      seedMap.find(es);
-    if (it3 != seedMap.end())
-      seedMap.erase(it3);
-    processForest->remove(es->ptreeNode);
-    if (es->isIntegrated()) {
-      delete es;
-    } else {
-      isolatedStates.push_back(es);
-    }
-  }
-  removedStates.clear();
 }
 
 BackwardResult Executor::goBackward(ExecutionState *state,

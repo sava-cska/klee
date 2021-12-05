@@ -34,7 +34,10 @@ Action ForwardBidirSearcher::selectAction() {
     KBlock* target = ex->calculateCoverTarget(state);
     if(target) {
       state.targets.insert(target);
-      
+      ex->updateStates(&state);
+    } else {
+      ex->pauseState(state);
+      ex->updateStates(nullptr);
     }
   }
   return Action(&state);

@@ -36,9 +36,13 @@ struct ForwardResult {
   // references to vectors?
   std::vector<ExecutionState *> addedStates;
   std::vector<ExecutionState *> removedStates;
-  ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> a,
-                std::vector<ExecutionState *> r)
+  // _-_ In the future probably do not use references
+  ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
+                std::vector<ExecutionState *> &r)
       : current(_s), addedStates(a), removedStates(r){};
+  // Way too easy to mistake for ...
+  ForwardResult(ExecutionState *_s)
+      : current(_s), addedStates({}), removedStates({}){};
 };
 
 struct BackwardResult {
@@ -48,11 +52,6 @@ struct BackwardResult {
       : newPob(_newPob), oldPob(_oldPob) {}
 };
 
-struct InitResult {
-  ExecutionState* state;
-  InitResult(ExecutionState* es) : state(es) {}
-};
-
-using ActionResult = std::variant<ForwardResult, BackwardResult, InitResult>;
+using ActionResult = std::variant<ForwardResult, BackwardResult>;
 
 }

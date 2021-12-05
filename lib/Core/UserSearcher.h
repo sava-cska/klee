@@ -12,13 +12,13 @@
 #include <memory>
 
 namespace klee {
-  class BaseExecutor;
-  class Searcher;
+  class Executor;
+  class ForwardSearcher;
 
   // XXX gross, should be on demand?
   bool userSearcherRequiresMD2U();
 
   void initializeSearchOptions();
 
-  std::unique_ptr<Searcher> constructUserSearcher(BaseExecutor &executor);
+  std::unique_ptr<ForwardSearcher> constructUserSearcher(Executor &executor);
 }

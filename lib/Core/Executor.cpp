@@ -1,4 +1,4 @@
-//===-- BaseExecutor.cpp ------------------------------------------------------===//
+//===-- Executor.cpp ------------------------------------------------------===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -7,8 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "BaseExecutor.h"
+#include "Executor.h"
 
+#include "BidirectionalSearcher.h"
+#include "Composer.h"
 #include "Context.h"
 #include "CoreStats.h"
 #include "ExecutionState.h"
@@ -16,7 +18,7 @@
 #include "ImpliedValue.h"
 #include "Memory.h"
 #include "PForest.h"
-#include "Searcher.h"
+#include "ForwardSearcher.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
 
@@ -54,6 +56,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
+#include <memory>
 #if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
 #endif
@@ -125,6 +128,13 @@ cl::opt<std::string> MaxTime(
              "Set to 0s to disable (default=0s)"),
     cl::init("0s"),
     cl::cat(TerminationCat));
+
+cl::opt<unsigned long long> MaxCycles(
+    "max-cycles",
+    cl::desc("stop execution after visiting some basic block this amount of times (default=1)."),
+    cl::init(1),
+    cl::cat(TerminationCat));
+
 
 cl::opt<bool> UseGEPExpr(
     "use-gep-expr",
@@ -288,32 +298,32 @@ cl::opt<std::string>
 
 /*** Termination criteria options ***/
 
-cl::list<BaseExecutor::TerminateReason> ExitOnErrorType(
+cl::list<Executor::TerminateReason> ExitOnErrorType(
     "exit-on-error-type",
     cl::desc(
         "Stop execution after reaching a specified condition (default=false)"),
     cl::values(
-        clEnumValN(BaseExecutor::Abort, "Abort", "The program crashed"),
-        clEnumValN(BaseExecutor::Assert, "Assert", "An assertion was hit"),
-        clEnumValN(BaseExecutor::BadVectorAccess, "BadVectorAccess",
+        clEnumValN(Executor::Abort, "Abort", "The program crashed"),
+        clEnumValN(Executor::Assert, "Assert", "An assertion was hit"),
+        clEnumValN(Executor::BadVectorAccess, "BadVectorAccess",
                    "Vector accessed out of bounds"),
-        clEnumValN(BaseExecutor::Exec, "Exec",
+        clEnumValN(Executor::Exec, "Exec",
                    "Trying to execute an unexpected instruction"),
-        clEnumValN(BaseExecutor::External, "External",
+        clEnumValN(Executor::External, "External",
                    "External objects referenced"),
-        clEnumValN(BaseExecutor::Free, "Free", "Freeing invalid memory"),
-        clEnumValN(BaseExecutor::Model, "Model", "Memory model limit hit"),
-        clEnumValN(BaseExecutor::Overflow, "Overflow", "An overflow occurred"),
-        clEnumValN(BaseExecutor::Ptr, "Ptr", "Pointer error"),
-        clEnumValN(BaseExecutor::ReadOnly, "ReadOnly", "Write to read-only memory"),
-        clEnumValN(BaseExecutor::ReportError, "ReportError",
+        clEnumValN(Executor::Free, "Free", "Freeing invalid memory"),
+        clEnumValN(Executor::Model, "Model", "Memory model limit hit"),
+        clEnumValN(Executor::Overflow, "Overflow", "An overflow occurred"),
+        clEnumValN(Executor::Ptr, "Ptr", "Pointer error"),
+        clEnumValN(Executor::ReadOnly, "ReadOnly", "Write to read-only memory"),
+        clEnumValN(Executor::ReportError, "ReportError",
                    "klee_report_error called"),
-        clEnumValN(BaseExecutor::User, "User", "Wrong klee_* functions invocation"),
-        clEnumValN(BaseExecutor::UncaughtException, "UncaughtException",
+        clEnumValN(Executor::User, "User", "Wrong klee_* functions invocation"),
+        clEnumValN(Executor::UncaughtException, "UncaughtException",
                    "Exception was not caught"),
-        clEnumValN(BaseExecutor::UnexpectedException, "UnexpectedException",
+        clEnumValN(Executor::UnexpectedException, "UnexpectedException",
                    "An unexpected exception was thrown"),
-        clEnumValN(BaseExecutor::Unhandled, "Unhandled",
+        clEnumValN(Executor::Unhandled, "Unhandled",
                    "Unhandled instruction hit") KLEE_LLVM_CL_VAL_END),
     cl::ZeroOrMore,
     cl::cat(TerminationCat));
@@ -461,7 +471,7 @@ cl::opt<bool> DebugPrintResult(
 extern "C" unsigned dumpStates, dumpPForest;
 unsigned dumpStates = 0, dumpPForest = 0;
 
-const char *BaseExecutor::TerminateReasonNames[] = {
+const char *Executor::TerminateReasonNames[] = {
   [ Abort ] = "abort",
   [ Assert ] = "assert",
   [ BadVectorAccess ] = "bad_vector_access",
@@ -479,7 +489,7 @@ const char *BaseExecutor::TerminateReasonNames[] = {
   [ Unhandled ] = "xxx",
 };
 
-BaseExecutor::BaseExecutor(LLVMContext &ctx, const InterpreterOptions &opts,
+Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                    InterpreterHandler *ih)
     : Interpreter(opts), interpreterHandler(ih), searcher(nullptr),
       externalDispatcher(new ExternalDispatcher(ctx)), statsTracker(nullptr),
@@ -538,10 +548,11 @@ BaseExecutor::BaseExecutor(LLVMContext &ctx, const InterpreterOptions &opts,
                  error.c_str());
     }
   }
+  Composer::executor = this;
 }
 
 llvm::Module *
-BaseExecutor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
+Executor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
                     const ModuleOptions &opts) {
   assert(!kmodule && !modules.empty() &&
          "can only register one module"); // XXX gross
@@ -607,7 +618,7 @@ BaseExecutor::setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
 
 /***/
 
-void BaseExecutor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
+void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
                                       const Constant *c, 
                                       unsigned offset) {
   const auto targetData = kmodule->targetData.get();
@@ -653,7 +664,7 @@ void BaseExecutor::initializeGlobalObject(ExecutionState &state, ObjectState *os
   }
 }
 
-MemoryObject * BaseExecutor::addExternalObject(ExecutionState &state, 
+MemoryObject * Executor::addExternalObject(ExecutionState &state, 
                                            void *addr, unsigned size, 
                                            bool isReadOnly) {
   auto mo = memory->allocateFixed(reinterpret_cast<std::uint64_t>(addr),
@@ -669,7 +680,7 @@ MemoryObject * BaseExecutor::addExternalObject(ExecutionState &state,
 
 extern void *__dso_handle __attribute__ ((__weak__));
 
-void BaseExecutor::initializeGlobals(ExecutionState &state) {
+void Executor::initializeGlobals(ExecutionState &state) {
   // allocate and initialize globals, done in two passes since we may
   // need address of a global in order to initialize some other one.
 
@@ -683,7 +694,7 @@ void BaseExecutor::initializeGlobals(ExecutionState &state) {
   initializeGlobalObjects(state);
 }
 
-void BaseExecutor::allocateGlobalObjects(ExecutionState &state) {
+void Executor::allocateGlobalObjects(ExecutionState &state) {
   const Module *m = kmodule->module.get();
 
   if (m->getModuleInlineAsm() != "")
@@ -789,7 +800,7 @@ void BaseExecutor::allocateGlobalObjects(ExecutionState &state) {
   }
 }
 
-void BaseExecutor::initializeGlobalAlias(const llvm::Constant *c) {
+void Executor::initializeGlobalAlias(const llvm::Constant *c) {
   // aliasee may either be a global value or constant expression
   const auto *ga = dyn_cast<GlobalAlias>(c);
   if (ga) {
@@ -825,14 +836,14 @@ void BaseExecutor::initializeGlobalAlias(const llvm::Constant *c) {
   }
 }
 
-void BaseExecutor::initializeGlobalAliases() {
+void Executor::initializeGlobalAliases() {
   const Module *m = kmodule->module.get();
   for (const GlobalAlias &a : m->aliases()) {
     initializeGlobalAlias(&a);
   }
 }
 
-void BaseExecutor::initializeGlobalObjects(ExecutionState &state) {
+void Executor::initializeGlobalObjects(ExecutionState &state) {
   const Module *m = kmodule->module.get();
 
   // remember constant objects to initialise their counter part for external
@@ -878,7 +889,7 @@ void BaseExecutor::initializeGlobalObjects(ExecutionState &state) {
   }
 }
 
-bool BaseExecutor::branchingPermitted(const ExecutionState &state) const {
+bool Executor::branchingPermitted(const ExecutionState &state) const {
   if ((MaxMemoryInhibit && atMemoryLimit) ||
       state.forkDisabled ||
       inhibitForking ||
@@ -899,7 +910,7 @@ bool BaseExecutor::branchingPermitted(const ExecutionState &state) const {
   return true;
 }
 
-void BaseExecutor::branch(ExecutionState &state, 
+void Executor::branch(ExecutionState &state, 
                       const std::vector< ref<Expr> > &conditions,
                       std::vector<ExecutionState*> &result) {
   TimerStatIncrementer timer(stats::forkTime);
@@ -981,8 +992,8 @@ void BaseExecutor::branch(ExecutionState &state,
       addConstraint(*result[i], conditions[i]);
 }
 
-BaseExecutor::StatePair 
-BaseExecutor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
+Executor::StatePair 
+Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   Solver::Validity res;
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
     seedMap.find(&current);
@@ -1202,7 +1213,7 @@ BaseExecutor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal
   }
 }
 
-void BaseExecutor::addConstraint(ExecutionState &state, ref<Expr> condition) {
+void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
     if (!CE->isTrue())
       llvm::report_fatal_error("attempt to add invalid constraint");
@@ -1237,7 +1248,7 @@ void BaseExecutor::addConstraint(ExecutionState &state, ref<Expr> condition) {
                                  ConstantExpr::alloc(1, Expr::Bool));
 }
 
-const Cell &BaseExecutor::eval(const KInstruction *ki, unsigned index,
+const Cell &Executor::eval(const KInstruction *ki, unsigned index,
                            ExecutionState &state, bool isSymbolic) {
   assert(index < ki->inst->getNumOperands());
   int vnumber = ki->operands[index];
@@ -1260,17 +1271,17 @@ const Cell &BaseExecutor::eval(const KInstruction *ki, unsigned index,
   }
 }
 
-void BaseExecutor::bindLocal(KInstruction *target, ExecutionState &state, 
+void Executor::bindLocal(KInstruction *target, ExecutionState &state, 
                          ref<Expr> value) {
   getDestCell(state, target).value = value;
 }
 
-void BaseExecutor::bindArgument(KFunction *kf, unsigned index, 
+void Executor::bindArgument(KFunction *kf, unsigned index, 
                             ExecutionState &state, ref<Expr> value) {
   getArgumentCell(state, kf, index).value = value;
 }
 
-ref<Expr> BaseExecutor::toUnique(const ExecutionState &state, 
+ref<Expr> Executor::toUnique(const ExecutionState &state, 
                              ref<Expr> &e) {
   ref<Expr> result = e;
 
@@ -1297,7 +1308,7 @@ ref<Expr> BaseExecutor::toUnique(const ExecutionState &state,
 /* Concretize the given expression, and return a possible constant value. 
    'reason' is just a documentation string stating the reason for concretization. */
 ref<klee::ConstantExpr> 
-BaseExecutor::toConstant(ExecutionState &state, 
+Executor::toConstant(ExecutionState &state, 
                      ref<Expr> e,
                      const char *reason) {
   e = ConstraintManager::simplifyExpr(state.constraints, e);
@@ -1326,7 +1337,7 @@ BaseExecutor::toConstant(ExecutionState &state,
   return value;
 }
 
-void BaseExecutor::executeGetValue(ExecutionState &state,
+void Executor::executeGetValue(ExecutionState &state,
                                ref<Expr> e,
                                KInstruction *target) {
   e = ConstraintManager::simplifyExpr(state.constraints, e);
@@ -1373,7 +1384,7 @@ void BaseExecutor::executeGetValue(ExecutionState &state,
   }
 }
 
-void BaseExecutor::printDebugInstructions(ExecutionState &state) {
+void Executor::printDebugInstructions(ExecutionState &state) {
   // print nothing if option unset
   if (DebugPrintInstructions.getBits() == 0)
     return;
@@ -1414,7 +1425,7 @@ void BaseExecutor::printDebugInstructions(ExecutionState &state) {
   }
 }
 
-void BaseExecutor::stepInstruction(ExecutionState &state) {
+void Executor::stepInstruction(ExecutionState &state) {
   printDebugInstructions(state);
   if (statsTracker)
     statsTracker->stepInstruction(state);
@@ -1452,7 +1463,7 @@ static inline const llvm::fltSemantics *fpWidthToSemantics(unsigned width) {
   }
 }
 
-MemoryObject *BaseExecutor::serializeLandingpad(ExecutionState &state,
+MemoryObject *Executor::serializeLandingpad(ExecutionState &state,
                                             const llvm::LandingPadInst &lpi,
                                             bool &stateTerminated) {
   stateTerminated = false;
@@ -1558,7 +1569,7 @@ MemoryObject *BaseExecutor::serializeLandingpad(ExecutionState &state,
   return mo;
 }
 
-void BaseExecutor::unwindToNextLandingpad(ExecutionState &state) {
+void Executor::unwindToNextLandingpad(ExecutionState &state) {
   UnwindingInformation *ui = state.unwindingInformation.get();
   assert(ui && "unwinding without unwinding information");
 
@@ -1668,7 +1679,7 @@ void BaseExecutor::unwindToNextLandingpad(ExecutionState &state) {
   }
 }
 
-ref<klee::ConstantExpr> BaseExecutor::getEhTypeidFor(ref<Expr> type_info) {
+ref<klee::ConstantExpr> Executor::getEhTypeidFor(ref<Expr> type_info) {
   // FIXME: Handling getEhTypeidFor is non-deterministic and depends on the
   //        order states have been processed and executed.
   auto eh_type_iterator =
@@ -1684,7 +1695,7 @@ ref<klee::ConstantExpr> BaseExecutor::getEhTypeidFor(ref<Expr> type_info) {
   return res;
 }
 
-void BaseExecutor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
+void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
                            std::vector<ref<Expr>> &arguments) {
   if(MaxRec && state.stack.size() > MaxRec) {
     terminateStateOnExit(state);
@@ -1980,7 +1991,7 @@ void BaseExecutor::executeCall(ExecutionState &state, KInstruction *ki, Function
   }
 }
 
-void BaseExecutor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
+void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
                                     ExecutionState &state) {
   // Note that in general phi nodes can reuse phi values from the same
   // block but the incoming value is the eval() result *before* the
@@ -2006,7 +2017,7 @@ void BaseExecutor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
   }
 }
 
-void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
+void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
     // Control flow
@@ -2131,7 +2142,7 @@ void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       ref<Expr> cond = eval(ki, 0, state).value;
 
       cond = optimizer.optimizeExpr(cond, false);
-      BaseExecutor::StatePair branches = fork(state, cond, false);
+      Executor::StatePair branches = fork(state, cond, false);
 
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -3299,7 +3310,7 @@ void BaseExecutor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
-void BaseExecutor::updateStates(ExecutionState *current) {
+void Executor::updateStates(ExecutionState *current) {
   if (searcher) {
     searcher->update(current, addedStates, removedStates);
   }
@@ -3329,7 +3340,7 @@ void BaseExecutor::updateStates(ExecutionState *current) {
 }
 
 template <typename SqType, typename TypeIt>
-void BaseExecutor::computeOffsetsSeqTy(KGEPInstruction *kgepi,
+void Executor::computeOffsetsSeqTy(KGEPInstruction *kgepi,
                                    ref<ConstantExpr> &constantOffset,
                                    uint64_t index, const TypeIt it) {
   const auto *sq = cast<SqType>(*it);
@@ -3348,7 +3359,7 @@ void BaseExecutor::computeOffsetsSeqTy(KGEPInstruction *kgepi,
 }
 
 template <typename TypeIt>
-void BaseExecutor::computeOffsets(KGEPInstruction *kgepi, TypeIt ib, TypeIt ie) {
+void Executor::computeOffsets(KGEPInstruction *kgepi, TypeIt ib, TypeIt ie) {
   ref<ConstantExpr> constantOffset =
     ConstantExpr::alloc(0, Context::get().getPointerWidth());
   uint64_t index = 1;
@@ -3377,7 +3388,7 @@ void BaseExecutor::computeOffsets(KGEPInstruction *kgepi, TypeIt ib, TypeIt ie) 
   kgepi->offset = constantOffset->getZExtValue();
 }
 
-void BaseExecutor::bindInstructionConstants(KInstruction *KI) {
+void Executor::bindInstructionConstants(KInstruction *KI) {
   if (GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(KI->inst)) {
     KGEPInstruction *kgepi = static_cast<KGEPInstruction *>(KI);
     computeOffsets(kgepi, gep_type_begin(gepi), gep_type_end(gepi));
@@ -3392,7 +3403,7 @@ void BaseExecutor::bindInstructionConstants(KInstruction *KI) {
   }
 }
 
-void BaseExecutor::bindModuleConstants() {
+void Executor::bindModuleConstants() {
   for (auto &kfp : kmodule->functions) {
     KFunction *kf = kfp.get();
     for (unsigned i=0; i<kf->numInstructions; ++i)
@@ -3407,7 +3418,7 @@ void BaseExecutor::bindModuleConstants() {
   }
 }
 
-bool BaseExecutor::checkMemoryUsage() {
+bool Executor::checkMemoryUsage() {
   if (!MaxMemory) return true;
 
   // We need to avoid calling GetTotalMallocUsage() often because it
@@ -3449,7 +3460,7 @@ bool BaseExecutor::checkMemoryUsage() {
   return false;
 }
 
-void BaseExecutor::doDumpStates() {
+void Executor::doDumpStates() {
   if (!DumpStatesOnHalt || states.empty())
     return;
 
@@ -3463,7 +3474,7 @@ void BaseExecutor::doDumpStates() {
   }
 }
 
-void BaseExecutor::seed(ExecutionState &initialState) {
+void Executor::seed(ExecutionState &initialState) {
   std::vector<SeedInfo> &v = seedMap[&initialState];
 
   for (std::vector<KTest*>::const_iterator it = usingSeeds->begin(),
@@ -3526,7 +3537,7 @@ void BaseExecutor::seed(ExecutionState &initialState) {
   }
 }
 
-void BaseExecutor::executeStep(ExecutionState &state) {
+void Executor::executeStep(ExecutionState &state) {
   KInstruction *ki = state.pc;
 
   stepInstruction(state);
@@ -3545,11 +3556,11 @@ void BaseExecutor::executeStep(ExecutionState &state) {
   }
 }
 
-void BaseExecutor::silentRemove(ExecutionState &state) {
+void Executor::silentRemove(ExecutionState &state) {
   removedStates.push_back(&state);
 }
 
-std::string BaseExecutor::getAddressInfo(ExecutionState &state, 
+std::string Executor::getAddressInfo(ExecutionState &state, 
                                      ref<Expr> address) const {
   std::string Str;
   llvm::raw_string_ostream info(Str);
@@ -3601,7 +3612,7 @@ std::string BaseExecutor::getAddressInfo(ExecutionState &state,
   return info.str();
 }
 
-void BaseExecutor::terminateState(ExecutionState &state) {
+void Executor::terminateState(ExecutionState &state) {
   if (replayKTest && replayPosition!=replayKTest->numObjects) {
     klee_warning_once(replayKTest,
                       "replay did not consume all objects in test input.");
@@ -3634,7 +3645,7 @@ void BaseExecutor::terminateState(ExecutionState &state) {
   }
 }
 
-void BaseExecutor::terminateStateEarly(ExecutionState &state, 
+void Executor::terminateStateEarly(ExecutionState &state, 
                                    const Twine &message) {
   if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
@@ -3643,7 +3654,7 @@ void BaseExecutor::terminateStateEarly(ExecutionState &state,
   terminateState(state);
 }
 
-void BaseExecutor::terminateStateOnExit(ExecutionState &state) {
+void Executor::terminateStateOnExit(ExecutionState &state) {
   if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
@@ -3651,7 +3662,7 @@ void BaseExecutor::terminateStateOnExit(ExecutionState &state) {
   terminateState(state);
 }
 
-void BaseExecutor::terminateStateOnTerminator(ExecutionState &state) {
+void Executor::terminateStateOnTerminator(ExecutionState &state) {
   if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
       (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
@@ -3660,7 +3671,7 @@ void BaseExecutor::terminateStateOnTerminator(ExecutionState &state) {
   terminateState(state);
 }
 
-const InstructionInfo & BaseExecutor::getLastNonKleeInternalInstruction(const ExecutionState &state,
+const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const ExecutionState &state,
     Instruction ** lastInstruction) {
   // unroll the stack of the applications state and find
   // the last instruction which is not inside a KLEE internal function
@@ -3703,7 +3714,7 @@ const InstructionInfo & BaseExecutor::getLastNonKleeInternalInstruction(const Ex
   return *ii;
 }
 
-bool BaseExecutor::shouldExitOn(enum TerminateReason termReason) {
+bool Executor::shouldExitOn(enum TerminateReason termReason) {
   std::vector<TerminateReason>::iterator s = ExitOnErrorType.begin();
   std::vector<TerminateReason>::iterator e = ExitOnErrorType.end();
 
@@ -3714,7 +3725,7 @@ bool BaseExecutor::shouldExitOn(enum TerminateReason termReason) {
   return false;
 }
 
-void BaseExecutor::terminateStateOnError(ExecutionState &state,
+void Executor::terminateStateOnError(ExecutionState &state,
                                      const llvm::Twine &messaget,
                                      enum TerminateReason termReason,
                                      const char *suffix,
@@ -3768,7 +3779,7 @@ void BaseExecutor::terminateStateOnError(ExecutionState &state,
     haltExecution = true;
 }
 
-void BaseExecutor::terminateStateOnOutOfBound(ExecutionState &state, ref<Expr> ptr) {
+void Executor::terminateStateOnOutOfBound(ExecutionState &state, ref<Expr> ptr) {
   terminateStateOnError(state, "memory error: out of bound pointer", Ptr,
                         NULL/*, getAddressInfo(state, ptr)*/);
 }
@@ -3782,7 +3793,7 @@ static std::set<std::string> okExternals(okExternalsList,
                                          okExternalsList + 
                                          (sizeof(okExternalsList)/sizeof(okExternalsList[0])));
 
-void BaseExecutor::callExternalFunction(ExecutionState &state,
+void Executor::callExternalFunction(ExecutionState &state,
                                     KInstruction *target,
                                     Function *function,
                                     std::vector< ref<Expr> > &arguments) {
@@ -3914,7 +3925,7 @@ void BaseExecutor::callExternalFunction(ExecutionState &state,
 
 /***/
 
-ref<Expr> BaseExecutor::replaceReadWithSymbolic(ExecutionState &state, 
+ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state, 
                                             ref<Expr> e) {
   unsigned n = interpreterOpts.MakeConcreteSymbolic;
   if (!n || replayKTest || replayPath)
@@ -3941,7 +3952,7 @@ ref<Expr> BaseExecutor::replaceReadWithSymbolic(ExecutionState &state,
   return res;
 }
 
-ObjectState *BaseExecutor::bindObjectInState(ExecutionState &state, 
+ObjectState *Executor::bindObjectInState(ExecutionState &state, 
                                          const MemoryObject *mo,
                                          bool isAlloca,
                                          const Array *array) {
@@ -3958,7 +3969,7 @@ ObjectState *BaseExecutor::bindObjectInState(ExecutionState &state,
   return os;
 }
 
-void BaseExecutor::executeAlloc(ExecutionState &state,
+void Executor::executeAlloc(ExecutionState &state,
                             ref<Expr> size,
                             bool isLocal,
                             KInstruction *target,
@@ -4078,7 +4089,7 @@ void BaseExecutor::executeAlloc(ExecutionState &state,
   }
 }
 
-void BaseExecutor::executeFree(ExecutionState &state,
+void Executor::executeFree(ExecutionState &state,
                            ref<Expr> address,
                            KInstruction *target) {
   address = optimizer.optimizeExpr(address, true);
@@ -4091,7 +4102,7 @@ void BaseExecutor::executeFree(ExecutionState &state,
     ExactResolutionList rl;
     resolveExact(*zeroPointer.second, address, rl, "free");
     
-    for (BaseExecutor::ExactResolutionList::iterator it = rl.begin(), 
+    for (Executor::ExactResolutionList::iterator it = rl.begin(), 
            ie = rl.end(); it != ie; ++it) {
       const MemoryObject *mo = it->first.first;
       if (it->second->isolated && (mo->isGlobal || mo->isLocal)) {
@@ -4110,7 +4121,7 @@ void BaseExecutor::executeFree(ExecutionState &state,
   }
 }
 
-void BaseExecutor::resolveExact(ExecutionState &state,
+void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
                             ExactResolutionList &results, 
                             const std::string &name,
@@ -4124,7 +4135,7 @@ void BaseExecutor::resolveExact(ExecutionState &state,
   ExecutionState *unbound = &state;
   for (ResolutionList::iterator it = rl.begin(), ie = rl.end(); 
        it != ie; ++it) {
-    const MemoryObject *mo = it->first; 
+    
     ref<Expr> inBounds = EqExpr::create(p, it->first->getBaseExpr());
 
     StatePair branches = fork(*unbound, inBounds, true);
@@ -4149,7 +4160,7 @@ void BaseExecutor::resolveExact(ExecutionState &state,
   }
 }
 
-void BaseExecutor::executeMemoryOperation(ExecutionState &state,
+void Executor::executeMemoryOperation(ExecutionState &state,
                                       MemoryOperation operation,
                                       ref<Expr> address,
                                       ref<Expr> value /* def if write*/,
@@ -4367,14 +4378,14 @@ void BaseExecutor::executeMemoryOperation(ExecutionState &state,
   }
 }
 
-ObjectPair BaseExecutor::lazyInstantiate(ExecutionState &state, bool isAlloca, const MemoryObject *mo) {
+ObjectPair Executor::lazyInstantiate(ExecutionState &state, bool isAlloca, const MemoryObject *mo) {
   executeMakeSymbolic(state, mo, "lazy_instantiation", isAlloca);
   ObjectPair op;
   state.addressSpace.resolveOne(mo->getBaseConstantExpr().get(), op);
   return op;
 }
 
-ObjectPair BaseExecutor::lazyInstantiateAlloca(ExecutionState &state,
+ObjectPair Executor::lazyInstantiateAlloca(ExecutionState &state,
                                      const MemoryObject *mo,
                                      KInstruction *target,
                                      bool isLocal) {
@@ -4383,7 +4394,7 @@ ObjectPair BaseExecutor::lazyInstantiateAlloca(ExecutionState &state,
   return op;
 }
 
-ObjectPair BaseExecutor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
+ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
   MemoryObject *mo =
       memory->allocate(size, false, /*isGlobal=*/false,
@@ -4391,7 +4402,7 @@ ObjectPair BaseExecutor::lazyInstantiateVariable(ExecutionState &state, ref<Expr
   return lazyInstantiate(state, /*isLocal=*/false, mo);
 }
 
-ObjectPair BaseExecutor::transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
+ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
   auto op = liCache.find(address);
   if (op != liCache.end()) {
@@ -4409,7 +4420,7 @@ ObjectPair BaseExecutor::transparentLazyInstantiateVariable(ExecutionState &stat
   return result;
 }
 
-const Array * BaseExecutor::makeArray(ExecutionState &state,
+const Array * Executor::makeArray(ExecutionState &state,
                                       const uint64_t size,
                                       const std::string &name,
                                       bool isForeign,
@@ -4425,21 +4436,21 @@ const Array * BaseExecutor::makeArray(ExecutionState &state,
   return array;
 }
 
-const Array * BaseExecutor::makeArray(ExecutionState &state,
+const Array * Executor::makeArray(ExecutionState &state,
                                       const uint64_t size,
                                       const std::string &name,
                                       bool isForeign) {
   return makeArray(state, size, name, isForeign, ref<Expr>());
 }
 
-const Array * BaseExecutor::makeArray(ExecutionState &state,
+const Array * Executor::makeArray(ExecutionState &state,
                                       const uint64_t size,
                                       const std::string &name,
                                       ref<Expr> liSource) {
   return makeArray(state, size, name, false, liSource);
 }
 
-void BaseExecutor::executeMakeSymbolic(ExecutionState &state,
+void Executor::executeMakeSymbolic(ExecutionState &state,
                                    const MemoryObject *mo,
                                    const std::string &name,
                                    bool isAlloca,
@@ -4513,7 +4524,7 @@ void BaseExecutor::executeMakeSymbolic(ExecutionState &state,
 }
 
 /***/
-ExecutionState* BaseExecutor::formState(Function *f,
+ExecutionState* Executor::formState(Function *f,
                                     int argc,
                                     char **argv,
                                     char **envp) {
@@ -4597,12 +4608,12 @@ ExecutionState* BaseExecutor::formState(Function *f,
   return state;
 }
 
-void BaseExecutor::clearGlobal() {
+void Executor::clearGlobal() {
   globalObjects.clear();
   globalAddresses.clear();
 }
 
-void BaseExecutor:: prepareSymbolicValue(ExecutionState &state, KInstruction *target) {
+void Executor:: prepareSymbolicValue(ExecutionState &state, KInstruction *target) {
   Instruction *allocSite = target->inst;
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
@@ -4622,12 +4633,12 @@ void BaseExecutor:: prepareSymbolicValue(ExecutionState &state, KInstruction *ta
   }
 }
 
-void BaseExecutor:: prepareSymbolicRegister(ExecutionState &state, StackFrame &sf, unsigned regNum) {
+void Executor:: prepareSymbolicRegister(ExecutionState &state, StackFrame &sf, unsigned regNum) {
   KInstruction *allocInst = sf.kf->reg2inst[regNum];
   prepareSymbolicValue(state, allocInst);
 }
 
-void BaseExecutor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
+void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
   for (auto ai = kf->function->arg_begin(), ae = kf->function->arg_end(); ai != ae; ai++) {
     Argument *arg = *&ai;
     uint64_t size = kmodule->targetData->getTypeStoreSize(arg->getType());
@@ -4637,7 +4648,7 @@ void BaseExecutor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
   }
 }
 
-ref<Expr> BaseExecutor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
+ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
   MemoryObject *mo =
         memory->allocate(size, true, /*isGlobal=*/false,
                           value, /*allocationAlignment=*/8);
@@ -4657,7 +4668,7 @@ ref<Expr> BaseExecutor::makeSymbolicValue(Value *value, ExecutionState &state, u
   return result;
 }
 
-void BaseExecutor::runFunctionAsMain(Function *f,
+void Executor::runFunctionAsMain(Function *f,
                int argc,
                char **argv,
                char **envp) {
@@ -4686,17 +4697,17 @@ void BaseExecutor::runFunctionAsMain(Function *f,
     statsTracker->done();
 }
 
-unsigned BaseExecutor::getPathStreamID(const ExecutionState &state) {
+unsigned Executor::getPathStreamID(const ExecutionState &state) {
   assert(pathWriter);
   return state.pathOS.getID();
 }
  
-unsigned BaseExecutor::getSymbolicPathStreamID(const ExecutionState &state) {
+unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state) {
   assert(symPathWriter);
   return state.symPathOS.getID();
 }
 
-void BaseExecutor::getConstraintLog(const ExecutionState &state, std::string &res,
+void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
                                 Interpreter::LogType logFormat) {
 
   switch (logFormat) {
@@ -4726,11 +4737,11 @@ void BaseExecutor::getConstraintLog(const ExecutionState &state, std::string &re
   } break;
 
   default:
-    klee_warning("BaseExecutor::getConstraintLog() : Log format not supported!");
+    klee_warning("Executor::getConstraintLog() : Log format not supported!");
   }
 }
 
-void BaseExecutor::logState(ExecutionState& state, int id,
+void Executor::logState(ExecutionState& state, int id,
 			std::unique_ptr<llvm::raw_fd_ostream>& f) {
   *f << "State number " << state.id << ". Test number: " << id << "\n\n";
   *f << state.symbolics.size() << " symbolics total. " << "Symbolics:\n";
@@ -4756,7 +4767,7 @@ void BaseExecutor::logState(ExecutionState& state, int id,
   }
 }
 
-int BaseExecutor::resolveLazyInstantiation(ExecutionState &state) {
+int Executor::resolveLazyInstantiation(ExecutionState &state) {
   int status = 0;
   for (auto i : state.symbolics) {
     if (!i.first->isLazyInstantiated()) {
@@ -4791,7 +4802,7 @@ int BaseExecutor::resolveLazyInstantiation(ExecutionState &state) {
   return status;
 }
 
-void BaseExecutor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
+void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
   // Ugly hotfix
   std::map<size_t, std::vector<Offset>> ofst;
   for(size_t i = 0; i < state.symbolics.size(); i++) {
@@ -4829,7 +4840,7 @@ void BaseExecutor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
 }
 
  
-bool BaseExecutor::getSymbolicSolution(const ExecutionState &state,
+bool Executor::getSymbolicSolution(const ExecutionState &state,
                                        TestCase &res) {
   solver->setTimeout(coreSolverTimeout);
 
@@ -4892,12 +4903,12 @@ bool BaseExecutor::getSymbolicSolution(const ExecutionState &state,
   return true;
 }
 
-void BaseExecutor::getCoveredLines(const ExecutionState &state,
+void Executor::getCoveredLines(const ExecutionState &state,
                                std::map<const std::string*, std::set<unsigned> > &res) {
   res = state.coveredLines;
 }
 
-void BaseExecutor::doImpliedValueConcretization(ExecutionState &state,
+void Executor::doImpliedValueConcretization(ExecutionState &state,
                                             ref<Expr> e,
                                             ref<ConstantExpr> value) {
   abort(); // FIXME: Broken until we sort out how to do the write back.
@@ -4931,11 +4942,11 @@ void BaseExecutor::doImpliedValueConcretization(ExecutionState &state,
   }
 }
 
-Expr::Width BaseExecutor::getWidthForLLVMType(llvm::Type *type) const {
+Expr::Width Executor::getWidthForLLVMType(llvm::Type *type) const {
   return kmodule->targetData->getTypeSizeInBits(type);
 }
 
-size_t BaseExecutor::getAllocationAlignment(const llvm::Value *allocSite) const {
+size_t Executor::getAllocationAlignment(const llvm::Value *allocSite) const {
   // FIXME: 8 was the previous default. We shouldn't hard code this
   // and should fetch the default from elsewhere.
   const size_t forcedAlignment = 8;
@@ -5006,7 +5017,7 @@ size_t BaseExecutor::getAllocationAlignment(const llvm::Value *allocSite) const 
   return alignment;
 }
 
-void BaseExecutor::prepareForEarlyExit() {
+void Executor::prepareForEarlyExit() {
   if (statsTracker) {
     // Make sure stats get flushed out
     statsTracker->done();
@@ -5014,7 +5025,7 @@ void BaseExecutor::prepareForEarlyExit() {
 }
 
 /// Returns the errno location in memory
-int *BaseExecutor::getErrnoLocation(const ExecutionState &state) const {
+int *Executor::getErrnoLocation(const ExecutionState &state) const {
 #if !defined(__APPLE__) && !defined(__FreeBSD__)
   /* From /usr/include/errno.h: it [errno] is a per-thread variable. */
   return __errno_location();
@@ -5023,22 +5034,22 @@ int *BaseExecutor::getErrnoLocation(const ExecutionState &state) const {
 #endif
 }
 
-TimingSolver *BaseExecutor::getSolver() {
+TimingSolver *Executor::getSolver() {
   return solver.get();
 }
 
-time::Span BaseExecutor::getSolverTimeout() {
+time::Span Executor::getSolverTimeout() {
   return coreSolverTimeout;
 }
 
-KInstruction *BaseExecutor::getKInst(llvm::Instruction *inst) {
+KInstruction *Executor::getKInst(llvm::Instruction *inst) {
   llvm::Function *caller = inst->getFunction();
   KFunction *kf = kmodule->functionMap[caller];
   assert(kf && kf->instructionMap.find(inst) != kf->instructionMap.end());
   return kf->instructionMap[inst];
 }
 
-KBlock *BaseExecutor::getKBlock(llvm::BasicBlock & bb) {
+KBlock *Executor::getKBlock(llvm::BasicBlock & bb) {
   llvm::Function *F  = bb.getParent();
   assert(F && this->kmodule->functionMap.find(F) != this->kmodule->functionMap.end());
   klee::KFunction *KF = this->kmodule->functionMap[F];
@@ -5048,20 +5059,20 @@ KBlock *BaseExecutor::getKBlock(llvm::BasicBlock & bb) {
   return KB;
 }
 
-const KFunction *BaseExecutor::getKFunction(const llvm::Function *f) const {
+const KFunction *Executor::getKFunction(const llvm::Function *f) const {
   const auto kfIt = kmodule->functionMap.find(const_cast<Function*>(f));
   return (kfIt == kmodule->functionMap.end()) ? nullptr : kfIt->second;
 }
 
-PForest *BaseExecutor::getProcessForest() { return processForest.get(); }
+PForest *Executor::getProcessForest() { return processForest.get(); }
 
-ArrayManager *BaseExecutor::getArrayManager() { return &arrayManager; }
+ArrayManager *Executor::getArrayManager() { return &arrayManager; }
 
-MemoryManager *BaseExecutor::getMemoryManager() { return memory.get(); }
+MemoryManager *Executor::getMemoryManager() { return memory.get(); }
 
-ExprOptimizer *BaseExecutor::getOptimizer() { return &optimizer; }
+ExprOptimizer *Executor::getOptimizer() { return &optimizer; }
 
-void BaseExecutor::dumpPForest() {
+void Executor::dumpPForest() {
   if (!::dumpPForest) return;
 
   char name[32];
@@ -5074,7 +5085,7 @@ void BaseExecutor::dumpPForest() {
   ::dumpPForest = 0;
 }
 
-void BaseExecutor::dumpStates() {
+void Executor::dumpStates() {
   if (!::dumpStates) return;
 
   auto os = interpreterHandler->openOutputFile("states.txt");
@@ -5120,6 +5131,624 @@ void BaseExecutor::dumpStates() {
   ::dumpStates = 0;
 }
 
-bool BaseExecutor::isGEPExpr(ref<Expr> expr) {
+bool Executor::isGEPExpr(ref<Expr> expr) {
   return gepExprBases.find(expr) != gepExprBases.end();
+}
+
+
+void Executor::addCompletedResult(ExecutionState &state) {
+  results[state.getInitPCBlock()]
+      .completedStates[state.getPrevPCBlock()]
+      .insert(&state);
+}
+
+void Executor::addErroneousResult(ExecutionState &state) {
+  results[state.getInitPCBlock()]
+      .erroneousStates[state.getPrevPCBlock()]
+      .insert(&state);
+}
+
+void Executor::addHistoryResult(ExecutionState &state) {
+  results[state.getInitPCBlock()].history[state.getPrevPCBlock()].insert(
+      state.level.begin(), state.level.end());
+  results[state.getInitPCBlock()]
+      .transitionHistory[state.getPrevPCBlock()]
+      .insert(state.transitionLevel.begin(), state.transitionLevel.end());
+}
+
+void Executor::addTargetable(ExecutionState &state) {
+  assert(state.isIsolated());
+  targetableStates[state.getInitPCBlock()->getParent()].insert(&state);
+}
+
+void Executor::removeTargetable(ExecutionState &state) {
+  assert(state.isIsolated());
+  std::unordered_set<ExecutionState *> &sts =
+      targetableStates[state.getInitPCBlock()->getParent()];
+  std::unordered_set<ExecutionState *>::iterator it = sts.find(&state);
+  if (it != sts.end()) {
+    sts.erase(it);
+  }
+}
+
+bool Executor::isTargetable(ExecutionState &state) {
+  assert(state.isIsolated());
+  std::unordered_set<ExecutionState *> &sts =
+      targetableStates[state.getInitPCBlock()->getParent()];
+  std::unordered_set<ExecutionState *>::iterator it = sts.find(&state);
+  return it != sts.end();
+}
+
+void Executor::initializeRoot(ExecutionState &state, KBlock *kb) {
+  ExecutionState *root = state.withKBlock(kb);
+  prepareSymbolicArgs(*root, kb->parent);
+  if (statsTracker)
+    statsTracker->framePushed(*root, 0);
+  processForest->addRoot(root);
+  addedStates.push_back(root);
+}
+
+void Executor::runWithTarget(ExecutionState &state, KBlock *target) {
+  if (pathWriter)
+    state.pathOS = pathWriter->open();
+  if (symPathWriter)
+    state.symPathOS = symPathWriter->open();
+
+  if (statsTracker)
+    statsTracker->framePushed(state, 0);
+
+  processForest = std::make_unique<PForest>();
+  processForest->addRoot(&state);
+  targetedRun(state, target);
+  processForest = nullptr;
+
+  if (statsTracker)
+    statsTracker->done();
+}
+
+bool Executor::tryBoundedExecuteStep(ExecutionState &state,
+                                           unsigned bound) {
+  KInstruction *prevKI = state.prevPC;
+
+  if (prevKI->inst->isTerminator()) {
+    addHistoryResult(state);
+    if (state.multilevel.count(state.getPCBlock()) > bound) {
+      return false;
+    }
+  }
+
+  executeStep(state);
+  return true;
+}
+
+void Executor::isolatedExecuteStep(ExecutionState &state) {
+  assert(state.isIsolated());
+  KInstruction *ki = state.pc;
+
+  if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
+    addTargetable(state);
+    addCompletedResult(state);
+    silentRemove(state);
+    if (isa<ReturnInst>(ki->inst)) {
+      executeStep(state);
+    } else
+      updateStates(nullptr);
+    return;
+  }
+
+  if (state.redundant) {
+    pauseRedundantState(state);
+    updateStates(nullptr);
+    return;
+  }
+
+  executeStep(state);
+}
+
+// Was named tryCoverStep
+bool Executor::tryExploreStep(ExecutionState &state,
+                                    ExecutionState &initialState) {
+  KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
+  if (state.isIntegrated() && state.isCriticalPC()) {
+    if (results.find(state.getPCBlock()) == results.end()) {
+      initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
+      updateStates(nullptr);
+    } else {
+      if (state.targets.empty() &&
+          state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
+        return false;
+      else
+        composeStep(state);
+    }
+  } else if (state.isIsolated()) {
+    isolatedExecuteStep(state);
+  } else {
+    executeStep(state);
+  }
+  return true;
+}
+
+// Absent in Bidir
+void Executor::executeReturn(ExecutionState &state, KInstruction *ki) {
+  assert(isa<ReturnInst>(ki->inst));
+  ReturnInst *ri = cast<ReturnInst>(ki->inst);
+  KInstIterator kcaller = state.stack.back().caller;
+  Instruction *caller = kcaller ? kcaller->inst : 0;
+  bool isVoidReturn = (ri->getNumOperands() == 0);
+  ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
+
+  if (!isVoidReturn) {
+    result = eval(ki, 0, state).value;
+  }
+  if (state.stack.size() <= 1) {
+    assert(!caller && "caller set on initial stack frame");
+    --state.stackBalance;
+    bindLocal(ki, state, result);
+    state.pc = state.prevPC;
+  } else {
+    state.stack.pop_back();
+
+    addHistoryResult(state);
+
+    if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
+      transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
+    } else {
+      state.pc = kcaller;
+      ++state.pc;
+      state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
+      BranchInst *bi = cast<BranchInst>(state.pc->inst);
+      assert(bi && bi->isUnconditional());
+      KInstruction *ki = state.pc;
+      stepInstruction(state);
+      executeInstruction(state, ki);
+    }
+  }
+}
+
+void Executor::composeStep(ExecutionState &lstate) {
+  assert(lstate.isIntegrated());
+  std::vector<ExecutionState *> result;
+  for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
+    for (auto rstate : blockstate.second) {
+      ExecutionState *currentResult = nullptr;
+      Composer::compose(&lstate, const_cast<ExecutionState *>(rstate),
+                        currentResult);
+      if (currentResult) {
+        if (isTargetable(*rstate)) {
+          removeTargetable(*rstate);
+        }
+        if (isa<ReturnInst>(currentResult->pc->inst) &&
+            currentResult->stack.size() > 1) {
+          executeReturn(*currentResult, currentResult->pc);
+        }
+        addHistoryResult(*currentResult);
+
+        result.push_back(currentResult);
+      }
+    }
+  }
+  for (auto &blockstate : results[lstate.getPCBlock()].redundantStates) {
+    for (auto rstate : blockstate.second) {
+      ExecutionState *currentResult = nullptr;
+      Composer::compose(&lstate, const_cast<ExecutionState *>(rstate),
+                        currentResult);
+      if (currentResult) {
+        removeTargetable(*rstate);
+        addHistoryResult(*currentResult);
+        result.push_back(currentResult);
+      }
+    }
+  }
+  removedStates.push_back(&lstate);
+  updateStates(nullptr);
+}
+
+// void Executor::targetedRun(ExecutionState &initialState,
+//                                     KBlock *target) {
+//   // Delay init till now so that ticks don't accrue during optimization and
+//   // such.
+//   timers.reset();
+//   states.insert(&initialState);
+
+//   auto targetedSearcher = new TargetedForwardSearcher(target);
+//   searcher.reset(targetedSearcher);
+//   searcher->update(0, {states.begin(), states.end()}, {});
+
+//   // main interpreter loop
+//   KInstruction *terminator = (target ? target->getLastInstruction() : nullptr);
+//   while (!searcher->empty() && !haltExecution) {
+//     ExecutionState &state = searcher->selectState();
+//     KInstruction *ki = state.pc;
+
+//     executeStep(state);
+
+//     if (ki == terminator) {
+//       terminateStateEarly(state, "The target has been found!");
+//       updateStates(&state);
+//       break;
+//     }
+//   }
+
+//   searcher.reset();
+
+//   doDumpStates();
+//   haltExecution = false;
+// }
+
+ActionResult Executor::executeAction(Action a) {
+  switch(a.type) {
+  case Action::Type::Forward:
+    return goForward(a.state);
+  case Action::Type::Backward:
+    return goBackward(a.state, a.pob);
+  case Action::Type::Init:
+    return initBranch(a.location);
+  }
+}
+
+void Executor::bidirectionalRun() {
+  while (!searcher->empty() && !haltExecution) {
+    auto action = searcher->selectAction();
+    auto result = executeAction(action);
+    searcher->update(result);
+  }
+}
+
+void Executor::bidirectionalRunWrapper(ExecutionState& state) {
+  initialState = state.copy();
+  initialState->stack.clear();
+  initialState->isolated = true;
+
+  timers.reset();
+  states.insert(&state);
+
+  SearcherConfig cfg;
+  cfg.initial_state = &state;
+  // cfg.targets.insert();
+  cfg.executor = this;
+
+  processForest->addRoot(&state);
+  searcher = std::make_unique<ForwardBidirSearcher>(cfg);
+
+  bidirectionalRun();
+  
+  // Все или только из начальной точки?
+  doDumpStates();
+  results.clear();
+  haltExecution = false;
+}
+
+KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
+  BasicBlock *initialBlock = state.getInitPCBlock();
+  VisitedBlock &history = results[initialBlock].history;
+  VisitedTransition &transitionHistory =
+      results[initialBlock].transitionHistory;
+  BasicBlock *bb = state.getPCBlock();
+  KFunction *kf = kmodule->functionMap[bb->getParent()];
+  KBlock *kb = kf->blockMap[bb];
+  KBlock *nearestBlock = nullptr;
+  unsigned int minDistance = -1;
+  unsigned int sfNum = 0;
+  bool newCov = false;
+  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe;
+       sfi++, sfNum++) {
+    kf = sfi->kf;
+    std::map<KBlock *, unsigned int> &kbd = kf->getDistance(kb);
+    for (auto &tstate : targetableStates[kf->function]) {
+      KBlock *currKB = kf->blockMap[tstate->getPCBlock()];
+      if (kbd.find(currKB) != kbd.end() && kbd[currKB] > 0 &&
+          kbd[currKB] < minDistance) {
+        nearestBlock = currKB;
+        minDistance = kbd[currKB];
+      }
+    }
+
+    if (nearestBlock) {
+      return nearestBlock;
+    }
+
+    for (auto currKB : kf->finalKBlocks) {
+      if (kbd.find(currKB) != kbd.end() && kbd[currKB] > 0 &&
+          kbd[currKB] < minDistance) {
+        if (history[currKB->basicBlock].size() != 0) {
+          std::vector<Transition> diff;
+          if (!newCov) {
+            std::set<Transition> left(state.transitionLevel.begin(),
+                                      state.transitionLevel.end());
+            std::set<Transition> right(
+                transitionHistory[currKB->basicBlock].begin(),
+                transitionHistory[currKB->basicBlock].end());
+            std::set_difference(left.begin(), left.end(), right.begin(),
+                                right.end(), std::inserter(diff, diff.begin()));
+          }
+
+          if (diff.empty()) {
+            continue;
+          }
+        } else {
+          newCov = true;
+        }
+        nearestBlock = currKB;
+        minDistance = kbd[currKB];
+      }
+    }
+
+    if (nearestBlock) {
+      return nearestBlock;
+    }
+
+    if (sfi->caller) {
+      kb = sfi->caller->parent;
+    }
+  }
+
+  return nearestBlock;
+}
+
+KBlock *Executor::calculateTarget(ExecutionState &state) {
+  BasicBlock *initialBlock = state.getInitPCBlock();
+  VisitedBlock &history = results[initialBlock].history;
+  BasicBlock *bb = state.getPCBlock();
+  KFunction *kf = kmodule->functionMap[bb->getParent()];
+  KBlock *kb = kf->blockMap[bb];
+  KBlock *nearestBlock = nullptr;
+  unsigned int minDistance = -1;
+  unsigned int sfNum = 0;
+  bool newCov = false;
+  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe;
+       sfi++, sfNum++) {
+    kf = sfi->kf;
+
+    for (auto &kbd : kf->getDistance(kb)) {
+      KBlock *target = kbd.first;
+      unsigned distance = kbd.second;
+      if ((sfNum > 0 || distance > 0) && distance < minDistance) {
+        if (history[target->basicBlock].size() != 0) {
+          std::vector<BasicBlock *> diff;
+          if (!newCov)
+            std::set_difference(state.level.begin(), state.level.end(),
+                                history[target->basicBlock].begin(),
+                                history[target->basicBlock].end(),
+                                std::inserter(diff, diff.begin()));
+          if (diff.empty()) {
+            continue;
+          }
+        } else
+          newCov = true;
+        nearestBlock = target;
+        minDistance = distance;
+      }
+    }
+
+    if (nearestBlock) {
+      return nearestBlock;
+    }
+
+    if (sfi->caller) {
+      kb = sfi->caller->parent;
+    }
+  }
+  return nearestBlock;
+}
+
+// void Executor::guidedRun(ExecutionState &initialState) {
+//   // Delay init till now so that ticks don't accrue during optimization and
+//   // such.
+//   timers.reset();
+
+//   states.clear();
+//   addedStates.clear();
+//   removedStates.clear();
+//   states.insert(&initialState);
+
+//   if (usingSeeds) {
+//     seed(initialState);
+//   }
+
+//   searcher = std::make_unique<GuidedForwardSearcher>(constructUserSearcher(*this));
+
+//   std::vector<ExecutionState *> newStates(states.begin(), states.end());
+//   searcher->update(0, newStates, std::vector<ExecutionState *>());
+//   // main interpreter loop
+//   while (!states.empty() && !haltExecution) {
+//     while (!searcher->empty() && !haltExecution) {
+//       ExecutionState &state = searcher->selectState();
+//       if (!state.targets.empty())
+//         executeStep(state);
+//       else if (!tryBoundedExecuteStep(state, MaxCycles - 1)) {
+//         KBlock *target = calculateTarget(state);
+//         if (target) {
+//           state.targets.insert(target);
+//         } else {
+//           pauseState(state);
+//           updateStates(nullptr);
+//         }
+//       }
+//     }
+
+//     if (searcher->empty())
+//       haltExecution = true;
+//   }
+
+//   searcher.reset();
+
+//   doDumpStates();
+//   haltExecution = false;
+// }
+
+void Executor::addState(ExecutionState &state) {
+  addedStates.push_back(&state);
+}
+
+void Executor::run(ExecutionState &state) {
+  bidirectionalRunWrapper(state);
+  // std::unique_ptr<ExecutionState> initialState(state.copy());
+  // initialState->stack.clear();
+  // initialState->stackBalance = 0;
+  // initialState->isolated = true;
+  // state.statesForRebuild.push_back(state.copy());
+
+  // // Delay init till now so that ticks don't accrue during optimization and such.
+  // timers.reset();
+
+  // states.insert(&state);
+
+  // if (usingSeeds)
+  //   seed(state);
+
+  // ExecutionStateIsolationRank rank;
+  // searcher = std::make_unique<BinaryRankedSearcher>(
+  //     rank, constructUserSearcher(*this),
+  //     std::make_unique<GuidedSearcher>(constructUserSearcher(*this)));
+
+  // std::vector<ExecutionState *> newStates(states.begin(), states.end());
+  // searcher->update(0, newStates, std::vector<ExecutionState *>());
+
+  // // main interpreter loop
+  // while (!searcher->empty() && !haltExecution) {
+  //   ExecutionState &es = searcher->selectState();
+  //   if (!tryExploreStep(es, *initialState)) {
+  //     KBlock *target = calculateCoverTarget(es);
+  //     if (target) {
+  //       es.targets.insert(target);
+  //       updateStates(&es);
+  //     } else {
+  //        pauseState(es);
+  //        updateStates(nullptr);
+  //     }
+  //   }
+  // }
+
+  // searcher.reset();
+
+  // doDumpStates();
+  // results.clear();
+  // haltExecution = false;
+}
+
+void Executor::pauseState(ExecutionState &state) {
+  results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
+  removedStates.push_back(&state);
+}
+
+void Executor::pauseRedundantState(ExecutionState &state) {
+  results[state.getInitPCBlock()].redundantStates[state.getPCBlock()].insert(&state);
+  removedStates.push_back(&state);
+}
+
+void Executor::unpauseState(ExecutionState &state) {
+  ExecutedInterval &pausedStates = results[state.getInitPCBlock()].pausedStates;
+
+  pausedStates[state.getPCBlock()].erase(&state);
+  if (pausedStates[state.getPCBlock()].empty())
+    pausedStates.erase(state.getPCBlock());
+  addedStates.push_back(&state);
+}
+
+void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {
+  switch (reason) {
+    case TerminateReason::Model       : addCompletedResult(state); break;
+    case TerminateReason::ReportError : addErroneousResult(state); break;
+    default                           : assert(false && "unreachable");
+  }
+  addHistoryResult(state);
+}
+
+/// TODO: remove?
+void Executor::runMainWithTarget(Function *mainFn,
+                                 BasicBlock *target,
+                                 int argc,
+                                 char **argv,
+                                 char **envp) {
+  ExecutionState *state = formState(mainFn, argc, argv, envp);
+  initialState = state->copy();
+  bindModuleConstants();
+  KFunction *kf = kmodule->functionMap[mainFn];
+  KBlock *kb = kmodule->functionMap[target->getParent()]->blockMap[target];
+  runWithTarget(*state, kb);
+  // hack to clear memory objects
+  memory = std::make_unique<MemoryManager>(nullptr);
+  clearGlobal();
+}
+
+InitResult Executor::initBranch(KBlock* loc) {
+  timers.invoke();
+  ExecutionState* state = initialState->withKBlock(loc);
+  prepareSymbolicArgs(*state, loc->parent);
+  if (statsTracker)
+    statsTracker->framePushed(*state, 0);
+  processForest->addRoot(state);
+  states.insert(state);
+  return InitResult(state);
+}
+
+ForwardResult Executor::goForward(ExecutionState* state) {
+  KInstruction *ki = state->pc;
+
+  stepInstruction(*state);
+
+  executeInstruction(*state, ki);
+
+  timers.invoke();
+  // if (::dumpStates) dumpStates();
+  // if (::dumpPForest) dumpPForest();
+  ForwardResult ret(state,addedStates,removedStates);
+  
+  states.insert(addedStates.begin(), addedStates.end());
+
+  return ret;
+}
+
+void Executor::clearAfterForward() {
+  addedStates.clear();
+
+  for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
+                                               ie = removedStates.end();
+       it != ie; ++it) {
+    ExecutionState *es = *it;
+    std::set<ExecutionState*>::iterator it2 = states.find(es);
+    assert(it2!=states.end());
+    states.erase(it2);
+    std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 = 
+      seedMap.find(es);
+    if (it3 != seedMap.end())
+      seedMap.erase(it3);
+    processForest->remove(es->ptreeNode);
+    if (es->isIntegrated()) {
+      delete es;
+    } else {
+      isolatedStates.push_back(es);
+    }
+  }
+  removedStates.clear();
+}
+
+BackwardResult Executor::goBackward(ExecutionState *state,
+                                                 ProofObligation *pob) {
+  timers.invoke();
+  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
+  for(auto& constraint : pob->condition) {
+    ref<Expr> rebuilt_constraint;
+    bool success = Composer::tryRebuild(constraint, state, rebuilt_constraint);
+    // if(!success)
+    newPob->condition.push_back(rebuilt_constraint);
+  }
+  
+  ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
+  for(auto& constraint: newPob->condition) {
+    check = AndExpr::create(check, constraint);
+  }
+  bool mayBeTrue;
+  bool success = getSolver()->mayBeTrue(state->constraints, check, mayBeTrue,
+                                        state->queryMetaData);
+  
+  // if(!success) У первого и второго success одно значение?
+
+  if (mayBeTrue) {
+    for (auto& constraint : state->constraints) {
+      newPob->condition.push_back(constraint);
+    }
+  }
+  return BackwardResult{newPob, pob};
+  // TODO: ERROR HANDLING
 }

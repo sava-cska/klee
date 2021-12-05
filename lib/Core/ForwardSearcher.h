@@ -1,14 +1,5 @@
-//===-- Searcher.h ----------------------------------------------*- C++ -*-===//
-//
-//                     The KLEE Symbolic Virtual Machine
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
-//
-//===----------------------------------------------------------------------===//
-
-#ifndef KLEE_SEARCHER_H
-#define KLEE_SEARCHER_H
+// -*- C++ -*-
+#pragma once
 
 #include "ExecutionState.h"
 #include "PForest.h"
@@ -39,9 +30,9 @@ namespace klee {
 
   /// A Searcher implements an exploration strategy for the Executor by selecting
   /// states for further exploration using different strategies or heuristics.
-  class Searcher {
+  class ForwardSearcher {
   public:
-    virtual ~Searcher() = default;
+    virtual ~ForwardSearcher() = default;
 
     /// Selects a state for further exploration.
     /// \return The selected state.
@@ -79,7 +70,7 @@ namespace klee {
 
   /// DFSSearcher implements depth-first exploration. All states are kept in
   /// insertion order. The last state is selected for further exploration.
-  class DFSSearcher final : public Searcher {
+  class DFSSearcher final : public ForwardSearcher {
     std::vector<ExecutionState*> states;
 
   public:
@@ -95,7 +86,7 @@ namespace klee {
   /// times for a single instruction, all new states have the same depth. Keep in
   /// mind that the process tree (PTree) is a binary tree and hence the depth of
   /// a state in that tree and its branch depth during BFS are different.
-  class BFSSearcher final : public Searcher {
+  class BFSSearcher final : public ForwardSearcher {
     std::deque<ExecutionState*> states;
 
   public:
@@ -108,7 +99,7 @@ namespace klee {
   };
 
   /// RandomSearcher picks a state randomly.
-  class RandomSearcher final : public Searcher {
+  class RandomSearcher final : public ForwardSearcher {
     std::vector<ExecutionState*> states;
     RNG &theRNG;
 
@@ -123,7 +114,7 @@ namespace klee {
   };
 
   /// TargetedSearcher picks a state /*COMMENT*/.
-  class TargetedSearcher final : public Searcher {
+  class TargetedForwardSearcher final : public ForwardSearcher {
   public:
     enum WeightResult : std::uint8_t {
       Continue,
@@ -148,8 +139,8 @@ namespace klee {
   public:
     std::unordered_set<ExecutionState*> reachedOnLastUpdate;
     std::unordered_set<ExecutionState*> states_set;
-    TargetedSearcher(KBlock *targetBB);
-    ~TargetedSearcher() override = default;
+    TargetedForwardSearcher(KBlock *targetBB);
+    ~TargetedForwardSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
@@ -158,17 +149,17 @@ namespace klee {
     void printName(llvm::raw_ostream &os) override;
   };
 
-  class GuidedSearcher final : public Searcher {
+  class GuidedForwardSearcher final : public ForwardSearcher {
 
   private:
-    std::unique_ptr<Searcher> baseSearcher;
-    std::map<KBlock*, std::unique_ptr<TargetedSearcher>> targetedSearchers;
+    std::unique_ptr<ForwardSearcher> baseSearcher;
+    std::map<KBlock*, std::unique_ptr<TargetedForwardSearcher>> targetedSearchers;
     unsigned index {1};
     void addTarget(KBlock *target);
 
   public:
-    GuidedSearcher(std::unique_ptr<Searcher> baseSearcher);
-    ~GuidedSearcher() override = default;
+    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher);
+    ~GuidedForwardSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
@@ -184,7 +175,7 @@ namespace klee {
 
   /// The base class for all weighted searchers. Uses DiscretePDF as underlying
   /// data structure.
-  class WeightedRandomSearcher final : public Searcher {
+  class WeightedRandomSearcher final : public ForwardSearcher {
   public:
     enum WeightType : std::uint8_t {
       Depth,
@@ -233,7 +224,7 @@ namespace klee {
   /// PTreeNodePtr that also steals the top bits of the pointer.
   ///
   /// The ownership bits are maintained in the update method.
-  class RandomPathSearcher final : public Searcher {
+  class RandomPathSearcher final : public ForwardSearcher {
     PForest &processForest;
     RNG &theRNG;
 
@@ -257,19 +248,19 @@ namespace klee {
 
   extern llvm::cl::opt<bool> UseIncompleteMerge;
   class MergeHandler;
-  class MergingSearcher final : public Searcher {
+  class MergingSearcher final : public ForwardSearcher {
     friend class MergeHandler;
 
     private:
 
-    std::unique_ptr<Searcher> baseSearcher;
+    std::unique_ptr<ForwardSearcher> baseSearcher;
 
     /// States that have been paused by the 'pauseState' function
     std::vector<ExecutionState*> pausedStates;
 
     public:
     /// \param baseSearcher The underlying searcher (takes ownership).
-    explicit MergingSearcher(Searcher *baseSearcher);
+    explicit MergingSearcher(ForwardSearcher *baseSearcher);
     ~MergingSearcher() override = default;
 
     /// ExecutionStates currently paused from scheduling because they are
@@ -303,8 +294,8 @@ namespace klee {
   /// BatchingSearcher selects a state from an underlying searcher and returns
   /// that state for further exploration for a given time or a given number
   /// of instructions.
-  class BatchingSearcher final : public Searcher {
-    std::unique_ptr<Searcher> baseSearcher;
+  class BatchingSearcher final : public ForwardSearcher {
+    std::unique_ptr<ForwardSearcher> baseSearcher;
     time::Span timeBudget;
     unsigned instructionBudget;
 
@@ -316,7 +307,7 @@ namespace klee {
     /// \param baseSearcher The underlying searcher (takes ownership).
     /// \param timeBudget Time span a state gets selected before choosing a different one.
     /// \param instructionBudget Number of instructions to re-select a state for.
-    BatchingSearcher(Searcher *baseSearcher, time::Span timeBudget, unsigned instructionBudget);
+    BatchingSearcher(ForwardSearcher *baseSearcher, time::Span timeBudget, unsigned instructionBudget);
     ~BatchingSearcher() override = default;
 
     ExecutionState &selectState() override;
@@ -332,15 +323,15 @@ namespace klee {
   /// limit it is paused (removed from underlying searcher). When the underlying
   /// searcher runs out of states, the time budget is increased and all paused
   /// states are revived (added to underlying searcher).
-  class IterativeDeepeningTimeSearcher final : public Searcher {
-    std::unique_ptr<Searcher> baseSearcher;
+  class IterativeDeepeningTimeSearcher final : public ForwardSearcher {
+    std::unique_ptr<ForwardSearcher> baseSearcher;
     time::Point startTime;
     time::Span time {time::seconds(1)};
     std::set<ExecutionState*> pausedStates;
 
   public:
     /// \param baseSearcher The underlying searcher (takes ownership).
-    explicit IterativeDeepeningTimeSearcher(Searcher *baseSearcher);
+    explicit IterativeDeepeningTimeSearcher(ForwardSearcher *baseSearcher);
     ~IterativeDeepeningTimeSearcher() override = default;
 
     ExecutionState &selectState() override;
@@ -354,13 +345,13 @@ namespace klee {
   /// InterleavedSearcher selects states from a set of searchers in round-robin
   /// manner. It is used for KLEE's default strategy where it switches between
   /// RandomPathSearcher and WeightedRandomSearcher with CoveringNew metric.
-  class InterleavedSearcher final : public Searcher {
-    std::vector<std::unique_ptr<Searcher>> searchers;
+  class InterleavedSearcher final : public ForwardSearcher {
+    std::vector<std::unique_ptr<ForwardSearcher>> searchers;
     unsigned index {1};
 
   public:
     /// \param searchers The underlying searchers (takes ownership).
-    explicit InterleavedSearcher(const std::vector<Searcher *> &searchers);
+    explicit InterleavedSearcher(const std::vector<ForwardSearcher *> &searchers);
     ~InterleavedSearcher() override = default;
 
     ExecutionState &selectState() override;
@@ -381,13 +372,13 @@ namespace klee {
     bool getRank(ExecutionState const &state) override;
   };
 
-  class BinaryRankedSearcher final : public Searcher {
+  class BinaryRankedSearcher final : public ForwardSearcher {
     ExecutionStateBinaryRank &rank;
-    std::unique_ptr<Searcher> firstRankSearcher;
-    std::unique_ptr<Searcher> secondRankSearcher;
+    std::unique_ptr<ForwardSearcher> firstRankSearcher;
+    std::unique_ptr<ForwardSearcher> secondRankSearcher;
 
   public:
-    explicit BinaryRankedSearcher(ExecutionStateBinaryRank &rank, std::unique_ptr<Searcher> first, std::unique_ptr<Searcher> second);
+    explicit BinaryRankedSearcher(ExecutionStateBinaryRank &rank, std::unique_ptr<ForwardSearcher> first, std::unique_ptr<ForwardSearcher> second);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
@@ -397,5 +388,3 @@ namespace klee {
   };
 
 } // klee namespace
-
-#endif /* KLEE_SEARCHER_H */

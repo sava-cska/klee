@@ -13,7 +13,7 @@
 #include "klee/ADT/RNG.h"
 #include "Core/ExecutionState.h"
 #include "Core/PTree.h"
-#include "Core/Searcher.h"
+#include "Core/ForwardSearcher.h"
 
 #include "llvm/Support/raw_ostream.h"
 

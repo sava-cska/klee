@@ -23,7 +23,7 @@
 
 #include "CallPathManager.h"
 #include "CoreStats.h"
-#include "BaseExecutor.h"
+#include "Executor.h"
 #include "MemoryManager.h"
 #include "UserSearcher.h"
 
@@ -162,7 +162,7 @@ std::string sqlite3ErrToStringAndFree(const std::string& prefix , char* sqlite3E
   return sstream.str();
 }
 
-StatsTracker::StatsTracker(BaseExecutor &_executor, std::string _objectFilename,
+StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
                            bool _updateMinDistToUncovered)
   : executor(_executor),
     objectFilename(_objectFilename),

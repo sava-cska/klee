@@ -7,152 +7,55 @@
 //
 //===----------------------------------------------------------------------===//
 #pragma once
+#include "Executor.h"
+#include "SearcherUtil.h"
 #include "ProofObligation.h"
-#include "Searcher.h"
+#include "ForwardSearcher.h"
 #include "klee/Module/KModule.h"
 #include <memory>
 #include <unordered_set>
 #include <vector>
+#include <variant>
+
 
 namespace klee {
 
-class ExecutionState;
-class BidirectionalExecutor;
-
-struct Action {
-  enum class Type { Init, Forward, Backward, None };
-  enum class SearcherType { Forward, Backward, Branch };
-
-  Type type;
-  SearcherType searcher;
-  ExecutionState* state; // Forward, Backward
-  KBlock *location;      // Init
-  ProofObligation *pob;  // Backward
-  std::unordered_set<KBlock*> targets; // Init
-};
-
-struct SearcherConfig {
-  ExecutionState* initial_state;
-  std::unordered_set<KBlock*> targets;
-  // Hack
-  BidirectionalExecutor* executor;
-};
-
-struct ForwardResult {
-  ExecutionState *current;
-  // references to vectors?
-  std::vector<ExecutionState *> addedStates;
-  std::vector<ExecutionState *> removedStates;
-  ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> a,
-                std::vector<ExecutionState *> r)
-      : current(_s), addedStates(a), removedStates(r){};
-};
-
-struct BackwardResult {
-  ProofObligation *newPob;
-  ProofObligation *oldPob;
-  BackwardResult(ProofObligation *_newPob, ProofObligation *_oldPob)
-      : newPob(_newPob), oldPob(_oldPob) {}
-};
-
-class IForwardSearcher {
+class IBidirectionalSearcher {
 public:
+
   virtual Action selectAction() = 0;
-
-  virtual std::unordered_set<ExecutionState *>
-  update(ForwardResult) = 0;
-
-  virtual void updateTarget(KBlock *target, KBlock *from, KBlock *remove) = 0;
-};
-
-class IBranchSearcher {
-public:
+  virtual void update(ActionResult) = 0;
   
-  virtual Action selectAction() = 0;
-
-  // Вариант Саши?
-  virtual void setTargets(ExecutionState *from,
-                          std::unordered_set<KBlock *> to) = 0;
+  virtual bool empty() = 0;
   
-  virtual std::unordered_set<ExecutionState *>
-  update(ForwardResult) = 0;
+  virtual ~IBidirectionalSearcher() = 0;
 };
 
-class IBackwardSearcher {
-public:
-  virtual Action selectAction() = 0;
-
-  virtual void addBranch(ExecutionState *state) = 0;
-
-  virtual void update(BackwardResult) = 0;
-  virtual void remove(ProofObligation* pob) = 0;
-};
-
-class GuidedForwardSearcher : IForwardSearcher {
+class ForwardBidirSearcher : public IBidirectionalSearcher {
 public:
   Action selectAction() override;
+  void update(ActionResult) override;
+  bool empty() override;
 
-  // hotfix
-  bool empty() { return searcher->empty(); }
-
-  std::unordered_set<ExecutionState *>
-  update(ForwardResult result) override;
-
-  void updateTarget(KBlock *target, KBlock *from, KBlock *remove) override;
-
-  GuidedForwardSearcher(GuidedSearcher* searcher) : searcher(searcher) {}
-
+  ForwardBidirSearcher(SearcherConfig);
+  
 private:
-  GuidedSearcher* searcher;
+  GuidedForwardSearcher* searcher;
+  Executor* ex; // hack
 };
 
-class GuidedBranchSearcher : IBranchSearcher {
-public:
-  Action selectAction() override;
+// class BidirectionalSearcher : public IBidirectionalSearcher {
+// public:
+//   Action selectAction() override;
+//   void update(ActionResult) override;
+//   bool empty() override;
 
-  std::unordered_set<ExecutionState *> update(ForwardResult result) override;
+//   BidirectionalSearcher(SearcherConfig);
 
-  void setTargets(ExecutionState *from,
-                  std::unordered_set<KBlock *> to) override;
-
-  GuidedBranchSearcher(GuidedSearcher* searcher) : searcher(searcher) {}
-
-private:
-  GuidedSearcher* searcher;
-};
-
-class BFSBackwardSearcher : IBackwardSearcher {
-public:
-  Action selectAction() override;
-
-  void addBranch(ExecutionState *state) override;
-
-  void update(BackwardResult) override;
-  void remove(ProofObligation* pob) override;
-
-  BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
-    for (auto location : locations) {
-      pobs.insert(new ProofObligation(location));
-    }
-  }
-
-private:
-  std::unordered_set<ProofObligation*> pobs;
-  std::unordered_set<KBlock*> targets;
-  std::queue<std::pair<ProofObligation*, ExecutionState*>> backpropQueue;
-  std::unordered_set<KBlock*> initializedLocs;
-};
-
-class BidirectionalSearcher {
-public:
-  Action selectAction();
-  bool empty();
-
-  BidirectionalSearcher(SearcherConfig);
-
-  std::unique_ptr<GuidedForwardSearcher> forwardSearcher;
-  std::unique_ptr<GuidedBranchSearcher> branchSearcher;
-  std::unique_ptr<BFSBackwardSearcher> backwardSearcher;
-};
+// private:
+//   std::unique_ptr<GuidedForwardSearcher> forwardSearcher;
+//   std::unique_ptr<GuidedForwardSearcher> branchSearcher;
+//   std::unique_ptr<BFSBackwardSearcher> backwardSearcher;
+// };
 
 } // namespace klee

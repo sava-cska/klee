@@ -1,4 +1,4 @@
-//===-- BaseExecutor.h ----------------------------------------------*- C++ -*-===//
+//===-- Executor.h ----------------------------------------------*- C++ -*-===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "SearcherUtil.h"
 #include "ExecutionState.h"
 #include "UserSearcher.h"
 #include "ExternalDispatcher.h"
@@ -80,7 +81,7 @@ class MemoryManager;
 class MemoryObject;
 class ObjectState;
 class PForest;
-class Searcher;
+class IBidirectionalSearcher;
 struct ExecutionStateBinaryRank;
 class SeedInfo;
 class SpecialFunctionHandler;
@@ -96,13 +97,15 @@ template <class T> class ref;
 /// during an instruction step. Should contain addedStates,
 /// removedStates, and haltExecution, among others.
 
-class BaseExecutor : public Interpreter {
+class Executor : public Interpreter {
   friend class OwningSearcher;
   friend class WeightedRandomSearcher;
   friend class SpecialFunctionHandler;
   friend class StatsTracker;
   friend class MergeHandler;
-  friend std::unique_ptr<Searcher> klee::constructUserSearcher(BaseExecutor &BaseExecutor);
+  friend class Composer;
+  friend class ComposeVisitor;
+  friend std::unique_ptr<ForwardSearcher> klee::constructUserSearcher(Executor &Executor);
 
 public:
   enum MemoryOperation { Read, Write };
@@ -125,11 +128,40 @@ public:
     Unhandled,
   };
 
+  typedef std::pair<llvm::BasicBlock *, llvm::BasicBlock *> BasicBlockPair;
+  typedef std::map<llvm::BasicBlock *,
+                   std::set<ExecutionState *, ExecutionStateIDCompare>>
+      ExecutedInterval;
+  typedef std::map<llvm::BasicBlock *, std::unordered_set<llvm::BasicBlock *>>
+      VisitedBlock;
+  typedef std::map<llvm::BasicBlock *,
+                   std::unordered_set<Transition, BasicBlockPairHash>>
+      VisitedTransition;
+
+  struct ExecutionBlockResult {
+    ExecutedInterval redundantStates;
+    ExecutedInterval completedStates;
+    ExecutedInterval pausedStates;
+    ExecutedInterval erroneousStates;
+    VisitedBlock history;
+    VisitedTransition transitionHistory;
+  };
+
+  typedef std::map<llvm::BasicBlock*, ExecutionBlockResult> ExecutionResult;
+  
+  typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
+  
+private:
   /// The random number generator.
   RNG theRNG;
 
-protected:
-  typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
+  std::map<llvm::Function *, std::unordered_set<ExecutionState *>>
+      targetableStates;
+
+  ExecutionResult results;
+
+    // The program state just before any instructions are excecuted.
+  ExecutionState* initialState;
 
   static const char *TerminateReasonNames[];
 
@@ -137,11 +169,10 @@ protected:
 
   InterpreterHandler *interpreterHandler;
 
-  std::unique_ptr<Searcher> searcher;
-
+  std::unique_ptr<IBidirectionalSearcher> searcher;
+  
   std::unique_ptr<ExternalDispatcher> externalDispatcher;
 
-  // Не актуально в BidirectionalExecutor
   std::unique_ptr<TimingSolver> solver;
 
   std::unique_ptr<MemoryManager> memory;
@@ -171,7 +202,7 @@ protected:
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
   std::vector<ExecutionState *> removedStates;
 
-  /// When non-empty the BaseExecutor is running in "seed" mode. The
+  /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
   /// (outside the normal search interface) until they terminate. When
   /// the states reach a symbolic branch then either direction that
@@ -213,7 +244,7 @@ protected:
   /// Disables forking, set by client. \see setInhibitForking()
   bool inhibitForking;
 
-  /// Signals the BaseExecutor to halt execution at the next instruction
+  /// Signals the Executor to halt execution at the next instruction
   /// step.
   bool haltExecution;
 
@@ -252,6 +283,10 @@ protected:
 
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
+  
+public:
+  
+private:
 
   /// Return the typeid corresponding to a certain `type_info`
   ref<ConstantExpr> getEhTypeidFor(ref<Expr> type_info);
@@ -259,7 +294,7 @@ protected:
   void executeInstruction(ExecutionState &state, KInstruction *ki);
 
   void seed(ExecutionState &initialState);
-  virtual void run(ExecutionState &initialState) = 0;
+  void run(ExecutionState &initialState);
 
   // Given a concrete object in our [klee's] address space, add it to
   // objects checked code can reference.
@@ -319,7 +354,7 @@ protected:
   ///
   /// \param allocationAlignment If non-zero, the given alignment is
   /// used. Otherwise, the alignment is deduced via
-  /// BaseExecutor::getAllocationAlignment
+  /// Executor::getAllocationAlignment
   void executeAlloc(ExecutionState &state, ref<Expr> size, bool isLocal,
                     KInstruction *target, bool zeroMemory = false,
                     const ObjectState *reallocFrom = 0,
@@ -346,7 +381,6 @@ protected:
   void executeCall(ExecutionState &state, KInstruction *ki, llvm::Function *f,
                    std::vector<ref<Expr>> &arguments);
 
-public:
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
   void executeMemoryOperation(ExecutionState &state, MemoryOperation operation,
@@ -360,8 +394,7 @@ public:
 
   ObjectPair transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
                                      const llvm::Value *allocSite, uint64_t size);
-
-private:
+  
   ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,
                              const MemoryObject *mo);
 
@@ -384,19 +417,16 @@ private:
   // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 
-public:
   /// Add the given (boolean) condition as a constraint on state. This
   /// function is a wrapper around the state's addConstraint function
   /// which also manages propagation of implied values,
   /// validity checks, and seed patching.
   void addConstraint(ExecutionState &state, ref<Expr> condition);
 
-private:
   // Called on [for now] concrete reads, replaces constant with a symbolic
   // Used for testing.
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
-public:
   const Cell &eval(const KInstruction *ki, unsigned index,
                    ExecutionState &state, bool isSymbolic = true);
 
@@ -411,7 +441,6 @@ public:
 
   void bindLocal(KInstruction *target, ExecutionState &state, ref<Expr> value);
 
-private:
   void bindArgument(KFunction *kf, unsigned index, ExecutionState &state,
                     ref<Expr> value);
 
@@ -457,9 +486,7 @@ private:
 
   bool shouldExitOn(enum TerminateReason termReason);
 
-protected:
-  virtual void actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {}
-  virtual void actionAfterStateTerminating(ExecutionState &state) { delete &state; }
+  void actionAfterStateTerminating(ExecutionState &state) { delete &state; }
 
 // private:
   // remove state from queue and delete
@@ -485,11 +512,9 @@ protected:
     terminateStateOnError(state, message, Exec, NULL, info);
   }
 
-public:
   // terminate state on out of bound pointer error
   void terminateStateOnOutOfBound(ExecutionState &state, ref<Expr> ptr);
 
-protected:
   /// bindModuleConstants - Initialize the module constant table.
   void bindModuleConstants();
 
@@ -524,9 +549,9 @@ protected:
   void dumpPForest();
 
 public:
-  BaseExecutor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
+  Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
                InterpreterHandler *ie);
-  virtual ~BaseExecutor() = default;
+  virtual ~Executor() = default;
 
   const InterpreterHandler &getHandler() { return *interpreterHandler; }
 
@@ -641,6 +666,63 @@ public:
   void executeStep(ExecutionState &state);
   void silentRemove(ExecutionState &state);
   bool isGEPExpr(ref<Expr> expr);
+  
+public:
+  void addCompletedResult(ExecutionState &state);
+  void addErroneousResult(ExecutionState &state);
+  void addHistoryResult(ExecutionState &state);
+  
+  void addTargetable(ExecutionState &state);
+  void removeTargetable(ExecutionState &state);
+  bool isTargetable(ExecutionState &state);
+
+  void targetedRun(ExecutionState &initialState, KBlock *target);
+  void guidedRun(ExecutionState &initialState);
+  
+  void bidirectionalRun();
+  void bidirectionalRunWrapper(ExecutionState& state);
+
+  void runWithTarget(ExecutionState &state, KBlock *target);
+  void runGuided(ExecutionState &state);
+  void runCovered(ExecutionState &state);
+
+  void initializeRoot(ExecutionState &state, KBlock *kb);
+  void pauseState(ExecutionState &state);
+  void pauseRedundantState(ExecutionState &state);
+  void unpauseState(ExecutionState &state);
+
+  InitResult initBranch(KBlock* loc);
+  ForwardResult goForward(ExecutionState* state);
+  BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
+
+  ActionResult executeAction(Action a);
+
+
+  void clearAfterForward();
+
+  
+  KBlock *getStartLocation(const ExecutionState &state);
+  KBlock *getLastExecutedLocation(const ExecutionState &state);
+  KBlock *getCurrentLocation(const ExecutionState &state);
+
+  void actionBeforeStateTerminating(ExecutionState &state,
+                                    TerminateReason reason);
+
+  void runMainWithTarget(llvm::Function *mainFn, llvm::BasicBlock *target,
+                         int argc, char **argv, char **envp);
+
+  bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
+  void isolatedExecuteStep(ExecutionState &state);
+  bool tryExploreStep(ExecutionState &state, ExecutionState &initialState);
+  void composeStep(ExecutionState &state);
+  void executeReturn(ExecutionState &state, KInstruction *ki);
+  KBlock *calculateCoverTarget(ExecutionState &state);
+  KBlock *calculateTarget(ExecutionState &state);
+  void calculateTargetedStates(
+      llvm::BasicBlock *initialBlock, ExecutedInterval &pausedStates,
+      std::map<KBlock *, std::vector<ExecutionState *>> &targetedStates);
+  void initializeRoots(ExecutionState *initialState);
+  void addState(ExecutionState &state);
 };
 
 } // namespace klee

@@ -9,9 +9,9 @@
 
 #include "UserSearcher.h"
 
-#include "BaseExecutor.h"
+#include "Executor.h"
 #include "MergeHandler.h"
-#include "Searcher.h"
+#include "ForwardSearcher.h"
 
 #include "klee/Support/ErrorHandling.h"
 
@@ -24,30 +24,30 @@ namespace {
 llvm::cl::OptionCategory
     SearchCat("Search options", "These options control the search heuristic.");
 
-cl::list<Searcher::CoreSearchType> CoreSearch(
+cl::list<ForwardSearcher::CoreSearchType> CoreSearch(
     "search",
     cl::desc("Specify the search heuristic (default=random-path interleaved "
              "with nurs:covnew)"),
     cl::values(
-        clEnumValN(Searcher::DFS, "dfs", "use Depth First Search (DFS)"),
-        clEnumValN(Searcher::BFS, "bfs",
+        clEnumValN(ForwardSearcher::DFS, "dfs", "use Depth First Search (DFS)"),
+        clEnumValN(ForwardSearcher::BFS, "bfs",
                    "use Breadth First Search (BFS), where scheduling decisions "
                    "are taken at the level of (2-way) forks"),
-        clEnumValN(Searcher::RandomState, "random-state",
+        clEnumValN(ForwardSearcher::RandomState, "random-state",
                    "randomly select a state to explore"),
-        clEnumValN(Searcher::RandomPath, "random-path",
+        clEnumValN(ForwardSearcher::RandomPath, "random-path",
                    "use Random Path Selection (see OSDI'08 paper)"),
-        clEnumValN(Searcher::NURS_CovNew, "nurs:covnew",
+        clEnumValN(ForwardSearcher::NURS_CovNew, "nurs:covnew",
                    "use Non Uniform Random Search (NURS) with Coverage-New"),
-        clEnumValN(Searcher::NURS_MD2U, "nurs:md2u",
+        clEnumValN(ForwardSearcher::NURS_MD2U, "nurs:md2u",
                    "use NURS with Min-Dist-to-Uncovered"),
-        clEnumValN(Searcher::NURS_Depth, "nurs:depth", "use NURS with depth"),
-        clEnumValN(Searcher::NURS_RP, "nurs:rp", "use NURS with 1/2^depth"),
-        clEnumValN(Searcher::NURS_ICnt, "nurs:icnt",
+        clEnumValN(ForwardSearcher::NURS_Depth, "nurs:depth", "use NURS with depth"),
+        clEnumValN(ForwardSearcher::NURS_RP, "nurs:rp", "use NURS with 1/2^depth"),
+        clEnumValN(ForwardSearcher::NURS_ICnt, "nurs:icnt",
                    "use NURS with Instr-Count"),
-        clEnumValN(Searcher::NURS_CPICnt, "nurs:cpicnt",
+        clEnumValN(ForwardSearcher::NURS_CPICnt, "nurs:cpicnt",
                    "use NURS with CallPath-Instr-Count"),
-        clEnumValN(Searcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost")
+        clEnumValN(ForwardSearcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost")
             KLEE_LLVM_CL_VAL_END),
     cl::cat(SearchCat));
 
@@ -86,49 +86,49 @@ void klee::initializeSearchOptions() {
   // default values
   if (CoreSearch.empty()) {
     if (UseMerge){
-      CoreSearch.push_back(Searcher::NURS_CovNew);
+      CoreSearch.push_back(ForwardSearcher::NURS_CovNew);
       klee_warning("--use-merge enabled. Using NURS_CovNew as default searcher.");
     } else {
-      CoreSearch.push_back(Searcher::RandomPath);
-      CoreSearch.push_back(Searcher::NURS_CovNew);
+      CoreSearch.push_back(ForwardSearcher::RandomPath);
+      CoreSearch.push_back(ForwardSearcher::NURS_CovNew);
     }
   }
 }
 
 bool klee::userSearcherRequiresMD2U() {
-  return (std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_MD2U) != CoreSearch.end() ||
-          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_CovNew) != CoreSearch.end() ||
-          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_ICnt) != CoreSearch.end() ||
-          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_CPICnt) != CoreSearch.end() ||
-          std::find(CoreSearch.begin(), CoreSearch.end(), Searcher::NURS_QC) != CoreSearch.end());
+  return (std::find(CoreSearch.begin(), CoreSearch.end(), ForwardSearcher::NURS_MD2U) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), ForwardSearcher::NURS_CovNew) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), ForwardSearcher::NURS_ICnt) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), ForwardSearcher::NURS_CPICnt) != CoreSearch.end() ||
+          std::find(CoreSearch.begin(), CoreSearch.end(), ForwardSearcher::NURS_QC) != CoreSearch.end());
 }
 
 
-Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng, PForest &processForest) {
-  Searcher *searcher = nullptr;
+ForwardSearcher *getNewSearcher(ForwardSearcher::CoreSearchType type, RNG &rng, PForest &processForest) {
+  ForwardSearcher *searcher = nullptr;
   switch (type) {
-    case Searcher::DFS: searcher = new DFSSearcher(); break;
-    case Searcher::BFS: searcher = new BFSSearcher(); break;
-    case Searcher::RandomState: searcher = new RandomSearcher(rng); break;
-    case Searcher::RandomPath: searcher = new RandomPathSearcher(processForest, rng); break;
-    case Searcher::NURS_CovNew: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CoveringNew, rng); break;
-    case Searcher::NURS_MD2U: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::MinDistToUncovered, rng); break;
-    case Searcher::NURS_Depth: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::Depth, rng); break;
-    case Searcher::NURS_RP: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::RP, rng); break;
-    case Searcher::NURS_ICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InstCount, rng); break;
-    case Searcher::NURS_CPICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CPInstCount, rng); break;
-    case Searcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost, rng); break;
+    case ForwardSearcher::DFS: searcher = new DFSSearcher(); break;
+    case ForwardSearcher::BFS: searcher = new BFSSearcher(); break;
+    case ForwardSearcher::RandomState: searcher = new RandomSearcher(rng); break;
+    case ForwardSearcher::RandomPath: searcher = new RandomPathSearcher(processForest, rng); break;
+    case ForwardSearcher::NURS_CovNew: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CoveringNew, rng); break;
+    case ForwardSearcher::NURS_MD2U: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::MinDistToUncovered, rng); break;
+    case ForwardSearcher::NURS_Depth: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::Depth, rng); break;
+    case ForwardSearcher::NURS_RP: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::RP, rng); break;
+    case ForwardSearcher::NURS_ICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InstCount, rng); break;
+    case ForwardSearcher::NURS_CPICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CPInstCount, rng); break;
+    case ForwardSearcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost, rng); break;
   }
 
   return searcher;
 }
 
-std::unique_ptr<Searcher> klee::constructUserSearcher(BaseExecutor &executor) {
+std::unique_ptr<ForwardSearcher> klee::constructUserSearcher(Executor &executor) {
 
-  std::unique_ptr<Searcher> searcher(getNewSearcher(CoreSearch[0], executor.theRNG, *executor.processForest));
+  std::unique_ptr<ForwardSearcher> searcher(getNewSearcher(CoreSearch[0], executor.theRNG, *executor.processForest));
 
   if (CoreSearch.size() > 1) {
-    std::vector<Searcher *> s;
+    std::vector<ForwardSearcher *> s;
     s.push_back(searcher.release());
 
     for (unsigned i = 1; i < CoreSearch.size(); i++)

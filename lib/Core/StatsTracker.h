@@ -26,7 +26,7 @@ namespace llvm {
 
 namespace klee {
   class ExecutionState;
-  class BaseExecutor;
+  class Executor;
   class InstructionInfoTable;
   class InterpreterHandler;
   struct KInstruction;
@@ -36,7 +36,7 @@ namespace klee {
     friend class WriteStatsTimer;
     friend class WriteIStatsTimer;
 
-    BaseExecutor &executor;
+    Executor &executor;
     std::string objectFilename;
 
     std::unique_ptr<llvm::raw_fd_ostream> istatsFile;
@@ -66,7 +66,7 @@ namespace klee {
     void writeIStats();
 
   public:
-    StatsTracker(BaseExecutor &_executor, std::string _objectFilename,
+    StatsTracker(Executor &_executor, std::string _objectFilename,
                  bool _updateMinDistToUncovered);
     ~StatsTracker();
 

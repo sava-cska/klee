@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Context.h"
-#include "BaseExecutor.h"
+#include "Executor.h"
 
 #include "klee/Config/Version.h"
 #include "klee/Core/Interpreter.h"
@@ -32,7 +32,7 @@ using namespace llvm;
 
 namespace klee {
 
-  ref<klee::ConstantExpr> BaseExecutor::evalConstant(const Constant *c,
+  ref<klee::ConstantExpr> Executor::evalConstant(const Constant *c,
                                                  const KInstruction *ki) {
     if (!ki) {
       KConstant* kc = kmodule->getKConstant(c);
@@ -135,7 +135,7 @@ namespace klee {
     }
   }
 
-  ref<ConstantExpr> BaseExecutor::evalConstantExpr(const llvm::ConstantExpr *ce,
+  ref<ConstantExpr> Executor::evalConstantExpr(const llvm::ConstantExpr *ce,
                                                const KInstruction *ki) {
     llvm::Type *type = ce->getType();
 

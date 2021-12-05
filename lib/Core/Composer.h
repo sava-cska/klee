@@ -1,7 +1,7 @@
 #ifndef KLEE_COMPOSER_H
 #define KLEE_COMPOSER_H
 
-#include "BidirectionalExecutor.h"
+#include "Executor.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Module/KModule.h"
@@ -11,7 +11,7 @@
 #include "ExecutionState.h"
 #include "Memory.h"
 #include "TimingSolver.h"
-#include "../lib/Core/BaseExecutor.h"
+#include "../lib/Core/Executor.h"
 
 #include <chrono>
 #include <map>
@@ -52,7 +52,7 @@ private:
   ExecutionState *S2;
 
 public:
-  static BidirectionalExecutor *executor;
+  static Executor *executor;
   };
 
   class ComposeVisitor : public ExprVisitor {

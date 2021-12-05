@@ -14,9 +14,8 @@ klee_add_component(kleeCore
   Context.cpp
   CoreStats.cpp
   ExecutionState.cpp
-  BaseExecutor.cpp
+  Executor.cpp
   ForwardExecutor.cpp
-  BidirectionalExecutor.cpp
   ExecutorUtil.cpp
   Interpreter.cpp
   ExternalDispatcher.cpp
@@ -25,7 +24,7 @@ klee_add_component(kleeCore
   MemoryManager.cpp
   PForest.cpp
   PTree.cpp
-  Searcher.cpp
+  ForwardSearcher.cpp
   SeedInfo.cpp
   SpecialFunctionHandler.cpp
   StatsTracker.cpp

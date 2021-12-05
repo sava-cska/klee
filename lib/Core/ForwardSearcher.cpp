@@ -7,11 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Searcher.h"
+#include "ForwardSearcher.h"
 
 #include "CoreStats.h"
 #include "ExecutionState.h"
-#include "BaseExecutor.h"
+#include "Executor.h"
 #include "MergeHandler.h"
 #include "PTree.h"
 #include "StatsTracker.h"
@@ -37,8 +37,6 @@
 using namespace klee;
 using namespace llvm;
 
-
-///
 
 ExecutionState &DFSSearcher::selectState() {
   return *states.back();
@@ -145,16 +143,16 @@ void RandomSearcher::printName(llvm::raw_ostream &os) {
   os << "RandomSearcher\n";
 }
 
-TargetedSearcher::TargetedSearcher(KBlock *targetBB)
+TargetedForwardSearcher::TargetedForwardSearcher(KBlock *targetBB)
   : states(std::make_unique<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>>()),
     target(targetBB),
     distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {}
 
-ExecutionState &TargetedSearcher::selectState() {
+ExecutionState &TargetedForwardSearcher::selectState() {
   return *states->choose(0.0);
 }
 
-bool TargetedSearcher::distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance) {
+bool TargetedForwardSearcher::distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance) {
   distance = UINT_MAX;
   std::map<KBlock*, unsigned> &dist = kf->getDistance(kb);
 
@@ -175,7 +173,7 @@ bool TargetedSearcher::distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned i
   return distance != UINT_MAX;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets) {
+TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets) {
   unsigned int intWeight = es->steppedMemoryInstructions;
   KFunction *currentKF = es->stack.back().kf;
   KBlock *currentKB = currentKF->blockMap[es->getPCBlock()];
@@ -196,7 +194,7 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetLocalWeight(ExecutionStat
   return Continue;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetPreTargetWeight(ExecutionState *es, double &weight) {
+TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetPreTargetWeight(ExecutionState *es, double &weight) {
   KFunction *currentKF = es->stack.back().kf;
   std::vector<KBlock*> localTargets;
   for (auto &kCallBlock : currentKF->kCallBlocks) {
@@ -213,7 +211,7 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPreTargetWeight(Execution
   return res == Done ? Continue : res;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(ExecutionState *es, double &weight) {
+TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetPostTargetWeight(ExecutionState *es, double &weight) {
   KFunction *currentKF = es->stack.back().kf;
   std::vector<KBlock*> &localTargets = currentKF->finalKBlocks;
 
@@ -224,14 +222,14 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(Executio
   return res == Done ? Continue : res;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(ExecutionState *es, double &weight) {
+TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetTargetWeight(ExecutionState *es, double &weight) {
   std::vector<KBlock*> localTargets = {target};
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
   weight = weight * (1.0 / 2.0); // number on [0,0.5)-real-interval
   return res;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetWeight(ExecutionState *es, double &weight) {
+TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetWeight(ExecutionState *es, double &weight) {
   BasicBlock *bb = es->getPCBlock();
   KBlock *kb = es->stack.back().kf->blockMap[bb];
   unsigned int minCallWeight = UINT_MAX, minSfNum = UINT_MAX, sfNum = 0;
@@ -263,7 +261,7 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetWeight(ExecutionState *es
   return res;
 }
 
-void TargetedSearcher::update(ExecutionState *current,
+void TargetedForwardSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {
   reachedOnLastUpdate.clear();
@@ -320,19 +318,19 @@ void TargetedSearcher::update(ExecutionState *current,
   
 }
 
-bool TargetedSearcher::empty() {
+bool TargetedForwardSearcher::empty() {
   return states->empty();
 }
 
-void TargetedSearcher::printName(llvm::raw_ostream &os) {
+void TargetedForwardSearcher::printName(llvm::raw_ostream &os) {
   os << "TargetedSearcher";
 }
 
-GuidedSearcher::GuidedSearcher(std::unique_ptr<Searcher> _baseSearcher) 
+GuidedForwardSearcher::GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> _baseSearcher) 
   : baseSearcher(std::move(_baseSearcher))
 {}
 
-ExecutionState &GuidedSearcher::selectState() {
+ExecutionState &GuidedForwardSearcher::selectState() {
   unsigned size = targetedSearchers.size();
   index = (index + 1) % (size + 1);
   if (index == size)
@@ -346,7 +344,7 @@ ExecutionState &GuidedSearcher::selectState() {
   }
 }
 
-void GuidedSearcher::updateTarget(KBlock *target, KBlock *from,
+void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
                                   KBlock *remove) {
 
   if(targetedSearchers.count(from)) {
@@ -363,7 +361,7 @@ void GuidedSearcher::updateTarget(KBlock *target, KBlock *from,
   }
 }
 
-void GuidedSearcher::update(ExecutionState *current,
+void GuidedForwardSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {
   
@@ -404,7 +402,7 @@ void GuidedSearcher::update(ExecutionState *current,
   baseSearcher->update(current, addedStates, removedStates);
 }
 
-std::unordered_set<ExecutionState*> GuidedSearcher::collectReached() {
+std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectReached() {
   std::unordered_set<ExecutionState*> ret;
   for (auto it = targetedSearchers.begin(); it != targetedSearchers.end();
        it++) {
@@ -415,16 +413,16 @@ std::unordered_set<ExecutionState*> GuidedSearcher::collectReached() {
   return ret;
 }
 
-bool GuidedSearcher::empty() {
+bool GuidedForwardSearcher::empty() {
   return baseSearcher->empty();
 }
 
-void GuidedSearcher::printName(llvm::raw_ostream &os) {
+void GuidedForwardSearcher::printName(llvm::raw_ostream &os) {
   os << "GuidedSearcher";
 }
 
-void GuidedSearcher::addTarget(KBlock *target) {
-  targetedSearchers[target] = std::make_unique<TargetedSearcher>(target);
+void GuidedForwardSearcher::addTarget(KBlock *target) {
+  targetedSearchers[target] = std::make_unique<TargetedForwardSearcher>(target);
 }
 
 WeightedRandomSearcher::WeightedRandomSearcher(WeightType type, RNG &rng)
@@ -630,7 +628,7 @@ void RandomPathSearcher::printName(llvm::raw_ostream &os) {
 
 ///
 
-MergingSearcher::MergingSearcher(Searcher *baseSearcher)
+MergingSearcher::MergingSearcher(ForwardSearcher *baseSearcher)
   : baseSearcher{baseSearcher} {};
 
 void MergingSearcher::pauseState(ExecutionState &state) {
@@ -696,7 +694,7 @@ void MergingSearcher::printName(llvm::raw_ostream &os) {
 
 ///
 
-BatchingSearcher::BatchingSearcher(Searcher *baseSearcher, time::Span timeBudget, unsigned instructionBudget)
+BatchingSearcher::BatchingSearcher(ForwardSearcher *baseSearcher, time::Span timeBudget, unsigned instructionBudget)
   : baseSearcher{baseSearcher},
     timeBudget{timeBudget},
     instructionBudget{instructionBudget} {};
@@ -750,7 +748,7 @@ void BatchingSearcher::printName(llvm::raw_ostream &os) {
 
 ///
 
-IterativeDeepeningTimeSearcher::IterativeDeepeningTimeSearcher(Searcher *baseSearcher)
+IterativeDeepeningTimeSearcher::IterativeDeepeningTimeSearcher(ForwardSearcher *baseSearcher)
   : baseSearcher{baseSearcher} {};
 
 ExecutionState &IterativeDeepeningTimeSearcher::selectState() {
@@ -809,14 +807,14 @@ void IterativeDeepeningTimeSearcher::printName(llvm::raw_ostream &os) {
 
 ///
 
-InterleavedSearcher::InterleavedSearcher(const std::vector<Searcher*> &_searchers) {
+InterleavedSearcher::InterleavedSearcher(const std::vector<ForwardSearcher*> &_searchers) {
   searchers.reserve(_searchers.size());
   for (auto searcher : _searchers)
     searchers.emplace_back(searcher);
 }
 
 ExecutionState &InterleavedSearcher::selectState() {
-  Searcher *s = searchers[--index].get();
+  ForwardSearcher *s = searchers[--index].get();
   if (index == 0) index = searchers.size();
   return s->selectState();
 }
@@ -841,7 +839,7 @@ void InterleavedSearcher::printName(llvm::raw_ostream &os) {
   os << "</InterleavedSearcher>\n";
 }
 
-BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank &rank, std::unique_ptr<Searcher> first, std::unique_ptr<Searcher> second)
+BinaryRankedSearcher::BinaryRankedSearcher(ExecutionStateBinaryRank &rank, std::unique_ptr<ForwardSearcher> first, std::unique_ptr<ForwardSearcher> second)
   : rank(rank), firstRankSearcher(std::move(first)), secondRankSearcher(std::move(second)) {}
 
 ExecutionState &BinaryRankedSearcher::selectState() {

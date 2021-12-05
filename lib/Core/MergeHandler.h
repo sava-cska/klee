@@ -88,14 +88,14 @@ extern llvm::cl::opt<bool> DebugLogMerge;
 
 extern llvm::cl::opt<bool> DebugLogIncompleteMerge;
 
-class BaseExecutor;
+class Executor;
 class ExecutionState;
 
 /// @brief Represents one `klee_open_merge()` call. 
 /// Handles merging of states that branched from it
 class MergeHandler {
 private:
-  BaseExecutor *executor;
+  Executor *executor;
 
   /// @brief The instruction count when the state ran into the klee_open_merge
   uint64_t openInstruction;
@@ -149,7 +149,7 @@ public:
   /// @brief Required by klee::ref-managed objects
   class ReferenceCounter _refCount;
 
-  MergeHandler(BaseExecutor *_executor, ExecutionState *es);
+  MergeHandler(Executor *_executor, ExecutionState *es);
   ~MergeHandler();
 };
 }

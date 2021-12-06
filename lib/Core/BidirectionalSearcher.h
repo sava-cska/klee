@@ -26,14 +26,12 @@ public:
   virtual Action selectAction() = 0;
   virtual void update(ActionResult) = 0;
   
-  virtual bool empty() = 0;
 };
 
 class ForwardBidirSearcher : public IBidirectionalSearcher {
 public:
   Action selectAction() override;
   void update(ActionResult) override;
-  bool empty() override;
 
   ForwardBidirSearcher(SearcherConfig);
   

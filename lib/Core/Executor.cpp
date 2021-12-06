@@ -5471,8 +5471,12 @@ void Executor::run(ExecutionState &state) {
   processForest->addRoot(&state);
   searcher = std::make_unique<ForwardBidirSearcher>(cfg);
 
-  while (!searcher->empty() && !haltExecution) {
+  while (!haltExecution) {
     auto action = searcher->selectAction();
+    
+    if(action.type == Action::Type::Terminate)
+      break;
+    
     auto result = executeAction(action);
     updateStates(result);
     // TODO testgen

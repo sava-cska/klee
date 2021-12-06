@@ -28,23 +28,22 @@
 namespace klee {
 
 Action ForwardBidirSearcher::selectAction() {
-  auto& state = searcher->selectState();
-  if (state.targets.empty() &&
-      state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-    KBlock* target = ex->calculateCoverTarget(state);
-    if(target) {
-      state.targets.insert(target);
-      ex->updateStates(&state);
-    } else {
-      ex->pauseState(state);
-      ex->updateStates(nullptr);
+  while(!searcher->empty()) {
+    auto &state = searcher->selectState();
+    if (state.targets.empty() &&
+        state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
+      KBlock *target = ex->calculateCoverTarget(state);
+      if (target) {
+        state.targets.insert(target);
+        ex->updateStates(&state);
+        return Action(&state);
+      } else {
+        ex->pauseState(state);
+        ex->updateStates(nullptr);
+      }
     }
   }
-  return Action(&state);
-}
-
-bool ForwardBidirSearcher::empty() {
-  return searcher->empty();
+  return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});
 }
 
 void ForwardBidirSearcher::update(ActionResult r) {

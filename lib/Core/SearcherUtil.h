@@ -3,6 +3,7 @@
 
 #include "ProofObligation.h"
 #include "klee/Module/KModule.h"
+#include <unordered_set>
 #include <variant>
 
 namespace klee {
@@ -11,7 +12,7 @@ class ExecutionState;
 class Executor;
 
 struct Action {
-  enum class Type { Init, Forward, Backward };
+  enum class Type { Init, Forward, Backward, Terminate };
 
   Type type;
   ExecutionState* state; // Forward, Backward
@@ -22,6 +23,10 @@ struct Action {
   Action(ExecutionState *es)
       : type(Action::Type::Forward), state(es), location(nullptr), pob(nullptr),
         targets({}) {}
+
+  Action(Type t, ExecutionState *es, KBlock *loc, ProofObligation *pob,
+         std::unordered_set<KBlock *> targets)
+      : type(t), state(es), location(loc), pob(pob), targets(targets) {}
 };
 
 struct SearcherConfig {

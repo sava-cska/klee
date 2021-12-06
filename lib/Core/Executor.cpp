@@ -3314,8 +3314,17 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
 // TODO: Refactor
 void Executor::updateStates(ActionResult r) {
+  
   if (searcher) {
-    searcher->update(r);
+    // ultra hot fix
+    if(std::holds_alternative<ForwardResult>(r)) {
+      auto fr = std::get<ForwardResult>(r);
+      fr.addedStates = addedStates;
+      fr.removedStates = removedStates;
+      searcher->update(fr);
+    } else {
+      searcher->update(r);
+    }
   }
 
   if (std::holds_alternative<ForwardResult>(r)) {
@@ -5334,6 +5343,8 @@ ActionResult Executor::executeAction(Action a) {
   case Action::Type::Init:
     // Dumb
     initBranch(a.location);
+    return nullptr;
+  case Action::Type::Terminate:
     return nullptr;
   }
 }

@@ -41,6 +41,8 @@ Action ForwardBidirSearcher::selectAction() {
         ex->pauseState(state);
         ex->updateStates(nullptr);
       }
+    } else {
+      return Action(&state);
     }
   }
   return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});

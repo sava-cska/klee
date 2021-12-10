@@ -10,7 +10,6 @@
 /* Straight C for linking simplicity */
 
 #include <assert.h>
-#include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,32 +52,33 @@ static void report_internal_error(const char *msg, ...) {
   }
 }
 
-int ends_with(const char *name, const char *extension) {
-  const char *ldot = strrchr(name, '.');
-  if (ldot != NULL) {
+int ends_with(const char* name, const char* extension)
+{
+  const char* ldot = strrchr(name, '.');
+  if (ldot != NULL)
+  {
     int length = strlen(extension);
     return strncmp(ldot + 1, extension, length) == 0;
   }
   return 0;
 }
 
-void recursively_allocate(ConcretizedObject *obj, size_t index, void *addr,
-                          int lazy) {
-  if (!lazy) {
+void recursively_allocate(ConcretizedObject* obj, size_t index, void* addr, int lazy) {
+  /* Verify implementation */
+  if(!lazy) {
     memcpy(addr, obj->values, obj->size);
     addresses[index] = (uintptr_t)addr;
-  } else {
-    void *address = malloc(obj->size);
+  } else  {
+    void* address = malloc(obj->size);
     memcpy(address, obj->values, obj->size);
     addresses[index] = (uintptr_t)address;
   }
-  for (size_t i = 0; i < obj->n_offsets; i++) {
-    if (!addresses[obj->offsets[i].index]) {
-      recursively_allocate(&input_tc->objects[obj->offsets[i].index],
-                           obj->offsets[i].index, 0, 1);
+  for(size_t i = 0; i < obj->n_offsets; i++) {
+    if(!addresses[obj->offsets[i].index]) {
+      recursively_allocate(&input_tc->objects[obj->offsets[i].index], obj->offsets[i].index, 0, 1);
     }
-    void *offset_addr = (void *)(addresses[index] + (obj->offsets[i].offset));
-    memcpy(offset_addr, &addresses[obj->offsets[i].index], sizeof(void *));
+    void* offset_addr = (void*)(addresses[index] + (obj->offsets[i].offset));
+    memcpy(offset_addr, &addresses[obj->offsets[i].index], sizeof(void*));
   }
   return;
 }
@@ -129,9 +129,9 @@ void klee_make_symbolic(void *array, size_t nbytes, const char *name) {
       }
       tmp[strlen(tmp) - 1] = '\0'; /* kill newline */
     }
-    if (ends_with(name, "ktestjson")) {
+    if(ends_with(name,"ktestjson")) {
       input_tc = TC_fromFile(name);
-    } else if (ends_with(name, "ktest")) {
+    } else if(ends_with(name,"ktest")) {
       testData = kTest_fromFile(name);
     } else {
       fprintf(stderr, "KLEE-RUNTIME: unknown test file type\n");

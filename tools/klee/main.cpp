@@ -550,7 +550,7 @@ void KleeHandler::writeTestCaseKTest(const TestCase &tc, unsigned id) {
                     getOutputFilename(getTestFilename("ktest", id)).c_str())) {
     klee_warning("unable to write output test case, losing it");
   } else {
-    ++m_numGeneratedTests;
+    // ++m_numGeneratedTests;
   }
   for (unsigned i = 0; i < b.numObjects; i++)
     delete[] b.objects[i].bytes;
@@ -616,7 +616,7 @@ void KleeHandler::writeTestCaseXML(
   }
   *file << "</testcase>\n";
 
-  ++m_numGeneratedTests;
+  // ++m_numGeneratedTests;
 }
 
 void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id) {
@@ -636,6 +636,7 @@ void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id) {
     out_obj["values"] = std::vector<unsigned char>(
         tc.objects[i].values, tc.objects[i].values + tc.objects[i].size);
     out_obj["size"] = tc.objects[i].size;
+    out_obj["address"] = tc.objects[i].address;
     out_obj["n_offsets"] = tc.objects[i].n_offsets;
     for (unsigned j = 0; j < tc.objects[i].n_offsets; j++) {
       json offset_obj;
@@ -661,7 +662,11 @@ void KleeHandler::processTestCase(ExecutionState &state,
     const auto start_time = time::getWallTime();
     TestCase assignments{};
     assignments.numArgs = m_argc;
-    assignments.args = m_argv;
+    assignments.args = new char*[m_argc];
+    for(int i = 0; i<m_argc; i++) {
+      assignments.args[i] = new char[std::strlen(m_argv[i])+1];
+      std::strcpy(assignments.args[i], m_argv[i]);
+    }
     assignments.symArgvs = 0;
     assignments.symArgvLen = 0;
     
@@ -689,6 +694,8 @@ void KleeHandler::processTestCase(ExecutionState &state,
       }
     }
 
+    TestCase_free(&assignments);
+    
     if (WriteStates && lazy_instantiation_resolved == -1) {
       auto f_s = openTestFile("state_li_unresolved", test_id);
       m_interpreter->logState(state, state_id, f_s);
@@ -762,6 +769,8 @@ void KleeHandler::processTestCase(ExecutionState &state,
         }
       }
     }
+
+    m_numGeneratedTests++;
 
     if (m_numGeneratedTests == MaxTests)
       m_interpreter->setHaltExecution(true);

@@ -264,7 +264,7 @@ TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetWeight(Exec
 void TargetedForwardSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {
-  reachedOnLastUpdate.clear();
+  reachedOnLastUpdate = nullptr;
   double weight;
   // update current
   if (current && std::find(removedStates.begin(), removedStates.end(), current) == removedStates.end()) {
@@ -279,8 +279,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       break;
     case Done:
       current->multilevel.clear();
-      // current->targets.erase(target);
-      reachedOnLastUpdate.insert(current);
+      reachedOnLastUpdate = current;
       break;
     case Miss:
       current->targets.erase(target);
@@ -301,7 +300,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       states->insert(state, weight);
       states_set.insert(state);
       state->multilevel.clear();
-      reachedOnLastUpdate.insert(current);
+      reachedOnLastUpdate = current;
       break;
     case Miss:
       state->targets.erase(target);
@@ -312,10 +311,19 @@ void TargetedForwardSearcher::update(ExecutionState *current,
   // remove states
   for (const auto state : removedStates) {
     state->targets.erase(target);
-    states->remove(state);
-    states_set.erase(state);
+    if(states_set.count(state)) {
+      states->remove(state);
+      states_set.erase(state);
+    }
   }
-  
+
+  if(reachedOnLastUpdate) {
+    for(auto state : states_set) {
+      states->remove(state);
+      state->targets.erase(target);
+    }
+    states_set.clear();
+  }
 }
 
 bool TargetedForwardSearcher::empty() {
@@ -406,8 +414,8 @@ std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectReached() {
   std::unordered_set<ExecutionState*> ret;
   for (auto it = targetedSearchers.begin(); it != targetedSearchers.end();
        it++) {
-    for(auto state: it->second->reachedOnLastUpdate) {
-      ret.insert(state);
+    if(it->second->reachedOnLastUpdate) {
+      ret.insert(it->second->reachedOnLastUpdate);
     }
   }
   return ret;

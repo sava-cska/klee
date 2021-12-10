@@ -4908,14 +4908,13 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                              ConstantExpr::alloc(0, Expr::Bool));
     return false;
   }
-
-  res.objects = (ConcretizedObject *)malloc(sizeof(ConcretizedObject) *
-                                            state.symbolics.size());
+  
+  res.objects = new ConcretizedObject[state.symbolics.size()];
   res.n_objects = state.symbolics.size();
 
   for (unsigned i = 0; i != state.symbolics.size(); ++i) {
     auto mo = state.symbolics[i].first;
-    res.objects[i] = createConcretizedObject(mo->name.c_str(), values[i]);
+    res.objects[i] = createConcretizedObject(mo->name.c_str(), values[i], mo->address);
   }
 
   return true;
@@ -5197,69 +5196,6 @@ bool Executor::isTargetable(ExecutionState &state) {
   return it != sts.end();
 }
 
-// bool Executor::tryBoundedExecuteStep(ExecutionState &state,
-//                                            unsigned bound) {
-//   KInstruction *prevKI = state.prevPC;
-
-//   if (prevKI->inst->isTerminator()) {
-//     addHistoryResult(state);
-//     if (state.multilevel.count(state.getPCBlock()) > bound) {
-//       return false;
-//     }
-//   }
-
-//   executeStep(state);
-//   return true;
-// }
-
-// void Executor::isolatedExecuteStep(ExecutionState &state) {
-//   assert(state.isIsolated());
-//   KInstruction *ki = state.pc;
-
-//   if (state.isCriticalPC() || isa<ReturnInst>(ki->inst)) {
-//     addTargetable(state);
-//     addCompletedResult(state);
-//     silentRemove(state);
-//     if (isa<ReturnInst>(ki->inst)) {
-//       executeStep(state);
-//     } else
-//       updateStates(ForwardResult(nullptr,addedStates,removedStates));
-//     return;
-//   }
-
-//   if (state.redundant) {
-//     pauseRedundantState(state);
-//     updateStates(ForwardResult(nullptr,addedStates,removedStates));
-//     return;
-//   }
-
-//   executeStep(state);
-// }
-
-// // Was named tryCoverStep
-// bool Executor::tryExploreStep(ExecutionState &state,
-//                                     ExecutionState &initialState) {
-//   KFunction *kf = kmodule->functionMap[state.getPCBlock()->getParent()];
-//   if (state.isIntegrated() && state.isCriticalPC()) {
-//     if (results.find(state.getPCBlock()) == results.end()) {
-//       initializeRoot(initialState, kf->blockMap[state.getPCBlock()]);
-//       updateStates(ForwardResult(nullptr,addedStates,removedStates));
-//     } else {
-//       if (state.targets.empty() &&
-//           state.multilevel.count(state.getPCBlock()) > MaxCycles - 1)
-//         return false;
-//       else
-//         composeStep(state);
-//     }
-//   } else if (state.isIsolated()) {
-//     isolatedExecuteStep(state);
-//   } else {
-//     executeStep(state);
-//   }
-//   return true;
-// }
-
-// Absent in Bidir
 void Executor::executeReturn(ExecutionState &state, KInstruction *ki) {
   assert(isa<ReturnInst>(ki->inst));
   ReturnInst *ri = cast<ReturnInst>(ki->inst);

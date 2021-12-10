@@ -33,7 +33,7 @@ public:
   Action selectAction() override;
   void update(ActionResult) override;
 
-  ForwardBidirSearcher(SearcherConfig);
+  explicit ForwardBidirSearcher(SearcherConfig);
   
 private:
   GuidedForwardSearcher* searcher;

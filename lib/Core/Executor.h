@@ -701,9 +701,6 @@ public:
   void runMainWithTarget(llvm::Function *mainFn, llvm::BasicBlock *target,
                          int argc, char **argv, char **envp);
 
-  bool tryBoundedExecuteStep(ExecutionState &state, unsigned bound);
-  void isolatedExecuteStep(ExecutionState &state);
-  bool tryExploreStep(ExecutionState &state, ExecutionState &initialState);
   void composeStep(ExecutionState &state);
   void executeReturn(ExecutionState &state, KInstruction *ki);
   KBlock *calculateCoverTarget(ExecutionState &state);

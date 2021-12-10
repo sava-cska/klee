@@ -23,6 +23,7 @@ struct ConcretizedObject {
   /* offset - child id */
   Offset* offsets;
   size_t n_offsets;
+  uint64_t address;
 };
 
 typedef struct TestCase TestCase;
@@ -37,6 +38,8 @@ struct TestCase {
 };
 
 TestCase* TC_fromFile(const char *path);
+void ConcretizedObject_free(ConcretizedObject*);
+void TestCase_free(TestCase*);
   
 #ifdef __cplusplus
 }

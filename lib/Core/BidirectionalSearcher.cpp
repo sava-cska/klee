@@ -147,13 +147,13 @@ void BidirectionalSearcher::update(ActionResult r) {
     auto reached = branch->collectAndClearReached();
     for(auto i : reached) {
         backward->addBranch(i);
-      }
+    }
     forward->update(fwd_cur, fwd_added, fwd_removed);
     reached = forward->collectAndClearReached();
     for (auto i : reached) {
       backward->addBranch(i);
     }
-    
+
   } else if (std::holds_alternative<BackwardResult>(r)) {
     auto br = std::get<BackwardResult>(r);
     backward->update(br.newPob);

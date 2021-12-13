@@ -300,7 +300,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       states->insert(state, weight);
       states_set.insert(state);
       state->multilevel.clear();
-      reachedOnLastUpdate.insert(current);
+      reachedOnLastUpdate.insert(state);
       break;
     case Miss:
       state->targets.erase(target);

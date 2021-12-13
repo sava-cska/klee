@@ -144,12 +144,12 @@ void BidirectionalSearcher::update(ActionResult r) {
     }
 
     branch->update(brnch_cur, brnch_added, brnch_removed);
-    auto reached = branch->collectReached();
+    auto reached = branch->collectAndClearReached();
     for(auto i : reached) {
         backward->addBranch(i);
       }
     forward->update(fwd_cur, fwd_added, fwd_removed);
-    reached = forward->collectReached();
+    reached = forward->collectAndClearReached();
     for (auto i : reached) {
       backward->addBranch(i);
     }

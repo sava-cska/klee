@@ -264,7 +264,7 @@ TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetWeight(Exec
 void TargetedForwardSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {
-  reachedOnLastUpdate = nullptr;
+  reachedOnLastUpdate.clear();
   double weight;
   // update current
   if (current && std::find(removedStates.begin(), removedStates.end(), current) == removedStates.end()) {
@@ -279,7 +279,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       break;
     case Done:
       current->multilevel.clear();
-      reachedOnLastUpdate = current;
+      reachedOnLastUpdate.insert(current);
       break;
     case Miss:
       current->targets.erase(target);
@@ -300,7 +300,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       states->insert(state, weight);
       states_set.insert(state);
       state->multilevel.clear();
-      reachedOnLastUpdate = current;
+      reachedOnLastUpdate.insert(current);
       break;
     case Miss:
       state->targets.erase(target);
@@ -312,18 +312,10 @@ void TargetedForwardSearcher::update(ExecutionState *current,
   for (const auto state : removedStates) {
     state->targets.erase(target);
     // Этот иф не должнен тут быть
-    if(states_set.count(state)) {
-      states->remove(state);
-      states_set.erase(state);
-    }
-  }
-
-  if(reachedOnLastUpdate) {
-    for(auto state : states_set) {
-      states->remove(state);
-      state->targets.erase(target);
-    }
-    states_set.clear();
+    // if(states_set.count(state)) {
+    states->remove(state);
+    states_set.erase(state);
+    // }
   }
 }
 
@@ -404,21 +396,23 @@ void GuidedForwardSearcher::update(ExecutionState *current,
     if (targetedSearchers.count(target) == 0)
       addTarget(target);
     targetedSearchers[target]->update(currTState, addedTStates[target], removedTStates[target]);
-    
-    if (targetedSearchers[target]->reachedOnLastUpdate)
-      reached.insert(targetedSearchers[target]->reachedOnLastUpdate);
-    
-    if (targetedSearchers[target]->empty())
+
+    if (!targetedSearchers[target]->reachedOnLastUpdate.empty() || targetedSearchers[target]->empty())
       targetedSearchers.erase(target);
   }
 
   baseSearcher->update(current, addedStates, removedStates);
 }
 
-std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectReached() {
+std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReached() {
   std::unordered_set<ExecutionState*> ret;
-  ret.insert(reached.begin(), reached.end());
-  reached.clear();
+  for (auto it = targetedSearchers.begin(); it != targetedSearchers.end();
+       it++) {
+    for(auto state: it->second->reachedOnLastUpdate) {
+      ret.insert(state);
+    }
+    it->second->reachedOnLastUpdate.clear();
+  }
   return ret;
 }
 

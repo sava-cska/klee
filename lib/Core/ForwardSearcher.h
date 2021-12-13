@@ -137,7 +137,7 @@ namespace klee {
     WeightResult tryGetWeight(ExecutionState* es, double &weight);
 
   public:
-    ExecutionState* reachedOnLastUpdate;
+    std::unordered_set<ExecutionState*> reachedOnLastUpdate;
     std::unordered_set<ExecutionState*> states_set;
     TargetedForwardSearcher(KBlock *targetBB);
     ~TargetedForwardSearcher() override = default;
@@ -168,7 +168,7 @@ namespace klee {
 
     void updateTarget(KBlock *target, KBlock *from, KBlock *remove);
 
-    std::unordered_set<ExecutionState*> collectReached();
+    std::unordered_set<ExecutionState*> collectAndClearReached();
     
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;

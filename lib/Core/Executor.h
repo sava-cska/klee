@@ -684,8 +684,7 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  // _-_ Weird void
-  void initBranch(KBlock* loc);
+  InitResult initBranch(KBlock* loc);
   ForwardResult goForward(ExecutionState* state);
   BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
 

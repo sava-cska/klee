@@ -311,6 +311,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
   // remove states
   for (const auto state : removedStates) {
     state->targets.erase(target);
+    // Этот иф не должнен тут быть
     if(states_set.count(state)) {
       states->remove(state);
       states_set.erase(state);

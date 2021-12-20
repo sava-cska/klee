@@ -24,6 +24,8 @@ klee_add_component(kleeCore
   PForest.cpp
   PTree.cpp
   ForwardSearcher.cpp
+  Initializer.cpp
+  BackwardSearcher.cpp
   SeedInfo.cpp
   SpecialFunctionHandler.cpp
   StatsTracker.cpp

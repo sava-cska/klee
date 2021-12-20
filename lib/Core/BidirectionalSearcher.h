@@ -7,7 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 #pragma once
+#include "BackwardSearcher.h"
 #include "Executor.h"
+#include "Initializer.h"
 #include "SearcherUtil.h"
 #include "ProofObligation.h"
 #include "ForwardSearcher.h"
@@ -40,18 +42,20 @@ private:
   Executor* ex; // hack
 };
 
-// class BidirectionalSearcher : public IBidirectionalSearcher {
-// public:
-//   Action selectAction() override;
-//   void update(ActionResult) override;
-//   bool empty() override;
+class BidirectionalSearcher : public IBidirectionalSearcher {
+public:
+  Action selectAction() override;
+  void update(ActionResult) override;
 
-//   BidirectionalSearcher(SearcherConfig);
-
-// private:
-//   std::unique_ptr<GuidedForwardSearcher> forwardSearcher;
-//   std::unique_ptr<GuidedForwardSearcher> branchSearcher;
-//   std::unique_ptr<BFSBackwardSearcher> backwardSearcher;
-// };
+  explicit BidirectionalSearcher(SearcherConfig);
+  
+private:
+  
+  Executor* ex; // hack
+  GuidedForwardSearcher* forward;
+  GuidedForwardSearcher* branch;
+  BFSBackwardSearcher* backward;
+  SDInitializer* initializer;
+};
 
 } // namespace klee

@@ -1,6 +1,7 @@
 // -*- C++ -*-
 #pragma once
 
+#include "ExecutionState.h"
 #include "ProofObligation.h"
 #include "SearcherUtil.h"
 
@@ -11,31 +12,34 @@ namespace klee {
 
 class BackwardSearcher {
 public:
-  
+
+  virtual std::pair<ProofObligation*, ExecutionState*> selectAction() = 0;
+
+  virtual void addBranch(ExecutionState* state) = 0;
   virtual void update(ProofObligation* pob) = 0;
-  virtual bool empty() = 0;
+  virtual bool empty() = 0;  
 };
 
 class BFSBackwardSearcher : BackwardSearcher {
-// public:
-//   // Action selectAction() override;
+public:
 
-//   // void addBranch(ExecutionState *state) override;
+  void update(ProofObligation* pob) override;
+  
+  std::pair<ProofObligation*, ExecutionState*> selectAction() override;
 
-//   // void update(BackwardResult) override;
-//   // void remove(ProofObligation* pob) override;
+  void addBranch(ExecutionState* state) override;
 
-//   BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
-//     for (auto location : locations) {
-//       pobs.insert(new ProofObligation(location));
-//     }
-//   }
+  bool empty() override;
 
-// private:
-//   std::unordered_set<ProofObligation *> pobs;
-//   std::unordered_set<KBlock *> targets;
-//   std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
-//   std::unordered_set<KBlock *> initializedLocs;
+  BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
+    for (auto location : locations) {
+      pobs.insert(new ProofObligation(location));
+    }
+  }
+
+private:
+  std::unordered_set<ProofObligation *> pobs;
+  std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
 };
 
 };

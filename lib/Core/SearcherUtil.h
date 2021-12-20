@@ -57,6 +57,12 @@ struct BackwardResult {
       : newPob(_newPob), oldPob(_oldPob) {}
 };
 
-using ActionResult = std::variant<ForwardResult, BackwardResult>;
+struct InitResult {
+  KBlock* location;
+  ExecutionState* state;
+  InitResult(KBlock *_loc, ExecutionState *es) : location(_loc), state(es) {}
+};
+
+using ActionResult = std::variant<ForwardResult, BackwardResult, InitResult>;
 
 }

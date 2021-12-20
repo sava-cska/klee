@@ -3327,30 +3327,28 @@ void Executor::updateStates(ActionResult r) {
     }
   }
 
-  if (std::holds_alternative<ForwardResult>(r)) {
-    states.insert(addedStates.begin(), addedStates.end());
-    addedStates.clear();
+  states.insert(addedStates.begin(), addedStates.end());
+  addedStates.clear();
 
-    for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
-                                                 ie = removedStates.end();
-         it != ie; ++it) {
-      ExecutionState *es = *it;
-      std::set<ExecutionState *>::iterator it2 = states.find(es);
-      assert(it2 != states.end());
-      states.erase(it2);
-      std::map<ExecutionState *, std::vector<SeedInfo>>::iterator it3 =
-          seedMap.find(es);
-      if (it3 != seedMap.end())
-        seedMap.erase(it3);
-      processForest->remove(es->ptreeNode);
-      if (es->isIntegrated()) {
-        delete es;
-      } else {
-        isolatedStates.push_back(es);
-      }
+  for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
+                                               ie = removedStates.end();
+       it != ie; ++it) {
+    ExecutionState *es = *it;
+    std::set<ExecutionState *>::iterator it2 = states.find(es);
+    assert(it2 != states.end());
+    states.erase(it2);
+    std::map<ExecutionState *, std::vector<SeedInfo>>::iterator it3 =
+        seedMap.find(es);
+    if (it3 != seedMap.end())
+      seedMap.erase(it3);
+    processForest->remove(es->ptreeNode);
+    if (es->isIntegrated()) {
+      delete es;
+    } else {
+      isolatedStates.push_back(es);
     }
-    removedStates.clear();
   }
+  removedStates.clear();
 }
 // ultra bad
 void Executor::updateStates(ExecutionState* state) {
@@ -5277,9 +5275,7 @@ ActionResult Executor::executeAction(Action a) {
   case Action::Type::Backward:
     return goBackward(a.state, a.pob);
   case Action::Type::Init:
-    // Dumb
-    initBranch(a.location);
-    return nullptr;
+    return initBranch(a.location);
   case Action::Type::Terminate:
     return nullptr;
   }
@@ -5412,21 +5408,38 @@ void Executor::run(ExecutionState &state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  // cfg.targets.insert();
+  for(auto i : state.stack.back().kf->finalKBlocks) {
+    if(!isa<UnreachableInst>(i->instructions[i->numInstructions - 1]->inst)) {
+      cfg.targets.insert(i);
+    }
+  }
   cfg.executor = this;
 
   processForest->addRoot(&state);
-  searcher = std::make_unique<ForwardBidirSearcher>(cfg);
+  searcher = std::make_unique<BidirectionalSearcher>(cfg);
 
   while (!haltExecution) {
     auto action = searcher->selectAction();
     
     if(action.type == Action::Type::Terminate)
       break;
-    
+      
     auto result = executeAction(action);
     updateStates(result);
-    // TODO testgen
+    // TODO verify _-_
+    if(std::holds_alternative<BackwardResult>(result)) {
+      auto br = std::get<BackwardResult>(result);
+      if(br.newPob->location->instructions[0]->inst ==
+         initialState->initPC->inst) {
+        ExecutionState* state = initialState->copy();
+        for(auto& constraint : br.newPob->condition) {
+          state->constraints.push_back(constraint);
+        }
+
+        interpreterHandler->processTestCase(*state,0,0);
+        delete state;
+      } 
+    }
   }
 
   // Все или только из начальной точки?
@@ -5463,7 +5476,7 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-void Executor::initBranch(KBlock* loc) {
+InitResult Executor::initBranch(KBlock* loc) {
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5471,6 +5484,7 @@ void Executor::initBranch(KBlock* loc) {
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
   addedStates.push_back(state);
+  return InitResult(loc, state);
 }
 
 ForwardResult Executor::goForward(ExecutionState* state) {

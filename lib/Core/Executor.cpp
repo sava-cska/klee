@@ -1067,7 +1067,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
         TimerStatIncrementer timer(stats::forkTime);
         if (theRNG.getBool()) {
           addConstraint(current, condition);
-          res = Solver::True;        
+          res = Solver::True;
         } else {
           addConstraint(current, Expr::createIsZero(condition));
           res = Solver::False;
@@ -1242,7 +1242,7 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
       klee_warning("seeds patched for violating constraint"); 
   }
 
-  state.addConstraint(condition);
+  state.addConstraint(condition, state.prevPC);
   if (ivcEnabled)
     doImpliedValueConcretization(state, condition, 
                                  ConstantExpr::alloc(1, Expr::Bool));
@@ -3329,8 +3329,8 @@ void Executor::updateStates(ActionResult r) {
   addedStates.clear();
 
   for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
-                                               ie = removedStates.end();
-       it != ie; ++it) {
+                                                ie = removedStates.end();
+        it != ie; ++it) {
     ExecutionState *es = *it;
     std::set<ExecutionState *>::iterator it2 = states.find(es);
     assert(it2 != states.end());
@@ -3339,8 +3339,8 @@ void Executor::updateStates(ActionResult r) {
         seedMap.find(es);
     if (it3 != seedMap.end())
       seedMap.erase(it3);
-    processForest->remove(es->ptreeNode);
     if (es->isIntegrated()) {
+      processForest->remove(es->ptreeNode);
       delete es;
     } else {
       isolatedStates.push_back(es);
@@ -3484,6 +3484,7 @@ void Executor::doDumpStates() {
   }
   updateStates(ForwardResult(nullptr, addedStates, removedStates));
   for (auto es : isolatedStates) {
+    processForest->remove(es->ptreeNode);
     delete es;
   }
 }
@@ -3961,7 +3962,7 @@ ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state,
   ref<Expr> res = Expr::createTempRead(array, e->getWidth());
   ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
   llvm::errs() << "Making symbolic: " << eq << "\n";
-  state.addConstraint(eq);
+  state.addConstraint(eq, nullptr);
   return res;
 }
 
@@ -4870,7 +4871,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
       // If the particular constraint operated on in this iteration through
       // the loop isn't implied then add it to the list of constraints.
       if (!mustBeTrue)
-        cm.addConstraint(*pi);
+        cm.addConstraint(*pi, nullptr);
     }
     if (pi!=pie) break;
   }
@@ -5409,7 +5410,7 @@ void Executor::run(ExecutionState &state) {
          initialState->initPC->inst) {
         ExecutionState* state = initialState->copy();
         for(auto& constraint : br.newPob->condition) {
-          state->constraints.push_back(constraint);
+          state->constraints.push_back(constraint, br.newPob->condition.get_location(constraint));
         }
         klee_message("making a test.");
         interpreterHandler->processTestCase(*state,0,0,true);
@@ -5489,14 +5490,15 @@ BackwardResult Executor::goBackward(ExecutionState *state,
   timers.invoke();
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   for(auto& constraint : pob->condition) {
+    KInstruction *loc = pob->condition.get_location(constraint);
     ref<Expr> rebuilt_constraint;
     bool success = Composer::tryRebuild(constraint, state, rebuilt_constraint);
     // if(!success)
-    newPob->condition.push_back(rebuilt_constraint);
+    newPob->condition.push_back(rebuilt_constraint, loc);
   }
   
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
-  for(auto& constraint: newPob->condition) {
+  for(auto& constraint : newPob->condition) {
     check = AndExpr::create(check, constraint);
   }
   bool mayBeTrue;
@@ -5507,7 +5509,8 @@ BackwardResult Executor::goBackward(ExecutionState *state,
 
   if (mayBeTrue) {
     for (auto& constraint : state->constraints) {
-      newPob->condition.push_back(constraint);
+      KInstruction *location = state->constraints.get_location(constraint);
+      newPob->condition.push_back(constraint, location);
     }
   }
   return BackwardResult{newPob, pob};

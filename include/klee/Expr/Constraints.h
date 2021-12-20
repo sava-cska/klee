@@ -11,6 +11,7 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr/Expr.h"
+#include "klee/Module/KInstruction.h"
 #include <string>
 
 namespace klee {
@@ -35,7 +36,8 @@ public:
   explicit ConstraintSet(constraints_ty cs) : constraints(std::move(cs)) {}
   ConstraintSet() = default;
 
-  void push_back(const ref<Expr> &e);
+  void push_back(const ref<Expr> &e, KInstruction *loc);
+  KInstruction *get_location(const ref<Expr> &e) const;
 
   bool operator==(const ConstraintSet &b) const {
     return constraints == b.constraints;
@@ -43,6 +45,7 @@ public:
 
 private:
   constraints_ty constraints;
+  std::map<ref<Expr>, KInstruction *> mapToLocations;
 };
 
 class ExprVisitor;
@@ -63,16 +66,16 @@ public:
 
   /// Add constraint to the referenced constraint set
   /// \param constraint
-  void addConstraint(const ref<Expr> &constraint, bool *sat = 0);
+  void addConstraint(const ref<Expr> &constraint, KInstruction *location, bool *sat = 0);
 
 private:
   /// Rewrite set of constraints using the visitor
   /// \param visitor constraint rewriter
   /// \return true iff any constraint has been changed
-  bool rewriteConstraints(ExprVisitor &visitor, bool *sat = 0);
+  bool rewriteConstraints(ExprVisitor &visitor, KInstruction *location, bool *sat = 0);
 
   /// Add constraint to the set of constraints
-  void addConstraintInternal(const ref<Expr> &constraint, bool *sat = 0);
+  void addConstraintInternal(const ref<Expr> &constraint, KInstruction *location, bool *sat = 0);
 
   ConstraintSet &constraints;
 };

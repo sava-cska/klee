@@ -304,7 +304,7 @@ public:
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
-  void addConstraint(ref<Expr> e, bool *sat = 0);
+  void addConstraint(ref<Expr> e, KInstruction *loc, bool *sat = 0);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;

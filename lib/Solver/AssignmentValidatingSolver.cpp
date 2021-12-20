@@ -125,7 +125,7 @@ void AssignmentValidatingSolver::dumpAssignmentQuery(
 
   // Add Constraints from `query`
   for (const auto &constraint : query.constraints)
-    constraints.push_back(constraint);
+    constraints.push_back(constraint, query.constraints.get_location(constraint));
 
   Query augmentedQuery(constraints, query.expr);
 

@@ -385,12 +385,13 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
+  ConstraintSet oldConstraints = constraints;
   constraints = ConstraintSet();
 
   ConstraintManager m(constraints);
   for (const auto &constraint : commonConstraints)
-    m.addConstraint(constraint);
-  m.addConstraint(OrExpr::create(inA, inB));
+    m.addConstraint(constraint, oldConstraints.get_location(constraint));
+  m.addConstraint(OrExpr::create(inA, inB), nullptr);
 
   return true;
 }
@@ -429,9 +430,9 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
   }
 }
 
-void ExecutionState::addConstraint(ref<Expr> e, bool *sat) {
+void ExecutionState::addConstraint(ref<Expr> e,  KInstruction *loc, bool *sat) {
   ConstraintManager c(constraints);
-  c.addConstraint(e, sat);
+  c.addConstraint(e, loc, sat);
 }
 
 BasicBlock *ExecutionState::getInitPCBlock() const{

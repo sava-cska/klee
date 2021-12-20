@@ -36,7 +36,7 @@ ConstraintSet Assignment::createConstraintsFromAssignment() const {
       result.push_back(EqExpr::create(
           ReadExpr::create(UpdateList(array, 0),
                            ConstantExpr::alloc(arrayIndex, array->getDomain())),
-          ConstantExpr::alloc(value, array->getRange())));
+          ConstantExpr::alloc(value, array->getRange())), nullptr);
     }
   }
   return result;

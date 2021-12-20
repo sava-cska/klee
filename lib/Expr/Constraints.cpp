@@ -150,19 +150,20 @@ public:
   }
 };
 
-bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, bool *sat) {
+bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, KInstruction *location, bool *sat) {
   ConstraintSet old;
   bool changed = false;
 
   std::swap(constraints, old);
   for (auto &ce : old) {
+    KInstruction *loc = old.get_location(ce);
     ref<Expr> e = visitor.visit(ce);
 
     if (e!=ce) {
-      addConstraintInternal(e, sat); // enable further reductions
+      addConstraintInternal(e, location, sat); // enable further reductions
       changed = true;
     } else {
-      constraints.push_back(ce);
+      constraints.push_back(ce, loc);
     }
   }
 
@@ -195,7 +196,7 @@ ref<Expr> ConstraintManager::simplifyExpr(const ConstraintSet &constraints,
   return ExprReplaceVisitor2(equalities).visit(e);
 }
 
-void ConstraintManager::addConstraintInternal(const ref<Expr> &e, bool *sat) {
+void ConstraintManager::addConstraintInternal(const ref<Expr> &e, KInstruction *location, bool *sat) {
   // rewrite any known equalities and split Ands into different conjuncts
 
   switch (e->getKind()) {
@@ -209,8 +210,8 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e, bool *sat) {
     // split to enable finer grained independence and other optimizations
   case Expr::And: {
     BinaryExpr *be = cast<BinaryExpr>(e);
-    addConstraintInternal(be->left, sat);
-    addConstraintInternal(be->right, sat);
+    addConstraintInternal(be->left, location, sat);
+    addConstraintInternal(be->right, location, sat);
     break;
   }
 
@@ -223,23 +224,23 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e, bool *sat) {
       // (byte-constant comparison).
       BinaryExpr *be = cast<BinaryExpr>(e);
       if (isa<ConstantExpr>(be->left)) {
-	ExprReplaceVisitor visitor(be->right, be->left);
-	rewriteConstraints(visitor, sat);
+        ExprReplaceVisitor visitor(be->right, be->left);
+        rewriteConstraints(visitor, location, sat);
       }
     }
-    constraints.push_back(e);
+    constraints.push_back(e, location);
     break;
   }
 
   default:
-    constraints.push_back(e);
+    constraints.push_back(e, location);
     break;
   }
 }
 
-void ConstraintManager::addConstraint(const ref<Expr> &e, bool *sat) {
+void ConstraintManager::addConstraint(const ref<Expr> &e, KInstruction *location, bool *sat) {
   ref<Expr> simplified = simplifyExpr(constraints, e);
-  addConstraintInternal(simplified, sat);
+  addConstraintInternal(simplified, location, sat);
 }
 
 ConstraintManager::ConstraintManager(ConstraintSet &_constraints)
@@ -257,4 +258,14 @@ klee::ConstraintSet::constraint_iterator ConstraintSet::end() const {
 
 size_t ConstraintSet::size() const noexcept { return constraints.size(); }
 
-void ConstraintSet::push_back(const ref<Expr> &e) { constraints.push_back(e); }
+void ConstraintSet::push_back(const ref<Expr> &e, KInstruction *loc) {
+  constraints.push_back(e);
+  mapToLocations.insert({e, loc});
+}
+
+KInstruction *ConstraintSet::get_location(const ref<Expr> &e) const {
+  if (mapToLocations.count(e))
+    return mapToLocations.at(e);
+  else
+    return nullptr;
+}

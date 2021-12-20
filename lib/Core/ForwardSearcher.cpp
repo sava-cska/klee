@@ -404,6 +404,10 @@ void GuidedForwardSearcher::update(ExecutionState *current,
     if (targetedSearchers.count(target) == 0)
       addTarget(target);
     targetedSearchers[target]->update(currTState, addedTStates[target], removedTStates[target]);
+    
+    if (targetedSearchers[target]->reachedOnLastUpdate)
+      reached.insert(targetedSearchers[target]->reachedOnLastUpdate);
+    
     if (targetedSearchers[target]->empty())
       targetedSearchers.erase(target);
   }
@@ -413,12 +417,8 @@ void GuidedForwardSearcher::update(ExecutionState *current,
 
 std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectReached() {
   std::unordered_set<ExecutionState*> ret;
-  for (auto it = targetedSearchers.begin(); it != targetedSearchers.end();
-       it++) {
-    if(it->second->reachedOnLastUpdate) {
-      ret.insert(it->second->reachedOnLastUpdate);
-    }
-  }
+  ret.insert(reached.begin(), reached.end());
+  reached.clear();
   return ret;
 }
 

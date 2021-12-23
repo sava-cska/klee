@@ -14,14 +14,16 @@ using namespace klee;
 
 SolverImpl::~SolverImpl() {}
 
-bool SolverImpl::computeValidity(const Query &query, Solver::Validity &result) {
+bool SolverImpl::computeValidity(const Query &query,
+                                 Solver::Validity &result,
+                                 SolverQueryMetaData &metaData) {
   bool isTrue, isFalse;
-  if (!computeTruth(query, isTrue))
+  if (!computeTruth(query, isTrue, metaData))
     return false;
   if (isTrue) {
     result = Solver::True;
   } else {
-    if (!computeTruth(query.negateExpr(), isFalse))
+    if (!computeTruth(query.negateExpr(), isFalse, metaData))
       return false;
     result = isFalse ? Solver::False : Solver::Unknown;
   }

@@ -62,13 +62,14 @@ public:
   virtual ~QueryLoggingSolver();
 
   /// implementation of the SolverImpl interface
-  bool computeTruth(const Query &query, bool &isValid);
-  bool computeValidity(const Query &query, Solver::Validity &result);
-  bool computeValue(const Query &query, ref<Expr> &result);
+  bool computeTruth(const Query &query, bool &isValid, SolverQueryMetaData &metaData);
+  bool computeValidity(const Query &query, Solver::Validity &result, SolverQueryMetaData &metaData);
+  bool computeValue(const Query &query, ref<Expr> &result, SolverQueryMetaData &metaData);
   bool computeInitialValues(const Query &query,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
-                            bool &hasSolution);
+                            bool &hasSolution,
+                            SolverQueryMetaData &metaData);
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query &);
   void setCoreSolverTimeout(time::Span timeout);

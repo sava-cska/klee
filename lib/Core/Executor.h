@@ -135,7 +135,7 @@ public:
   typedef std::map<llvm::BasicBlock *, std::unordered_set<llvm::BasicBlock *>>
       VisitedBlock;
   typedef std::map<llvm::BasicBlock *,
-                   std::unordered_set<Transition, BasicBlockPairHash>>
+                   std::unordered_set<Transition, TransitionHash>>
       VisitedTransition;
 
   struct ExecutionBlockResult {
@@ -154,9 +154,6 @@ public:
 private:
   /// The random number generator.
   RNG theRNG;
-
-  std::map<llvm::Function *, std::unordered_set<ExecutionState *>>
-      targetableStates;
 
   ExecutionResult results;
 
@@ -676,10 +673,6 @@ public:
   void addCompletedResult(ExecutionState &state);
   void addErroneousResult(ExecutionState &state);
   void addHistoryResult(ExecutionState &state);
-  
-  void addTargetable(ExecutionState &state);
-  void removeTargetable(ExecutionState &state);
-  bool isTargetable(ExecutionState &state);
 
   void pauseState(ExecutionState &state);
   void pauseRedundantState(ExecutionState &state);
@@ -701,13 +694,9 @@ public:
   void runMainWithTarget(llvm::Function *mainFn, llvm::BasicBlock *target,
                          int argc, char **argv, char **envp);
 
-  void composeStep(ExecutionState &state);
-  void executeReturn(ExecutionState &state, KInstruction *ki);
-  KBlock *calculateCoverTarget(ExecutionState &state);
-  KBlock *calculateTarget(ExecutionState &state);
-  void calculateTargetedStates(
-      llvm::BasicBlock *initialBlock, ExecutedInterval &pausedStates,
-      std::map<KBlock *, std::vector<ExecutionState *>> &targetedStates);
+  KBlock *calculateTargetByTransitionHistory(ExecutionState &state);
+  KBlock *calculateTargetByBlockHistory(ExecutionState &state);
+  KBlock *calculateRootByValidityCore(ExecutionState &state); 
   void initializeRoots(ExecutionState *initialState);
   void addState(ExecutionState &state);
 };

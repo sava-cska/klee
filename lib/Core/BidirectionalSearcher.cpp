@@ -38,7 +38,7 @@ Action ForwardBidirSearcher::selectAction() {
     if (prevKI->inst->isTerminator() &&
         state.targets.empty() &&
         state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-      KBlock *target = ex->calculateCoverTarget(state);
+      KBlock *target = ex->calculateTargetByTransitionHistory(state);
       if (target) {
         state.targets.insert(target);
         ex->updateStates(&state);
@@ -82,7 +82,7 @@ Action BidirectionalSearcher::selectAction() {
         if (prevKI->inst->isTerminator() &&
             state.targets.empty() &&
             state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-          KBlock *target = ex->calculateCoverTarget(state);
+          KBlock *target = ex->calculateTargetByTransitionHistory(state);
           if (target) {
             state.targets.insert(target);
             ex->updateStates(&state);

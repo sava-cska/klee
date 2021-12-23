@@ -37,7 +37,7 @@ bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
   if (simplifyExprs)
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
-  bool success = solver->evaluate(Query(constraints, expr), result);
+  bool success = solver->evaluate(Query(constraints, expr), result, metaData);
 
   metaData.queryCost += timer.delta();
 
@@ -57,7 +57,7 @@ bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
   if (simplifyExprs)
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
-  bool success = solver->mustBeTrue(Query(constraints, expr), result);
+  bool success = solver->mustBeTrue(Query(constraints, expr), result, metaData);
 
   metaData.queryCost += timer.delta();
 
@@ -101,7 +101,7 @@ bool TimingSolver::getValue(const ConstraintSet &constraints, ref<Expr> expr,
   if (simplifyExprs)
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
-  bool success = solver->getValue(Query(constraints, expr), result);
+  bool success = solver->getValue(Query(constraints, expr), result, metaData);
 
   metaData.queryCost += timer.delta();
 
@@ -118,7 +118,7 @@ bool TimingSolver::getInitialValues(
   TimerStatIncrementer timer(stats::solverTime);
 
   bool success = solver->getInitialValues(
-      Query(constraints, ConstantExpr::alloc(0, Expr::Bool)), objects, result);
+      Query(constraints, ConstantExpr::alloc(0, Expr::Bool)), objects, result, metaData);
 
   metaData.queryCost += timer.delta();
 
@@ -129,7 +129,7 @@ std::pair<ref<Expr>, ref<Expr>>
 TimingSolver::getRange(const ConstraintSet &constraints, ref<Expr> expr,
                        SolverQueryMetaData &metaData) {
   TimerStatIncrementer timer(stats::solverTime);
-  auto result = solver->getRange(Query(constraints, expr));
+  auto result = solver->getRange(Query(constraints, expr), metaData);
   metaData.queryCost += timer.delta();
   return result;
 }

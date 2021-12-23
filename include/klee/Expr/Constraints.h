@@ -11,6 +11,7 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/ExprHashMap.h"
 #include "klee/Module/KInstruction.h"
 #include <string>
 
@@ -45,7 +46,7 @@ public:
 
 private:
   constraints_ty constraints;
-  std::map<ref<Expr>, KInstruction *> mapToLocations;
+  ExprHashMap<KInstruction *> mapToLocations;
 };
 
 class ExprVisitor;

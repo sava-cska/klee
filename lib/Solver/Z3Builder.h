@@ -75,6 +75,9 @@ public:
   void dump();
 
   operator T() const { return node; }
+
+  // To be specialised
+  unsigned hash();
 };
 
 // Specialise for Z3_sort
@@ -85,11 +88,23 @@ template <> inline ::Z3_ast Z3NodeHandle<Z3_sort>::as_ast() {
 }
 typedef Z3NodeHandle<Z3_sort> Z3SortHandle;
 template <> void Z3NodeHandle<Z3_sort>::dump() __attribute__((used));
+template <> unsigned Z3NodeHandle<Z3_sort>::hash() __attribute__((used));
 
 // Specialise for Z3_ast
 template <> inline ::Z3_ast Z3NodeHandle<Z3_ast>::as_ast() { return node; }
 typedef Z3NodeHandle<Z3_ast> Z3ASTHandle;
 template <> void Z3NodeHandle<Z3_ast>::dump() __attribute__((used));
+template <> unsigned Z3NodeHandle<Z3_ast>::hash() __attribute__((used));
+
+struct Z3ASTHandleHash {
+  unsigned operator()(const Z3ASTHandle &e) const {return const_cast<Z3ASTHandle*>(&e)->hash(); }
+};
+
+struct Z3ASTHandleCmp {
+  bool operator()(const Z3ASTHandle &a, const Z3ASTHandle &b) const {
+    return a==b;
+  }
+};
 
 class Z3ArrayExprHash : public ArrayExprHash<Z3ASTHandle> {
 

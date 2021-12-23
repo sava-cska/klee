@@ -5153,103 +5153,6 @@ void Executor::addHistoryResult(ExecutionState &state) {
       .insert(state.transitionLevel.begin(), state.transitionLevel.end());
 }
 
-void Executor::addTargetable(ExecutionState &state) {
-  assert(state.isIsolated());
-  targetableStates[state.getInitPCBlock()->getParent()].insert(&state);
-}
-
-void Executor::removeTargetable(ExecutionState &state) {
-  assert(state.isIsolated());
-  std::unordered_set<ExecutionState *> &sts =
-      targetableStates[state.getInitPCBlock()->getParent()];
-  std::unordered_set<ExecutionState *>::iterator it = sts.find(&state);
-  if (it != sts.end()) {
-    sts.erase(it);
-  }
-}
-
-bool Executor::isTargetable(ExecutionState &state) {
-  assert(state.isIsolated());
-  std::unordered_set<ExecutionState *> &sts =
-      targetableStates[state.getInitPCBlock()->getParent()];
-  std::unordered_set<ExecutionState *>::iterator it = sts.find(&state);
-  return it != sts.end();
-}
-
-void Executor::executeReturn(ExecutionState &state, KInstruction *ki) {
-  assert(isa<ReturnInst>(ki->inst));
-  ReturnInst *ri = cast<ReturnInst>(ki->inst);
-  KInstIterator kcaller = state.stack.back().caller;
-  Instruction *caller = kcaller ? kcaller->inst : 0;
-  bool isVoidReturn = (ri->getNumOperands() == 0);
-  ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
-
-  if (!isVoidReturn) {
-    result = eval(ki, 0, state).value;
-  }
-  if (state.stack.size() <= 1) {
-    assert(!caller && "caller set on initial stack frame");
-    --state.stackBalance;
-    bindLocal(ki, state, result);
-    state.pc = state.prevPC;
-  } else {
-    state.stack.pop_back();
-
-    addHistoryResult(state);
-
-    if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-      transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
-    } else {
-      state.pc = kcaller;
-      ++state.pc;
-      state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
-      BranchInst *bi = cast<BranchInst>(state.pc->inst);
-      assert(bi && bi->isUnconditional());
-      KInstruction *ki = state.pc;
-      stepInstruction(state);
-      executeInstruction(state, ki);
-    }
-  }
-}
-
-void Executor::composeStep(ExecutionState &lstate) {
-  assert(lstate.isIntegrated());
-  std::vector<ExecutionState *> result;
-  for (auto &blockstate : results[lstate.getPCBlock()].completedStates) {
-    for (auto rstate : blockstate.second) {
-      ExecutionState *currentResult = nullptr;
-      Composer::compose(&lstate, const_cast<ExecutionState *>(rstate),
-                        currentResult);
-      if (currentResult) {
-        if (isTargetable(*rstate)) {
-          removeTargetable(*rstate);
-        }
-        if (isa<ReturnInst>(currentResult->pc->inst) &&
-            currentResult->stack.size() > 1) {
-          executeReturn(*currentResult, currentResult->pc);
-        }
-        addHistoryResult(*currentResult);
-
-        result.push_back(currentResult);
-      }
-    }
-  }
-  for (auto &blockstate : results[lstate.getPCBlock()].redundantStates) {
-    for (auto rstate : blockstate.second) {
-      ExecutionState *currentResult = nullptr;
-      Composer::compose(&lstate, const_cast<ExecutionState *>(rstate),
-                        currentResult);
-      if (currentResult) {
-        removeTargetable(*rstate);
-        addHistoryResult(*currentResult);
-        result.push_back(currentResult);
-      }
-    }
-  }
-  removedStates.push_back(&lstate);
-  updateStates(ForwardResult(nullptr,addedStates,removedStates));
-}
-
 ActionResult Executor::executeAction(Action a) {
   switch(a.type) {
   case Action::Type::Forward:
@@ -5263,7 +5166,7 @@ ActionResult Executor::executeAction(Action a) {
   }
 }
 
-KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
+KBlock *Executor::calculateTargetByTransitionHistory(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
   VisitedTransition &transitionHistory =
@@ -5275,11 +5178,11 @@ KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
   unsigned int minDistance = -1;
   unsigned int sfNum = 0;
   bool newCov = false;
-  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe;
-       sfi++, sfNum++) {
+  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend();
+       sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
 
-    for (auto &kbd : kf->getDistance(kb)) {
+    for (auto &kbd : kf->getBFSSort(kb)) {
       KBlock *target = kbd.first;
       unsigned distance = kbd.second;
       if ((sfNum > 0 || distance > 0)) {
@@ -5291,8 +5194,8 @@ KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
             std::set<Transition> left(state.transitionLevel.begin(),
                                       state.transitionLevel.end());
             std::set<Transition> right(
-                transitionHistory[target->basicBlock].begin(),
-                transitionHistory[target->basicBlock].end());
+              transitionHistory[target->basicBlock].begin(),
+              transitionHistory[target->basicBlock].end());
             std::set_difference(left.begin(), left.end(), right.begin(),
                                 right.end(), std::inserter(diff, diff.begin()));
           }
@@ -5320,41 +5223,45 @@ KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
   return nearestBlock;
 }
 
-KBlock *Executor::calculateTarget(ExecutionState &state) {
+KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
   BasicBlock *initialBlock = state.getInitPCBlock();
   VisitedBlock &history = results[initialBlock].history;
   BasicBlock *bb = state.getPCBlock();
   KFunction *kf = kmodule->functionMap[bb->getParent()];
   KBlock *kb = kf->blockMap[bb];
+
   KBlock *nearestBlock = nullptr;
   unsigned int minDistance = -1;
   unsigned int sfNum = 0;
   bool newCov = false;
-  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe;
-       sfi++, sfNum++) {
+
+  for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend();
+       sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
 
-    for (auto &kbd : kf->getDistance(kb)) {
+    for (auto &kbd : kf->getBFSSort(kb)) {
       KBlock *target = kbd.first;
       unsigned distance = kbd.second;
-      if ((sfNum > 0 || distance > 0) && distance < minDistance) {
+      if ((sfNum > 0 || distance > 0)) {
+        if (distance >= minDistance)
+          break;
         if (history[target->basicBlock].size() != 0) {
           std::vector<BasicBlock *> diff;
           if (!newCov) {
-            std::set<BasicBlock *> left(state.level.begin(),
-                                      state.level.end());
-            std::set<BasicBlock *> right(
-                history[target->basicBlock].begin(),
-                history[target->basicBlock].end());
-            std::set_difference(left.begin(), left.end(), right.begin(),
-                                right.end(), std::inserter(diff, diff.begin()));
+            std::set<BasicBlock*> left(state.level.begin(), state.level.end());
+            std::set<BasicBlock*> right(
+              history[target->basicBlock].begin(),
+              history[target->basicBlock].end());
+            std::set_difference(left.begin(), left.end(),
+                                right.begin(), right.end(),
+                                std::inserter(diff, diff.begin()));
           }
-
           if (diff.empty()) {
             continue;
           }
-        } else
+        } else {
           newCov = true;
+        }
         nearestBlock = target;
         minDistance = distance;
       }
@@ -5369,6 +5276,31 @@ KBlock *Executor::calculateTarget(ExecutionState &state) {
     }
   }
   return nearestBlock;
+}
+
+KBlock *Executor::calculateRootByValidityCore(ExecutionState &state) {
+  SolverQueryMetaData metaData = state.queryMetaData;
+  BasicBlock *bb = state.getPCBlock();
+  KFunction *kf = kmodule->functionMap[bb->getParent()];
+  auto &callGraphDistance = kmodule->getBackwardDistance(kf);
+  KBlock *kb = kf->blockMap[bb];
+
+  KBlock *nearestRoot = nullptr;
+  unsigned int minDistance = -1;
+
+  if (!metaData.queryValidityCores.empty()) {
+    SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
+    for (auto &ekp : core) {
+      KInstruction *inst = ekp.second;
+      if (inst && inst->parent->parent == kf &&
+          kf->getDistance(inst->parent).at(kb) < minDistance) {
+        minDistance = kf->getDistance(inst->parent).at(kb);
+        nearestRoot = inst->parent;
+      }
+    }
+  }
+
+  return nearestRoot;
 }
 
 void Executor::addState(ExecutionState &state) {
@@ -5397,17 +5329,16 @@ void Executor::run(ExecutionState &state) {
 
   while (!haltExecution) {
     auto action = searcher->selectAction();
-    
+
     if(action.type == Action::Type::Terminate)
       break;
-      
+
     auto result = executeAction(action);
     updateStates(result);
     // TODO verify _-_
     if(std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
-      if(br.newPob->location->instructions[0]->inst ==
-         initialState->initPC->inst) {
+      if(br.newPob->location->instructions[0]->inst == initialState->initPC->inst) {
         ExecutionState* state = initialState->copy();
         for(auto& constraint : br.newPob->condition) {
           state->constraints.push_back(constraint, br.newPob->condition.get_location(constraint));
@@ -5415,7 +5346,7 @@ void Executor::run(ExecutionState &state) {
         klee_message("making a test.");
         interpreterHandler->processTestCase(*state,0,0,true);
         delete state;
-      } 
+      }
     }
   }
 
@@ -5477,8 +5408,8 @@ ForwardResult Executor::goForward(ExecutionState* state) {
 
   timers.invoke();
   if (::dumpStates) dumpStates();
-  if (::dumpPForest) dumpPForest();;
-  ForwardResult ret(state,addedStates,removedStates);
+  if (::dumpPForest) dumpPForest();
+  ForwardResult ret(state, addedStates, removedStates);
   
   states.insert(addedStates.begin(), addedStates.end());
 

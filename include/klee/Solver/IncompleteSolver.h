@@ -75,10 +75,8 @@ public:
   /// for the initial state of each given object. If a correct result
   /// is not found, then the values array must be unmodified.
   virtual bool computeInitialValues(const Query&,
-                                    const std::vector<const Array*> 
-                                      &objects,
-                                    std::vector< std::vector<unsigned char> > 
-                                      &values,
+                                    const std::vector<const Array*> &objects,
+                                    std::vector< std::vector<unsigned char> > &values,
                                     bool &hasSolution) = 0;
 };
 
@@ -94,13 +92,13 @@ public:
   StagedSolverImpl(IncompleteSolver *_primary, Solver *_secondary);
   ~StagedSolverImpl();
     
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeValue(const Query&, ref<Expr> &result);
+  bool computeTruth(const Query&, bool &isValid, SolverQueryMetaData &metaData);
+  bool computeValidity(const Query&, Solver::Validity &result, SolverQueryMetaData &metaData);
+  bool computeValue(const Query&, ref<Expr> &result, SolverQueryMetaData &metaData);
   bool computeInitialValues(const Query&,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
+                            bool &hasSolution, SolverQueryMetaData &metaData);
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query&);
   void setCoreSolverTimeout(time::Span timeout);

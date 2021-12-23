@@ -154,7 +154,7 @@ struct CleanupPhaseUnwindingInformation : public UnwindingInformation {
 
 typedef std::pair<llvm::BasicBlock *, llvm::BasicBlock *> Transition;
 
-struct BasicBlockPairHash {
+struct TransitionHash {
   std::size_t operator()(const Transition& p) const {
     return reinterpret_cast<size_t>(p.first) * 31 + reinterpret_cast<size_t>(p.second);
   }
@@ -205,7 +205,7 @@ public:
   /// @brief Exploration level, i.e., number of times KLEE cycled for this state
   std::unordered_multiset<llvm::BasicBlock *> multilevel;
   std::unordered_set<llvm::BasicBlock *> level;
-  std::unordered_set<Transition, BasicBlockPairHash> transitionLevel;
+  std::unordered_set<Transition, TransitionHash> transitionLevel;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;

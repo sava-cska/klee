@@ -39,9 +39,15 @@ template <> void Z3NodeHandle<Z3_sort>::dump() {
   llvm::errs() << "Z3SortHandle:\n" << ::Z3_sort_to_string(context, node)
                << "\n";
 }
+template <> unsigned Z3NodeHandle<Z3_sort>::hash() {
+  return Z3_get_ast_hash(context, as_ast());
+}
 template <> void Z3NodeHandle<Z3_ast>::dump() {
   llvm::errs() << "Z3ASTHandle:\n" << ::Z3_ast_to_string(context, as_ast())
                << "\n";
+}
+template <> unsigned Z3NodeHandle<Z3_ast>::hash() {
+  return Z3_get_ast_hash(context, as_ast());
 }
 
 void custom_z3_error_handler(Z3_context ctx, Z3_error_code ec) {

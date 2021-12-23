@@ -666,14 +666,17 @@ for (unsigned i=0; i<numInstructions; ++i)
 
 void KFunction::calculateDistance(KBlock *bb) {
   std::map<KBlock*, unsigned int> &dist = distance[bb];
+  std::vector<std::pair<KBlock*, unsigned int>> &sort = BFSSort[bb];
   std::deque<KBlock*> nodes;
   nodes.push_back(bb);
   dist[bb] = 0;
+  sort.push_back({bb, 0});
   while(!nodes.empty()) {
     KBlock *currBB = nodes.front();
     for (auto const &succ : successors(currBB->basicBlock)) {
       if (dist.find(blockMap[succ]) == dist.end()) {
         dist[blockMap[succ]] = dist[currBB] + 1;
+        sort.push_back({blockMap[succ], dist[currBB] + 1});
         nodes.push_back(blockMap[succ]);
       }
     }
@@ -683,14 +686,17 @@ void KFunction::calculateDistance(KBlock *bb) {
 
 void KFunction::calculateBackwardDistance(KBlock *bb) {
   std::map<KBlock*, unsigned int> &bdist = backwardDistance[bb];
+  std::vector<std::pair<KBlock*, unsigned int>> &bsort = backwardBFSSort[bb];
   std::deque<KBlock*> nodes;
   nodes.push_back(bb);
   bdist[bb] = 0;
+  bsort.push_back({bb, 0});
   while(!nodes.empty()) {
     KBlock *currBB = nodes.front();
     for (auto const &pred : predecessors(currBB->basicBlock)) {
       if (bdist.find(blockMap[pred]) == bdist.end()) {
         bdist[blockMap[pred]] = bdist[currBB] + 1;
+        bsort.push_back({blockMap[pred], bdist[currBB] + 1});
         nodes.push_back(blockMap[pred]);
       }
     }
@@ -704,10 +710,31 @@ std::map<KBlock*, unsigned int>& KFunction::getDistance(KBlock *kb) {
   return distance[kb];
 }
 
+std::vector<std::pair<KBlock*, unsigned int>>& KFunction::getBFSSort(KBlock *kb) {
+  if (distance.find(kb) == distance.end())
+    calculateDistance(kb);
+  return BFSSort[kb];
+}
+
 std::map<KBlock*, unsigned int>& KFunction::getBackwardDistance(KBlock *kb) {
   if (backwardDistance.find(kb) == backwardDistance.end())
     calculateBackwardDistance(kb);
   return backwardDistance[kb];
+}
+
+std::vector<std::pair<KBlock*, unsigned int>>& KFunction::getBackwardBFSSort(KBlock *kb) {
+  if (backwardDistance.find(kb) == backwardDistance.end())
+    calculateBackwardDistance(kb);
+  return backwardBFSSort[kb];
+}
+
+KBlock *KFunction::getNearestJoinBlock(KBlock *kb) {
+  KFunction *kf = kb->parent;
+  for (auto &kbd : kf->getBackwardBFSSort(kb)) {
+    if (kbd.first->basicBlock->hasNPredecessorsOrMore(2))
+      return kbd.first;
+  }
+  return nullptr;
 }
 
 KBlock::KBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,

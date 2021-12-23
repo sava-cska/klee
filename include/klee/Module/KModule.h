@@ -123,6 +123,8 @@ namespace klee {
   private:
     std::map<KBlock*, std::map<KBlock*, unsigned int>> distance;
     std::map<KBlock*, std::map<KBlock*, unsigned int>> backwardDistance;
+    std::map<KBlock*, std::vector<std::pair<KBlock*, unsigned int>>> BFSSort;
+    std::map<KBlock*, std::vector<std::pair<KBlock*, unsigned int>>> backwardBFSSort;
     // BFS algorithm
     void calculateDistance(KBlock *bb);
     void calculateBackwardDistance(KBlock *bb);
@@ -136,7 +138,10 @@ namespace klee {
 
     unsigned getArgRegister(unsigned index) const { return index; }
     std::map<KBlock*, unsigned int>& getDistance(KBlock *kb);
+    std::vector<std::pair<KBlock*, unsigned int>>& getBFSSort(KBlock *kb);
     std::map<KBlock*, unsigned int>& getBackwardDistance(KBlock *kb);
+    std::vector<std::pair<KBlock*, unsigned int>>& getBackwardBFSSort(KBlock *kb);
+    KBlock *getNearestJoinBlock(KBlock *kb);
   };
 
 

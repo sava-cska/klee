@@ -348,13 +348,13 @@ ExecutionState &GuidedForwardSearcher::selectState() {
 void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
                                   KBlock *remove) {
 
-  if(targetedSearchers.count(from)) {
+  if (targetedSearchers.count(from)) {
     for(auto state: targetedSearchers[from]->states_set) {
       state->targets.insert(target);
     }
   }
   
-  if(targetedSearchers.count(remove)) {
+  if (targetedSearchers.count(remove)) {
     for(auto state: targetedSearchers[remove]->states_set) {
       state->targets.erase(remove);
     }
@@ -378,27 +378,31 @@ void GuidedForwardSearcher::update(ExecutionState *current,
   }
 
   for (const auto state : removedStates) {
-    for(auto i : state->targets) {
+    for (auto i : state->targets) {
       targets.insert(i);
       removedTStates[i].push_back(state);
     }
   }
 
-  if(current)
-    for(auto i : current->targets) targets.insert(i);
+  if (current)
+    for (auto i : current->targets) targets.insert(i);
 
   for (auto target : targets) {
     ExecutionState *currTState =
         current && current->targets.find(target) != current->targets.end()
             ? current
             : nullptr;
-    
+
     if (targetedSearchers.count(target) == 0)
       addTarget(target);
     targetedSearchers[target]->update(currTState, addedTStates[target], removedTStates[target]);
 
-    if (!targetedSearchers[target]->reachedOnLastUpdate.empty() || targetedSearchers[target]->empty())
+    if (!targetedSearchers[target]->reachedOnLastUpdate.empty() || targetedSearchers[target]->empty()) {
+      for(auto state: targetedSearchers[target]->states_set) {
+        state->targets.erase(target);
+      }
       targetedSearchers.erase(target);
+    }
   }
 
   baseSearcher->update(current, addedStates, removedStates);
@@ -408,7 +412,7 @@ std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReache
   std::unordered_set<ExecutionState*> ret;
   for (auto it = targetedSearchers.begin(); it != targetedSearchers.end();
        it++) {
-    for(auto state: it->second->reachedOnLastUpdate) {
+    for (auto state: it->second->reachedOnLastUpdate) {
       ret.insert(state);
     }
     it->second->reachedOnLastUpdate.clear();

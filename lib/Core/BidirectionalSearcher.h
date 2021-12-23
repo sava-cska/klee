@@ -48,9 +48,9 @@ public:
   void update(ActionResult) override;
 
   explicit BidirectionalSearcher(SearcherConfig);
-  
+
 private:
-  
+
   Executor* ex; // hack
   GuidedForwardSearcher* forward;
   GuidedForwardSearcher* branch;

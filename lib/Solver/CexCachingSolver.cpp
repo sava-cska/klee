@@ -82,19 +82,20 @@ class CexCachingSolver : public SolverImpl {
     return lookupAssignment(query, key, result);
   }
 
-  bool getAssignment(const Query& query, Assignment *&result);
+  bool getAssignment(const Query& query, Assignment *&result, SolverQueryMetaData &metaData);
   
 public:
   CexCachingSolver(Solver *_solver) : solver(_solver) {}
   ~CexCachingSolver();
   
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeValue(const Query&, ref<Expr> &result);
+  bool computeTruth(const Query&, bool &isValid, SolverQueryMetaData &metaData);
+  bool computeValidity(const Query&, Solver::Validity &result, SolverQueryMetaData &metaData);
+  bool computeValue(const Query&, ref<Expr> &result, SolverQueryMetaData &metaData);
   bool computeInitialValues(const Query&,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
+                            bool &hasSolution,
+                            SolverQueryMetaData &metaData);
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query& query);
   void setCoreSolverTimeout(time::Span timeout);
@@ -219,7 +220,8 @@ bool CexCachingSolver::lookupAssignment(const Query &query,
   return found;
 }
 
-bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result) {
+bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result,
+                                       SolverQueryMetaData &metaData) {
   KeyType key;
   if (lookupAssignment(query, key, result))
     return true;
@@ -230,7 +232,7 @@ bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result) {
   std::vector< std::vector<unsigned char> > values;
   bool hasSolution;
   if (!solver->impl->computeInitialValues(query, objects, values, 
-                                          hasSolution))
+                                          hasSolution, metaData))
     return false;
     
   Assignment *binding;
@@ -272,10 +274,11 @@ CexCachingSolver::~CexCachingSolver() {
 }
 
 bool CexCachingSolver::computeValidity(const Query& query,
-                                       Solver::Validity &result) {
+                                       Solver::Validity &result,
+                                       SolverQueryMetaData &metaData) {
   TimerStatIncrementer t(stats::cexCacheTime);
   Assignment *a;
-  if (!getAssignment(query.withFalse(), a))
+  if (!getAssignment(query.withFalse(), a, metaData))
     return false;
   assert(a && "computeValidity() must have assignment");
   ref<Expr> q = a->evaluate(query.expr);
@@ -283,11 +286,11 @@ bool CexCachingSolver::computeValidity(const Query& query,
          "assignment evaluation did not result in constant");
 
   if (cast<ConstantExpr>(q)->isTrue()) {
-    if (!getAssignment(query, a))
+    if (!getAssignment(query, a, metaData))
       return false;
     result = !a ? Solver::True : Solver::Unknown;
   } else {
-    if (!getAssignment(query.negateExpr(), a))
+    if (!getAssignment(query.negateExpr(), a, metaData))
       return false;
     result = !a ? Solver::False : Solver::Unknown;
   }
@@ -296,7 +299,8 @@ bool CexCachingSolver::computeValidity(const Query& query,
 }
 
 bool CexCachingSolver::computeTruth(const Query& query,
-                                    bool &isValid) {
+                                    bool &isValid,
+                                    SolverQueryMetaData &metaData) {
   TimerStatIncrementer t(stats::cexCacheTime);
 
   // There is a small amount of redundancy here. We only need to know
@@ -314,7 +318,7 @@ bool CexCachingSolver::computeTruth(const Query& query,
   }
 
   Assignment *a;
-  if (!getAssignment(query, a))
+  if (!getAssignment(query, a, metaData))
     return false;
 
   isValid = !a;
@@ -323,11 +327,12 @@ bool CexCachingSolver::computeTruth(const Query& query,
 }
 
 bool CexCachingSolver::computeValue(const Query& query,
-                                    ref<Expr> &result) {
+                                    ref<Expr> &result,
+                                    SolverQueryMetaData &metaData) {
   TimerStatIncrementer t(stats::cexCacheTime);
 
   Assignment *a;
-  if (!getAssignment(query.withFalse(), a))
+  if (!getAssignment(query.withFalse(), a, metaData))
     return false;
   assert(a && "computeValue() must have assignment");
   result = a->evaluate(query.expr);  
@@ -338,14 +343,13 @@ bool CexCachingSolver::computeValue(const Query& query,
 
 bool 
 CexCachingSolver::computeInitialValues(const Query& query,
-                                       const std::vector<const Array*> 
-                                         &objects,
-                                       std::vector< std::vector<unsigned char> >
-                                         &values,
-                                       bool &hasSolution) {
+                                       const std::vector<const Array*> &objects,
+                                       std::vector< std::vector<unsigned char> > &values,
+                                       bool &hasSolution,
+                                       SolverQueryMetaData &metaData) {
   TimerStatIncrementer t(stats::cexCacheTime);
   Assignment *a;
-  if (!getAssignment(query, a))
+  if (!getAssignment(query, a, metaData))
     return false;
   hasSolution = !!a;
   

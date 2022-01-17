@@ -81,30 +81,30 @@ Action BidirectionalSearcher::selectAction() {
           if (target) {
             state.targets.insert(target);
             ex->updateStates(&state);
-            klee_message("Forward");
+            // klee_message("Forward");
             return Action(&state);
           } else {
             ex->pauseState(state);
             ex->updateStates(nullptr);
           }
         } else {
-          klee_message("Forward");
+          // klee_message("Forward");
           return Action(&state);
         }
       }
-      klee_message("Forward");
+      // klee_message("Forward");
       return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});
     }
     if (choice == 1) {
       if(branch->empty()) continue;
       auto& state = branch->selectState();
-      klee_message("Branch");
+      // klee_message("Branch");
       return Action(&state);
     }
     if(choice == 2) {
       if(backward->empty()) continue;
       auto a = backward->selectAction();
-      klee_message("Backward");
+      // klee_message("Backward");
       return Action(Action::Type::Backward, a.second, nullptr, a.first, {});
     }
     if(choice == 3) {
@@ -171,7 +171,7 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   branch = new GuidedForwardSearcher(
       constructUserSearcher(*(Executor *)(cfg.executor)));
   backward = new BFSBackwardSearcher(cfg.targets);
-  initializer = new SDInitializer(cfg.targets);
+  initializer = new ForkInitializer(cfg.targets);
 }
 
 } // namespace klee

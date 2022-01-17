@@ -101,12 +101,12 @@ class TestRunner(object):
 
     def run_coverage(self, source):
         print(f"Running {source} on generated tests")
-        t_end = time.time() + 10
+        t_end = time.time() + 60
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + "o")
         for filename in os.listdir(os.path.join(self.klee_output_dir, os.path.splitext(source)[0])):
             if time.time() > t_end:
-                print(f"Stopping running generated tests after 10 seconds, some tests have not run.")
+                print(f"Stopping running generated tests after 60 seconds, some tests have not run.")
                 break
             if filename.endswith(".ktestjson"):
                 os.environ["KTEST_FILE"] = os.path.join(self.klee_output_dir, os.path.splitext(source)[0] ,filename)

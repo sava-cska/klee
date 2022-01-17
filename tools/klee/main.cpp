@@ -369,7 +369,7 @@ private:
           &out,
       unsigned id);
 
-  void writeTestCasePlain(const TestCase &tc, unsigned id);
+  void writeTestCasePlain(const TestCase &tc, unsigned id, bool back = false);
 
 public:
   KleeHandler(int argc, char **argv);
@@ -385,12 +385,13 @@ public:
 
   void processTestCase(ExecutionState  &state,
                        const char *errorMessage,
-                       const char *errorSuffix);
+                       const char *errorSuffix,
+                       bool back);
 
   std::string getOutputFilename(const std::string &filename);
   std::unique_ptr<llvm::raw_fd_ostream> openOutputFile(const std::string &filename);
-  std::string getTestFilename(const std::string &suffix, unsigned id);
-  std::unique_ptr<llvm::raw_fd_ostream> openTestFile(const std::string &suffix, unsigned id);
+  std::string getTestFilename(const std::string &suffix, unsigned id, bool back = false);
+  std::unique_ptr<llvm::raw_fd_ostream> openTestFile(const std::string &suffix, unsigned id, bool back = false);
 
   // load a .path file
   static void loadPathFile(std::string name,
@@ -516,15 +517,15 @@ KleeHandler::openOutputFile(const std::string &filename) {
   return f;
 }
 
-std::string KleeHandler::getTestFilename(const std::string &suffix, unsigned id) {
+std::string KleeHandler::getTestFilename(const std::string &suffix, unsigned id, bool back) {
   std::stringstream filename;
-  filename << "test" << std::setfill('0') << std::setw(6) << id << '.' << suffix;
+  filename << (back ? "testbackw" : "test") << std::setfill('0') << std::setw(6) << id << '.' << suffix;
   return filename.str();
 }
 
 std::unique_ptr<llvm::raw_fd_ostream>
-KleeHandler::openTestFile(const std::string &suffix, unsigned id) {
-  return openOutputFile(getTestFilename(suffix, id));
+KleeHandler::openTestFile(const std::string &suffix, unsigned id, bool back) {
+  return openOutputFile(getTestFilename(suffix, id, back));
 }
 
 void KleeHandler::writeTestCaseKTest(const TestCase &tc, unsigned id) {
@@ -619,7 +620,7 @@ void KleeHandler::writeTestCaseXML(
   // ++m_numGeneratedTests;
 }
 
-void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id) {
+void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id, bool back) {
   json out;
 
   out["n_objects"] = tc.n_objects;
@@ -646,7 +647,7 @@ void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id) {
     }
     out["objects"].push_back(out_obj);
   }
-  auto file = openTestFile("ktestjson", id);
+  auto file = openTestFile("ktestjson", id, back);
   *file << out.dump(4);
   ++m_numGeneratedTests;
 }
@@ -654,7 +655,8 @@ void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id) {
 /* Outputs all files (.ktest, .kquery, .cov etc.) describing a test case */
 void KleeHandler::processTestCase(ExecutionState &state,
                                   const char *errorMessage,
-                                  const char *errorSuffix) {
+                                  const char *errorSuffix,
+                                  bool back) {
 
   unsigned state_id = ++m_statesTerminated;
 
@@ -687,7 +689,7 @@ void KleeHandler::processTestCase(ExecutionState &state,
       writeTestCaseKTest(assignments, test_id);
     }
     if (success && lazy_instantiation_resolved != -1) {
-      writeTestCasePlain(assignments, test_id);
+      writeTestCasePlain(assignments, test_id, back);
       if(WriteStates) {
 	auto f = openTestFile("state", test_id);
 	m_interpreter->logState(state,test_id,f);

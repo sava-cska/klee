@@ -5435,8 +5435,8 @@ void Executor::run(ExecutionState &state) {
         for(auto& constraint : br.newPob->condition) {
           state->constraints.push_back(constraint);
         }
-
-        interpreterHandler->processTestCase(*state,0,0);
+        klee_message("making a test.");
+        interpreterHandler->processTestCase(*state,0,0,true);
         delete state;
       } 
     }

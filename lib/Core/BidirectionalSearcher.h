@@ -55,7 +55,7 @@ private:
   GuidedForwardSearcher* forward;
   GuidedForwardSearcher* branch;
   BFSBackwardSearcher* backward;
-  SDInitializer* initializer;
+  ForkInitializer* initializer;
 };
 
 } // namespace klee

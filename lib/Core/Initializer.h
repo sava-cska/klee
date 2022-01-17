@@ -27,4 +27,17 @@ private:
   std::unordered_set<KBlock *> initializedLocs;
 };
 
+class ForkInitializer : public Initializer {
+public:
+  std::pair<KBlock *, std::unordered_set<KBlock *>> selectAction() override;
+  bool empty() override;
+  void addPob(ProofObligation *pob) override;
+
+  ForkInitializer(std::unordered_set<KBlock *> targets) : pobs(targets) {}
+
+private:
+  std::unordered_set<KBlock *> pobs;
+  std::unordered_set<KBlock *> initializedLocs;
+};
+
 };

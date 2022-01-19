@@ -1,4 +1,5 @@
 #include "Tracker.h"
+#include "klee/Support/Debug.h"
 #include <cassert>
 
 namespace klee {

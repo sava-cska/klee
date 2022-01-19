@@ -33,7 +33,10 @@ namespace klee {
 Action ForwardBidirSearcher::selectAction() {
   while(!searcher->empty()) {
     auto &state = searcher->selectState();
-    if (state.targets.empty() &&
+    KInstruction *prevKI = state.prevPC;
+
+    if (prevKI->inst->isTerminator() &&
+        state.targets.empty() &&
         state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
       KBlock *target = ex->calculateCoverTarget(state);
       if (target) {
@@ -74,9 +77,11 @@ Action BidirectionalSearcher::selectAction() {
     if (choice == 0) {
       while (!forward->empty()) {
         auto &state = forward->selectState();
-        if (state.targets.empty() &&
-            state.multilevel.count(state.getPCBlock()) >
-                0 /* maxcycles - 1 */) {
+        KInstruction *prevKI = state.prevPC;
+
+        if (prevKI->inst->isTerminator() &&
+            state.targets.empty() &&
+            state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
           KBlock *target = ex->calculateCoverTarget(state);
           if (target) {
             state.targets.insert(target);

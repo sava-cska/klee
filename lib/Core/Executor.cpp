@@ -5296,31 +5296,21 @@ KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
   for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend(); sfi != sfe;
        sfi++, sfNum++) {
     kf = sfi->kf;
-    std::map<KBlock *, unsigned int> &kbd = kf->getDistance(kb);
-    for (auto &tstate : targetableStates[kf->function]) {
-      KBlock *currKB = kf->blockMap[tstate->getPCBlock()];
-      if (kbd.find(currKB) != kbd.end() && kbd[currKB] > 0 &&
-          kbd[currKB] < minDistance) {
-        nearestBlock = currKB;
-        minDistance = kbd[currKB];
-      }
-    }
 
-    if (nearestBlock) {
-      return nearestBlock;
-    }
-
-    for (auto currKB : kf->finalKBlocks) {
-      if (kbd.find(currKB) != kbd.end() && kbd[currKB] > 0 &&
-          kbd[currKB] < minDistance) {
-        if (history[currKB->basicBlock].size() != 0) {
+    for (auto &kbd : kf->getDistance(kb)) {
+      KBlock *target = kbd.first;
+      unsigned distance = kbd.second;
+      if ((sfNum > 0 || distance > 0)) {
+        if (distance >= minDistance)
+          break;
+        if (history[target->basicBlock].size() != 0) {
           std::vector<Transition> diff;
           if (!newCov) {
             std::set<Transition> left(state.transitionLevel.begin(),
                                       state.transitionLevel.end());
             std::set<Transition> right(
-                transitionHistory[currKB->basicBlock].begin(),
-                transitionHistory[currKB->basicBlock].end());
+                transitionHistory[target->basicBlock].begin(),
+                transitionHistory[target->basicBlock].end());
             std::set_difference(left.begin(), left.end(), right.begin(),
                                 right.end(), std::inserter(diff, diff.begin()));
           }
@@ -5331,8 +5321,8 @@ KBlock *Executor::calculateCoverTarget(ExecutionState &state) {
         } else {
           newCov = true;
         }
-        nearestBlock = currKB;
-        minDistance = kbd[currKB];
+        nearestBlock = target;
+        minDistance = distance;
       }
     }
 
@@ -5368,11 +5358,16 @@ KBlock *Executor::calculateTarget(ExecutionState &state) {
       if ((sfNum > 0 || distance > 0) && distance < minDistance) {
         if (history[target->basicBlock].size() != 0) {
           std::vector<BasicBlock *> diff;
-          if (!newCov)
-            std::set_difference(state.level.begin(), state.level.end(),
-                                history[target->basicBlock].begin(),
-                                history[target->basicBlock].end(),
-                                std::inserter(diff, diff.begin()));
+          if (!newCov) {
+            std::set<BasicBlock *> left(state.level.begin(),
+                                      state.level.end());
+            std::set<BasicBlock *> right(
+                history[target->basicBlock].begin(),
+                history[target->basicBlock].end());
+            std::set_difference(left.begin(), left.end(), right.begin(),
+                                right.end(), std::inserter(diff, diff.begin()));
+          }
+
           if (diff.empty()) {
             continue;
           }
@@ -5416,7 +5411,7 @@ void Executor::run(ExecutionState &state) {
   cfg.executor = this;
 
   processForest->addRoot(&state);
-  searcher = std::make_unique<BidirectionalSearcher>(cfg);
+  searcher = std::make_unique<ForwardBidirSearcher>(cfg);
 
   while (!haltExecution) {
     auto action = searcher->selectAction();
@@ -5488,6 +5483,10 @@ InitResult Executor::initBranch(KBlock* loc) {
 }
 
 ForwardResult Executor::goForward(ExecutionState* state) {
+  KInstruction *prevKI = state->prevPC;
+  if (prevKI->inst->isTerminator())
+    addHistoryResult(*state);
+
   KInstruction *ki = state->pc;
 
   stepInstruction(*state);

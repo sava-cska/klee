@@ -4403,7 +4403,7 @@ ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> ad
   return lazyInstantiate(state, /*isLocal=*/false, mo);
 }
 
-ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
+ObjectPair Executor::cachedLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
   auto op = liCache.find(address);
   if (op != liCache.end()) {
@@ -4412,10 +4412,10 @@ ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, r
   MemoryObject *mo =
       memory->allocate(size, false, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
-  memory->deallocate(mo);
   const Array *array = makeArray(state, size, "lazy_instantiation", address);
   ObjectState *os = new ObjectState(mo, array);
   const_cast<Array*>(array)->binding = os;
+  state.addSymbolic(mo, array);
   ObjectPair result = {mo, os}; 
   liCache[address] = result;
   return result;
@@ -4769,38 +4769,7 @@ void Executor::logState(ExecutionState& state, int id,
 }
 
 int Executor::resolveLazyInstantiation(ExecutionState &state) {
-  int status = 0;
-  for (auto i : state.symbolics) {
-    if (!i.first->isLazyInstantiated()) {
-      continue;
-    }
-    status = 1;
-    auto lisource = i.first->lazyInstantiatedSource;
-    switch(lisource->getKind()) {
-    case Expr::Read: {
-      ref<ReadExpr> base = dyn_cast<ReadExpr>(lisource);
-      auto parent = base->updates.root->binding->getObject();
-      if(!parent) {
-        return -1;
-      }
-      state.pointers[lisource] = std::make_pair(parent, base->index);
-      break;
-    } 
-    case Expr::Concat: {
-      ref<ReadExpr> base =
-          ArrayExprHelper::hasOrderedReads(*dyn_cast<ConcatExpr>(lisource));
-      auto parent = base->updates.root->binding->getObject();
-      if (!parent) {
-        return -1;
-      }
-      state.pointers[lisource] = std::make_pair(parent, base->index);
-      break;
-    }
-    default:
-      return -1;
-    }
-  }
-  return status;
+  return state.resolveLazyInstantiation(state.pointers);
 }
 
 void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
@@ -4818,7 +4787,7 @@ void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
       klee_error("Offset resolution failure (setInstantiationGraph)");
     size_t index_parent;
     for(size_t j = 0; j < state.symbolics.size(); j++) {
-      if(state.symbolics[j].first == parent.first) {
+      if(state.symbolics[j].first == parent.first.first) {
         index_parent = j;
         break;
       }
@@ -5317,7 +5286,7 @@ void Executor::run(ExecutionState &state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  for(auto i : state.stack.back().kf->finalKBlocks) {
+  for (auto i : state.stack.back().kf->finalKBlocks) {
     if(!isa<UnreachableInst>(i->instructions[i->numInstructions - 1]->inst)) {
       cfg.targets.insert(i);
     }
@@ -5325,26 +5294,29 @@ void Executor::run(ExecutionState &state) {
   cfg.executor = this;
 
   processForest->addRoot(&state);
-  searcher = std::make_unique<ForwardBidirSearcher>(cfg);
+  searcher = std::make_unique<BidirectionalSearcher>(cfg);
 
   while (!haltExecution) {
     auto action = searcher->selectAction();
 
-    if(action.type == Action::Type::Terminate)
+    if (action.type == Action::Type::Terminate)
       break;
 
     auto result = executeAction(action);
     updateStates(result);
     // TODO verify _-_
-    if(std::holds_alternative<BackwardResult>(result)) {
+    if (std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
-      if(br.newPob->location->instructions[0]->inst == initialState->initPC->inst) {
+      if (br.newPob->location->instructions[0]->inst == initialState->initPC->inst) {
         ExecutionState* state = initialState->copy();
-        for(auto& constraint : br.newPob->condition) {
+        for (auto &constraint : br.newPob->condition) {
           state->constraints.push_back(constraint, br.newPob->condition.get_location(constraint));
         }
+        for (auto &symbolic : br.newPob->symbolics) {
+          state->symbolics.push_back(symbolic);
+        }
         klee_message("making a test.");
-        interpreterHandler->processTestCase(*state,0,0,true);
+        interpreterHandler->processTestCase(*state, 0, 0, true);
         delete state;
       }
     }
@@ -5417,17 +5389,11 @@ ForwardResult Executor::goForward(ExecutionState* state) {
 }
 
 BackwardResult Executor::goBackward(ExecutionState *state,
-                                                 ProofObligation *pob) {
+                                    ProofObligation *pob) {
   timers.invoke();
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
-  for(auto& constraint : pob->condition) {
-    KInstruction *loc = pob->condition.get_location(constraint);
-    ref<Expr> rebuilt_constraint;
-    bool success = Composer::tryRebuild(constraint, state, rebuilt_constraint);
-    // if(!success)
-    newPob->condition.push_back(rebuilt_constraint, loc);
-  }
-  
+  Composer::tryRebuild(*pob, state, *newPob);
+
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
   for(auto& constraint : newPob->condition) {
     check = AndExpr::create(check, constraint);
@@ -5443,7 +5409,9 @@ BackwardResult Executor::goBackward(ExecutionState *state,
       KInstruction *location = state->constraints.get_location(constraint);
       newPob->condition.push_back(constraint, location);
     }
+    return BackwardResult(newPob, pob);
+  } else {
+    return BackwardResult(nullptr, pob);
   }
-  return BackwardResult{newPob, pob};
   // TODO: ERROR HANDLING
 }

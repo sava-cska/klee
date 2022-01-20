@@ -160,6 +160,8 @@ struct TransitionHash {
   }
 };
 
+typedef std::pair<ref<const MemoryObject>, const Array *> Symbolic;
+
 /// @brief ExecutionState representing a path under exploration
 class ExecutionState : public Indexer<ExecutionState> {
   using BaseIndexer = Indexer<ExecutionState>;
@@ -174,7 +176,7 @@ private:
 public:
   using stack_ty = std::vector<StackFrame>;
 
-  std::map<ref<Expr>,std::pair<const MemoryObject*,ref<Expr>>> pointers;
+  std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> pointers;
 
   // Execution - Control Flow specific
 
@@ -239,7 +241,7 @@ public:
   /// @brief Ordered list of symbolics: used to generate test cases.
   //
   // FIXME: Move to a shared list structure (not critical).
-  std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
+  std::vector<Symbolic> symbolics;
 
   /// @brief Set of used array names for this state.  Used to avoid collisions.
   std::set<std::string> arrayNames;
@@ -273,9 +275,6 @@ public:
   /// @brief The target basic block that the state must achieve
   std::unordered_set<KBlock*> targets;
 
-  /// @brief Еhe sequence of states, to be used to fill the expressions
-  std::vector<ExecutionState *> statesForRebuild;
-
 public:
   #ifdef KLEE_UNITTEST
   // provide this function only in the context of unittests
@@ -305,6 +304,8 @@ public:
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
   void addConstraint(ref<Expr> e, KInstruction *loc, bool *sat = 0);
+  int resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &);
+  void exctractForeignSymbolics(std::vector<Symbolic> &);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;

@@ -1,4 +1,7 @@
 #pragma once
+
+#include "Memory.h"
+
 #include "klee/Expr/Constraints.h"
 #include "klee/Module/KModule.h"
 
@@ -7,6 +10,7 @@
 namespace klee {
 
 class ExecutionState;
+class MemoryObject;
 
 class ProofObligation {
 
@@ -19,6 +23,7 @@ class ProofObligation {
 public:
   KBlock* location;
   ConstraintSet condition;
+  std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
   size_t lvl;
   bool answered;
 

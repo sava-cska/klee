@@ -75,147 +75,40 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
     Composer::globalDerefCache;
 
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
-  ComposeVisitor visitor(this, -S1->stackBalance);
+  ComposeVisitor visitor(this, -copy->stackBalance);
   auto res_o = expr;
   res = visitor.visit(expr);
-  if(ComposerDebug) {
-    errs() << "--<-------------------------------------->--\n";
-    errs() << "Expression before rebuild:\n";
-    res_o->dump();
-    errs() << "Expression after rebuild:\n";
-    if(res.isNull()) errs() << "No expression\n";
-    else res->dump();
-  }
   res = visitor.faultyPtr.isNull() ? res : visitor.faultyPtr;
   return visitor.faultyPtr.isNull();
 }
 
-void Composer::compose(ExecutionState *S1, ExecutionState *S2,
-                       ExecutionState *&result) {
-  assert(S1 || S2);
-  if (!S1 || S1->isEmpty()) {
-    result = S2->copy();
-    return;
-  } else if (!S2 || S2->isEmpty()) {
-    result = S1->copy();
-    return;
-  }
-
-  TimingSolver *solver = executor->getSolver();
-  assert(solver);
-  Composer composer(S1, S2);
-
-  ExecutionState *copy = S1->copy();
-  executor->addState(*copy);
-  executor->getProcessForest()->attach(S1->ptreeNode, copy, S1);
-  composer.compose(copy, result);
-}
-
-bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *S1,
-                          ref<Expr> &res) {
-  Composer composer(S1, nullptr);
+bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *state, ref<Expr> &res) {
+  Composer composer(state);
   return composer.tryRebuild(expr, res);
 }
 
-void Composer::compose(ExecutionState *state, ExecutionState *&result) {
-  assert(S1 && S2 && state && !S1->isEmpty() && !S2->isEmpty());
-  assert(state->pc == S2->initPC);
-  if (ComposerDebug) {
-    errs() << "COMPOSING DEBUG: Composing begins\n";    
-  }
-
-  std::vector<ref<Expr>> rconstraints;
-  for (auto &constraint : S2->constraints) {
-    ref<Expr> rebuildConstraint = constraint;
-
-    bool success;
-    for (auto sti = state->statesForRebuild.rbegin(),
-              ste = state->statesForRebuild.rend();
-         sti != ste; ++sti) {
-      ExecutionState *st = *sti;
-      success = Composer::tryRebuild(rebuildConstraint, st, rebuildConstraint);
-      if (!success) {
-        // TODO: образуется слишком много состояний с ошибками по сравнению с
-        // forward-режимом
-        executor->terminateStateOnOutOfBound(*state, rebuildConstraint);
-        if (ComposerDebug) {
-          errs() << "COMPOSING DEBUG: Composing ends, State out of bound\n";
-        }
-        return;
-      }
-      rebuildConstraint =
-          ConstraintManager::simplifyExpr(st->constraints, rebuildConstraint);
-    }
-    rebuildConstraint =
-        ConstraintManager::simplifyExpr(state->constraints, rebuildConstraint);
-
-    if (isa<ConstantExpr>(rebuildConstraint)) {
-      if (cast<ConstantExpr>(rebuildConstraint)->isTrue())
-        continue;
-      else {
-        executor->silentRemove(*state);
-        if (ComposerDebug) {
-          errs() << "COMPOSING DEBUG: Composing ends, state unreachable\n";
-        }
-        return;
-      }
-    }
-
-    rconstraints.push_back(rebuildConstraint);
-  }
-
-  ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
-  for (auto &rc : rconstraints) {
-    check = AndExpr::create(check, rc);
-  }
-  bool mayBeTrue;
-  bool success = executor->getSolver()->mayBeTrue(
-      state->constraints, check, mayBeTrue, state->queryMetaData);
-  assert(success && "FIXME: Unhandled solver failure");
-  if (mayBeTrue) {
-    for (auto &rc : rconstraints) {
-      executor->addConstraint(*state, rc);
-    }
-  } else {
-    // TODO: нужна нормальная обработка недостижимого состояния
-    if (ComposerDebug) {
-      errs() << "COMPOSING DEBUG: Composing ends, state unreachable\n";
-    }
-    executor->silentRemove(*state);
-    return;
-  }
-
-  assert(state->stack.back().kf == S2->stack.front().kf &&
-         "can not compose states from different functions");
-
-  if (S2->stack.size() > 1) {
-    for (unsigned n = 1; n < S2->stack.size(); ++n) {
-      state->stack.push_back(S2->stack[n]);
+bool Composer::tryRebuild(const ProofObligation old, ExecutionState *state, ProofObligation &rebuilded) {
+  bool success = true;
+  Composer composer(state);
+  for(auto& constraint : old.condition) {
+    KInstruction *loc = old.condition.get_location(constraint);
+    ref<Expr> rebuilt_constraint;
+    if (composer.tryRebuild(constraint, rebuilt_constraint))
+      rebuilded.condition.push_back(rebuilt_constraint, loc);
+    else {
+      success = false;
+      break;
     }
   }
-
-  state->prevPC = S2->prevPC;
-  state->pc = S2->pc;
-  state->incomingBBIndex = S2->incomingBBIndex;
-  state->steppedInstructions =
-      state->steppedInstructions + S2->steppedInstructions;
-  state->depth = state->depth + S2->depth;
-  state->coveredNew = S2->coveredNew;
-  state->level.insert(S2->level.begin(), S2->level.end());
-  state->multilevel.insert(S2->multilevel.begin(), S2->multilevel.end());
-  state->transitionLevel.insert(S2->transitionLevel.begin(),
-                                S2->transitionLevel.end());
-  state->statesForRebuild.push_back(S2);
-
-  result = state;
-  if (ComposerDebug) {
-    errs() << "COMPOSING DEBUG: Composing ends\n";
-  }
+  std::vector<Symbolic> foreign;
+  composer.copy->exctractForeignSymbolics(foreign);
+  rebuilded.symbolics.insert(foreign.begin(), foreign.end(), rebuilded.symbolics.end());
+  return success;
 }
 
 bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
-  ExecutionState *S1 = caller->S1;
-  ExprHashMap<ref<Expr>> &derefCache = Composer::globalDerefCache[S1];
+  ExecutionState *state = caller->copy;
+  ExprHashMap<ref<Expr>> &derefCache = Composer::globalDerefCache[state];
   auto cachedDeref = derefCache.find(ptr);
   if (cachedDeref != derefCache.end()) {
     result = derefCache[ptr];
@@ -224,7 +117,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
 
   ResolutionList rl;
   Solver::Validity res = Solver::False;
-  S1->addressSpace.resolve(*S1, caller->executor->getSolver(), ptr, rl, true);
+  state->addressSpace.resolve(*state, caller->executor->getSolver(), ptr, rl, true);
 
   if (rl.empty() && isa<ConstantExpr>(ptr)) {
     faultyPtr = ptr;
@@ -242,7 +135,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
     time::Span timeout = caller->executor->getSolverTimeout();
     TimingSolver *solver = caller->executor->getSolver();
     solver->setTimeout(timeout);
-    solver->evaluate(S1->constraints, AndExpr::create(check, inBounds), res, S1->queryMetaData);
+    solver->evaluate(state->constraints, AndExpr::create(check, inBounds), res, state->queryMetaData);
     solver->setTimeout(time::Span());
 
     if (res == Solver::True) {
@@ -260,8 +153,8 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
   }
 
   if (!isa<ConstantExpr>(ptr) && res != Solver::True) {
-    ObjectPair p = caller->executor->transparentLazyInstantiateVariable(
-      *S1, ptr, nullptr, size);
+    ObjectPair p = caller->executor->cachedLazyInstantiateVariable(
+      *state, ptr, nullptr, size);
     ref<Expr> trueCase = p.second->read(0, 8 * p.second->size);
     results.push_back({ConstantExpr::create(true, Expr::Bool),
                         SExtExpr::create(trueCase, 8 * size)});
@@ -284,10 +177,10 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
 
 ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
   ref<Expr> refRe = new ReadExpr(re);
-  ExecutionState *S1 = caller->S1;
-  assert(S1 && "no context passed");
+  ExecutionState *state = caller->copy;
+  assert(state && "no context passed");
 
-   std::map<const MemoryObject *, ref<Expr>> &readCache = Composer::globalReadCache[S1];
+  std::map<const MemoryObject *, ref<Expr>> &readCache = Composer::globalReadCache[state];
 
   ref<ObjectState> OS;
   if(re.updates.root->isForeign ||
@@ -349,8 +242,8 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
   if(!allocSite)
     return new ReadExpr(re);
 
-  KFunction *kf1 = S1->stack.back().kf;
-  KBlock *pckb1 = kf1->blockMap[S1->getPCBlock()];
+  KFunction *kf1 = state->stack.back().kf;
+  KBlock *pckb1 = kf1->blockMap[state->getPCBlock()];
 
   if(isa<Argument>(allocSite)) {
     const Argument *arg = cast<Argument>(allocSite);
@@ -359,14 +252,14 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
     const unsigned argN = arg->getArgNo();
     prevVal =
       kf->function == kf1->function ?
-        caller->executor->getArgumentCell(*S1, kf, argN).value : nullptr;
+        caller->executor->getArgumentCell(*state, kf, argN).value : nullptr;
   } else if(isa<Instruction>(allocSite)) {
     const Instruction *inst = cast<Instruction>(allocSite);
     const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
     bool isFinalPCKb1 =
       std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
     if (isa<PHINode>(inst))
-      prevVal = caller->executor->eval(ki, S1->incomingBBIndex, *S1, false).value;
+      prevVal = caller->executor->eval(ki, state->incomingBBIndex, *state, false).value;
     else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
       Function *f =
         isa<CallInst>(inst) ?
@@ -374,14 +267,14 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
           dyn_cast<InvokeInst>(inst)->getCalledFunction();
       prevVal =
         isFinalPCKb1 && f == kf1->function ?
-          caller->executor->getDestCell(*S1, S1->prevPC).value : nullptr;
+          caller->executor->getDestCell(*state, state->prevPC).value : nullptr;
     } else {
       const Instruction *inst = cast<Instruction>(allocSite);
       const Function *f = inst->getParent()->getParent();
       const KFunction *kf = caller->executor->getKFunction(f);
       prevVal =
         kf->function == kf1->function ?
-          caller->executor->getDestCell(*S1, ki).value : nullptr;
+          caller->executor->getDestCell(*state, ki).value : nullptr;
     }
   } else {
     return new ReadExpr(re);

@@ -30,7 +30,7 @@
 
 namespace klee {
 
-Action ForwardBidirSearcher::selectAction() {
+Action ForwardBidirectionalSearcher::selectAction() {
   while(!searcher->empty()) {
     auto &state = searcher->selectState();
     KInstruction *prevKI = state.prevPC;
@@ -54,14 +54,14 @@ Action ForwardBidirSearcher::selectAction() {
   return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});
 }
 
-void ForwardBidirSearcher::update(ActionResult r) {
+void ForwardBidirectionalSearcher::update(ActionResult r) {
   if(std::holds_alternative<ForwardResult>(r)) {
     auto fr = std::get<ForwardResult>(r);
     searcher->update(fr.current, fr.addedStates, fr.removedStates);
   }
 }
 
-ForwardBidirSearcher::ForwardBidirSearcher(SearcherConfig cfg) {
+ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
   searcher = new GuidedForwardSearcher(
       constructUserSearcher(*(Executor *)(cfg.executor)));
   for(auto target : cfg.targets) {

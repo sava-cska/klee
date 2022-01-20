@@ -27,16 +27,16 @@ public:
 
   virtual Action selectAction() = 0;
   virtual void update(ActionResult) = 0;
-  
+
 };
 
-class ForwardBidirSearcher : public IBidirectionalSearcher {
+class ForwardBidirectionalSearcher : public IBidirectionalSearcher {
 public:
   Action selectAction() override;
   void update(ActionResult) override;
 
-  explicit ForwardBidirSearcher(SearcherConfig);
-  
+  explicit ForwardBidirectionalSearcher(SearcherConfig);
+
 private:
   GuidedForwardSearcher* searcher;
   Executor* ex; // hack

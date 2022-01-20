@@ -394,7 +394,7 @@ private:
   ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
                                      const llvm::Value *allocSite, uint64_t size);
 
-  ObjectPair transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
+  ObjectPair cachedLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
                                      const llvm::Value *allocSite, uint64_t size);
   
   ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,

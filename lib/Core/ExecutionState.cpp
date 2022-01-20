@@ -11,6 +11,7 @@
 
 #include "Memory.h"
 
+#include "klee/Expr/ArrayExprVisitor.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprHashMap.h"
 #include "klee/Module/Cell.h"
@@ -28,6 +29,7 @@
 #include <iomanip>
 #include <map>
 #include <set>
+#include <queue>
 #include <sstream>
 #include <stdarg.h>
 
@@ -157,8 +159,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
     redundant(state.redundant),
-    targets(state.targets),
-    statesForRebuild(state.statesForRebuild)
+    targets(state.targets)
 {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
@@ -433,6 +434,69 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
 void ExecutionState::addConstraint(ref<Expr> e,  KInstruction *loc, bool *sat) {
   ConstraintManager c(constraints);
   c.addConstraint(e, loc, sat);
+}
+
+int ExecutionState::resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &resolved) {
+  int status = 0;
+  for (auto i : symbolics) {
+    if (!i.first->isLazyInstantiated()) {
+      continue;
+    }
+    status = 1;
+    auto lisource = i.first->lazyInstantiatedSource;
+    switch (lisource->getKind()) {
+    case Expr::Read: {
+      ref<ReadExpr> base = dyn_cast<ReadExpr>(lisource);
+      auto parent = base->updates.root->binding->getObject();
+      if (!parent) {
+        return -1;
+      }
+      resolved[lisource] = std::make_pair(
+        std::make_pair(parent, base->updates.root),
+        base->index);
+      break;
+    } 
+    case Expr::Concat: {
+      ref<ReadExpr> base =
+          ArrayExprHelper::hasOrderedReads(*dyn_cast<ConcatExpr>(lisource));
+      auto parent = base->updates.root->binding->getObject();
+      if (!parent) {
+        return -1;
+      }
+      resolved[lisource] = std::make_pair(
+        std::make_pair(parent, base->updates.root),
+        base->index);
+      break;
+    }
+    default:
+      return -1;
+    }
+  }
+  return status;
+}
+
+void ExecutionState::exctractForeignSymbolics(std::vector<Symbolic> &foreign) {
+  std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> resolved;
+  resolveLazyInstantiation(resolved);
+  for (auto &moArray : symbolics) {
+    if (moArray.second->isForeign)
+      foreign.push_back(moArray);
+  }
+
+  bool keepSearching = true;
+  Symbolic parent;
+  while (keepSearching) {
+    keepSearching = false;
+    for (auto &moArray : symbolics) {
+      if (moArray.first->isLazyInstantiated()) {
+        parent = resolved[moArray.first->lazyInstantiatedSource].first;
+        if (std::find(foreign.begin(), foreign.end(), parent) != foreign.end()) {
+          foreign.push_back(moArray);
+          keepSearching = true;
+        }
+      }
+    }
+  }
 }
 
 BasicBlock *ExecutionState::getInitPCBlock() const{

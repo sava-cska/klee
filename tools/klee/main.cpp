@@ -684,7 +684,7 @@ void KleeHandler::processTestCase(ExecutionState &state,
       klee_warning("unable to get symbolic solution, losing test case");
 
     unsigned test_id = ++m_numTotalTests;
-    
+
     if (WriteKTestFiles && success && lazy_instantiation_resolved == 0) {
       writeTestCaseKTest(assignments, test_id);
     }

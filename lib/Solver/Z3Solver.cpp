@@ -361,8 +361,8 @@ bool Z3SolverImpl::internalRunSolver(
     Z3_ast_vector assertions = Z3_solver_get_assertions(builder->ctx, theSolver);
     unsigned assertionsCount = Z3_ast_vector_size(builder->ctx, assertions);
 
-    stats::unsatQueriesAssertionsCount += stats::unsatQueriesAssertionsCount + assertionsCount;
-    stats::unsatCoresSize += stats::unsatCoresSize + size;
+    stats::unsatQueriesAssertionsCount += assertionsCount;
+    stats::unsatCoresSize += size;
 
     Z3_ast_vector_dec_ref(builder->ctx, unsatCore);
   }

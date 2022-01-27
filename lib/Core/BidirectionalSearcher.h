@@ -56,6 +56,7 @@ private:
   GuidedForwardSearcher* branch;
   BFSBackwardSearcher* backward;
   ForkInitializer* initializer;
+  uint choice = 0;
 };
 
 } // namespace klee

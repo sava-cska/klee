@@ -102,7 +102,7 @@ bool Composer::tryRebuild(const ProofObligation old, ExecutionState *state, Proo
   }
   std::vector<Symbolic> foreign;
   composer.copy->exctractForeignSymbolics(foreign);
-  rebuilded.symbolics.insert(foreign.begin(), foreign.end(), rebuilded.symbolics.end());
+  rebuilded.symbolics.insert(rebuilded.symbolics.end(), foreign.begin(), foreign.end());
   return success;
 }
 

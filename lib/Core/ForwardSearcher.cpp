@@ -311,11 +311,8 @@ void TargetedForwardSearcher::update(ExecutionState *current,
   // remove states
   for (const auto state : removedStates) {
     state->targets.erase(target);
-    // Этот иф не должнен тут быть
-    // if(states_set.count(state)) {
     states->remove(state);
     states_set.erase(state);
-    // }
   }
 }
 
@@ -397,10 +394,7 @@ void GuidedForwardSearcher::update(ExecutionState *current,
       addTarget(target);
     targetedSearchers[target]->update(currTState, addedTStates[target], removedTStates[target]);
 
-    if (!targetedSearchers[target]->reachedOnLastUpdate.empty() || targetedSearchers[target]->empty()) {
-      for(auto state: targetedSearchers[target]->states_set) {
-        state->targets.erase(target);
-      }
+    if (targetedSearchers[target]->empty()) {
       targetedSearchers.erase(target);
     }
   }
@@ -410,12 +404,20 @@ void GuidedForwardSearcher::update(ExecutionState *current,
 
 std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReached() {
   std::unordered_set<ExecutionState*> ret;
-  for (auto it = targetedSearchers.begin(); it != targetedSearchers.end();
-       it++) {
-    for (auto state: it->second->reachedOnLastUpdate) {
-      ret.insert(state);
+  std::vector<KBlock *> targets;
+  for(auto const& targetSearcher: targetedSearchers)
+    targets.push_back(targetSearcher.first);
+  for (auto target : targets) {
+    if (!targetedSearchers[target]->reachedOnLastUpdate.empty()) {
+      for (auto state: targetedSearchers[target]->reachedOnLastUpdate) {
+        ret.insert(state);
+      }
+      targetedSearchers[target]->reachedOnLastUpdate.clear();
+      for(auto state: targetedSearchers[target]->states_set) {
+        state->targets.erase(target);
+      }
+      targetedSearchers.erase(target);
     }
-    it->second->reachedOnLastUpdate.clear();
   }
   return ret;
 }

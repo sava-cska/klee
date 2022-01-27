@@ -123,8 +123,8 @@ namespace klee {
   private:
     std::map<KBlock*, std::map<KBlock*, unsigned int>> distance;
     std::map<KBlock*, std::map<KBlock*, unsigned int>> backwardDistance;
-    std::map<KBlock*, std::vector<std::pair<KBlock*, unsigned int>>> BFSSort;
-    std::map<KBlock*, std::vector<std::pair<KBlock*, unsigned int>>> backwardBFSSort;
+    std::map<KBlock*, std::vector<std::pair<KBlock*, unsigned int>>> sortedDistance;
+    std::map<KBlock*, std::vector<std::pair<KBlock*, unsigned int>>> sortedBackwardDistance;
     // BFS algorithm
     void calculateDistance(KBlock *bb);
     void calculateBackwardDistance(KBlock *bb);
@@ -138,9 +138,9 @@ namespace klee {
 
     unsigned getArgRegister(unsigned index) const { return index; }
     std::map<KBlock*, unsigned int>& getDistance(KBlock *kb);
-    std::vector<std::pair<KBlock*, unsigned int>>& getBFSSort(KBlock *kb);
+    std::vector<std::pair<KBlock*, unsigned int>>& getSortedDistance(KBlock *kb);
     std::map<KBlock*, unsigned int>& getBackwardDistance(KBlock *kb);
-    std::vector<std::pair<KBlock*, unsigned int>>& getBackwardBFSSort(KBlock *kb);
+    std::vector<std::pair<KBlock*, unsigned int>>& getSortedBackwardDistance(KBlock *kb);
     KBlock *getNearestJoinBlock(KBlock *kb);
   };
 
@@ -189,6 +189,8 @@ namespace klee {
   private:
     std::map<KFunction*, std::map<KFunction*, unsigned int>> distance;
     std::map<KFunction*, std::map<KFunction*, unsigned int>> backwardDistance;
+    std::map<KFunction*, std::vector<std::pair<KFunction*, unsigned int>>> sortedDistance;
+    std::map<KFunction*, std::vector<std::pair<KFunction*, unsigned int>>> sortedBackwardDistance;
 
     // Mark function with functionName as part of the KLEE runtime
     void addInternalFunction(const char* functionName);
@@ -238,8 +240,10 @@ namespace klee {
     void checkModule();
 
     KBlock *getKBlock(llvm::BasicBlock *bb);
-    std::map<KFunction*, unsigned int>& getBackwardDistance(KFunction *kf);
     std::map<KFunction*, unsigned int>& getDistance(KFunction *kf);
+    std::vector<std::pair<KFunction*, unsigned int>>& getSortedDistance(KFunction *kf);
+    std::map<KFunction*, unsigned int>& getBackwardDistance(KFunction *kf);
+    std::vector<std::pair<KFunction*, unsigned int>>& getSortedBackwardDistance(KFunction *kf);
   };
 } // End klee namespace
 

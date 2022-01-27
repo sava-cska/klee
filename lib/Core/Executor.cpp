@@ -5129,7 +5129,7 @@ ActionResult Executor::executeAction(Action a) {
   case Action::Type::Backward:
     return goBackward(a.state, a.pob);
   case Action::Type::Init:
-    return initBranch(a.location);
+    return initBranch(a.location, a.targets);
   case Action::Type::Terminate:
     return nullptr;
   }
@@ -5151,7 +5151,7 @@ KBlock *Executor::calculateTargetByTransitionHistory(ExecutionState &state) {
        sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
 
-    for (auto &kbd : kf->getBFSSort(kb)) {
+    for (auto &kbd : kf->getSortedDistance(kb)) {
       KBlock *target = kbd.first;
       unsigned distance = kbd.second;
       if ((sfNum > 0 || distance > 0)) {
@@ -5208,7 +5208,7 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
        sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
 
-    for (auto &kbd : kf->getBFSSort(kb)) {
+    for (auto &kbd : kf->getSortedDistance(kb)) {
       KBlock *target = kbd.first;
       unsigned distance = kbd.second;
       if ((sfNum > 0 || distance > 0)) {
@@ -5286,11 +5286,11 @@ void Executor::run(ExecutionState &state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  for (auto i : state.stack.back().kf->finalKBlocks) {
-    if(!isa<UnreachableInst>(i->instructions[i->numInstructions - 1]->inst)) {
-      cfg.targets.insert(i);
-    }
-  }
+  // for (auto i : state.stack.back().kf->finalKBlocks) {
+  //   if(!isa<UnreachableInst>(i->instructions[i->numInstructions - 1]->inst)) {
+  //     cfg.targets.insert(i);
+  //   }
+  // }
   cfg.executor = this;
 
   processForest->addRoot(&state);
@@ -5356,7 +5356,7 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-InitResult Executor::initBranch(KBlock* loc) {
+InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets) {
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5364,6 +5364,7 @@ InitResult Executor::initBranch(KBlock* loc) {
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
   addedStates.push_back(state);
+  state->targets.merge(targets);
   return InitResult(loc, state);
 }
 

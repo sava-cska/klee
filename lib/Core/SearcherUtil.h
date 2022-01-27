@@ -30,10 +30,10 @@ struct Action {
 };
 
 struct SearcherConfig {
-  ExecutionState* initial_state;
-  std::unordered_set<KBlock*> targets;
+  ExecutionState *initial_state;
+  std::unordered_set<KBlock *> targets;
   // Hack
-  Executor* executor;
+  Executor *executor;
 };
 
 struct ForwardResult {

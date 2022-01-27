@@ -73,7 +73,7 @@ ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
 
 Action BidirectionalSearcher::selectAction() {
   while (true) {
-    int choice = rand() % 4;
+    choice = (choice + 1) % 4;
     if (choice == 0) {
       while (!forward->empty()) {
         auto &state = forward->selectState();
@@ -85,6 +85,11 @@ Action BidirectionalSearcher::selectAction() {
           KBlock *target = ex->calculateTargetByTransitionHistory(state);
           if (target) {
             state.targets.insert(target);
+
+            ProofObligation *pob = new ProofObligation(target);
+            backward->update(pob);
+            initializer->addPob(pob);
+
             ex->updateStates(&state);
             // klee_message("Forward");
             return Action(&state);
@@ -101,18 +106,18 @@ Action BidirectionalSearcher::selectAction() {
       return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});
     }
     if (choice == 1) {
-      if(branch->empty()) continue;
+      if (branch->empty()) continue;
       auto& state = branch->selectState();
       // klee_message("Branch");
       return Action(&state);
     }
-    if(choice == 2) {
-      if(backward->empty()) continue;
+    if (choice == 2) {
+      if (backward->empty()) continue;
       auto a = backward->selectAction();
       // klee_message("Backward");
       return Action(Action::Type::Backward, a.second, nullptr, a.first, {});
     }
-    if(choice == 3) {
+    if (choice == 3) {
       if(initializer->empty()) continue;
       auto a = initializer->selectAction();
       klee_message("Initializer");
@@ -129,7 +134,7 @@ void BidirectionalSearcher::update(ActionResult r) {
     std::vector<ExecutionState*> brnch_added;
     std::vector<ExecutionState*> fwd_removed;
     std::vector<ExecutionState*> brnch_removed;
-    
+
     if(fr.current) {
       if(fr.current->isIsolated()) brnch_cur = fr.current;
       else fwd_cur = fr.current;
@@ -160,21 +165,18 @@ void BidirectionalSearcher::update(ActionResult r) {
     initializer->addPob(br.newPob);
   } else {
     auto ir = std::get<InitResult>(r);
-    ir.state->targets.insert(ir.location);
     branch->update(nullptr, {ir.state}, {});
   }
 }
 
 BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   ex = cfg.executor;
-  forward = new GuidedForwardSearcher(
-      constructUserSearcher(*(Executor *)(cfg.executor)));
+  forward = new GuidedForwardSearcher(constructUserSearcher(*cfg.executor));
   for(auto target : cfg.targets) {
     cfg.initial_state->targets.insert(target);
   }
   forward->update(nullptr,{cfg.initial_state},{});
-  branch = new GuidedForwardSearcher(
-      constructUserSearcher(*(Executor *)(cfg.executor)));
+  branch = new GuidedForwardSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()));
   backward = new BFSBackwardSearcher(cfg.targets);
   initializer = new ForkInitializer(cfg.targets);
 }

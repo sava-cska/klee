@@ -678,12 +678,12 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  InitResult initBranch(KBlock* loc);
-  ForwardResult goForward(ExecutionState* state);
-  BackwardResult goBackward(ExecutionState* state, ProofObligation* pob);
+  InitResult initBranch(KBlock *loc, std::unordered_set<KBlock *> &targets);
+  ForwardResult goForward(ExecutionState *state);
+  BackwardResult goBackward(ExecutionState *state, ProofObligation *pob);
 
   ActionResult executeAction(Action a);
-  
+
   KBlock *getStartLocation(const ExecutionState &state);
   KBlock *getLastExecutedLocation(const ExecutionState &state);
   KBlock *getCurrentLocation(const ExecutionState &state);

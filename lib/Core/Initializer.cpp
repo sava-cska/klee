@@ -42,6 +42,9 @@ void SDInitializer::addPob(ProofObligation* pob) {
   pobs.insert(pob->location);
 }
 
+void SDInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
+
+
 bool ForkInitializer::empty() {
   for(auto i : pobs) {
     auto distmap = i->parent->getSortedBackwardDistance(i);
@@ -84,4 +87,21 @@ void ForkInitializer::addPob(ProofObligation* pob) {
   pobs.insert(pob->location);
 }
 
+void ForkInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
+
+std::pair<KBlock *, std::unordered_set<KBlock *>> ValidityCoreInitializer::selectAction() {
+  std::pair<KBlock*,KBlock*> v = validity_core_inits.front();
+  validity_core_inits.pop();
+  return std::make_pair(v.first, std::unordered_set({v.second}));
+}
+
+bool ValidityCoreInitializer::empty() {
+  return validity_core_inits.empty();
+}
+
+void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
+
+void ValidityCoreInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {
+  validity_core_inits.push(v);
+}
 };

@@ -55,7 +55,7 @@ private:
   GuidedForwardSearcher* forward;
   GuidedForwardSearcher* branch;
   BFSBackwardSearcher* backward;
-  ForkInitializer* initializer;
+  ValidityCoreInitializer* initializer;
   uint choice = 0;
 };
 

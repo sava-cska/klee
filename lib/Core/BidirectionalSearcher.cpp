@@ -71,6 +71,7 @@ ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
   ex = cfg.executor;
 }
 
+
 Action BidirectionalSearcher::selectAction() {
   while (true) {
     choice = (choice + 1) % 4;
@@ -159,6 +160,10 @@ void BidirectionalSearcher::update(ActionResult r) {
       backward->addBranch(i);
     }
 
+    if(fr.validity_core_init.first != nullptr) {
+      initializer->addValidityCoreInit(fr.validity_core_init);
+    }
+
   } else if (std::holds_alternative<BackwardResult>(r)) {
     auto br = std::get<BackwardResult>(r);
     backward->update(br.newPob);
@@ -178,7 +183,7 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedForwardSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()));
   backward = new BFSBackwardSearcher(cfg.targets);
-  initializer = new ForkInitializer(cfg.targets);
+  initializer = new ValidityCoreInitializer(cfg.targets);
 }
 
 } // namespace klee

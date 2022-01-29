@@ -64,6 +64,10 @@ namespace klee {
     /// "coverable" for statistics and search heuristics.
     bool trackCoverage;
 
+    // Number of times transfer to this Block via a branch
+    // instruction was blocked due to unsatisfiable conditions.
+    size_t failed_fork_count;
+
   public:
     explicit KBlock(KFunction*, llvm::BasicBlock*, KModule*,
                     std::map<llvm::Instruction*, unsigned>&,

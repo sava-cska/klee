@@ -2144,6 +2144,15 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
+      if (branches.first == nullptr) {
+        KBlock* target = getKBlock(*bi->getSuccessor(0));
+        target->failed_fork_count++;
+        validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
+      } else if (branches.second == nullptr) {
+        KBlock* target = getKBlock(*bi->getSuccessor(1));
+        target->failed_fork_count++;
+        validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
+      }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
       // instruction (it reuses its statistic id). Should be cleaned
@@ -5383,7 +5392,11 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
   ForwardResult ret(state, addedStates, removedStates);
-  
+  ret.validity_core_init = std::make_pair(nullptr,nullptr);
+  if(validity_core_init.first != nullptr) {
+    ret.validity_core_init = validity_core_init;
+    validity_core_init = std::make_pair(nullptr,nullptr);
+  }
   states.insert(addedStates.begin(), addedStates.end());
 
   return ret;

@@ -1033,12 +1033,6 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   solver->setTimeout(timeout);
   bool success = solver->evaluate(current.constraints, condition, res,
                                   current.queryMetaData);
-
-  // _-_ Ugly hack
-  Solver::Validity neg_res;
-  bool negation_success = solver->evaluate(current.constraints,
-                                           Expr::createIsZero(condition),
-                                           neg_res, current.queryMetaData);
     
   solver->setTimeout(time::Span());
   if (!success) {

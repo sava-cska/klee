@@ -13,7 +13,7 @@ public:
   virtual std::pair<KBlock*, std::unordered_set<KBlock*>> selectAction() = 0;
   virtual bool empty() = 0;
   virtual void addPob(ProofObligation* pob) = 0;
-  virtual void addValidityCoreInit(std::pair<KBlock*,KBlock*>);
+  virtual void addValidityCoreInit(std::pair<KBlock*,KBlock*>) = 0;
 };
 
 class SDInitializer : public Initializer {

@@ -1033,6 +1033,13 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   solver->setTimeout(timeout);
   bool success = solver->evaluate(current.constraints, condition, res,
                                   current.queryMetaData);
+
+  // _-_ Ugly hack
+  Solver::Validity neg_res;
+  bool negation_success = solver->evaluate(current.constraints,
+                                           Expr::createIsZero(condition),
+                                           neg_res, current.queryMetaData);
+    
   solver->setTimeout(time::Span());
   if (!success) {
     current.pc = current.prevPC;
@@ -2144,11 +2151,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
-      if (branches.first == nullptr) {
+      if (branches.first == nullptr && branches.second != nullptr) {
         KBlock* target = getKBlock(*bi->getSuccessor(0));
         target->failed_fork_count++;
         validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
-      } else if (branches.second == nullptr) {
+      } else if (branches.second == nullptr && branches.first != nullptr) {
         KBlock* target = getKBlock(*bi->getSuccessor(1));
         target->failed_fork_count++;
         validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);

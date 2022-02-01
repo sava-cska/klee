@@ -51,7 +51,7 @@ Action ForwardBidirectionalSearcher::selectAction() {
       return Action(&state);
     }
   }
-  return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});
+  return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
 }
 
 void ForwardBidirectionalSearcher::update(ActionResult r) {
@@ -105,7 +105,7 @@ Action BidirectionalSearcher::selectAction() {
         }
       }
       // klee_message("Forward");
-      return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {});
+      return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
     }
     if (choice == 1) {
       if (branch->empty()) continue;
@@ -117,13 +117,13 @@ Action BidirectionalSearcher::selectAction() {
       if (backward->empty()) continue;
       auto a = backward->selectAction();
       // klee_message("Backward");
-      return Action(Action::Type::Backward, a.second, nullptr, a.first, {});
+      return Action(Action::Type::Backward, a.second, nullptr, a.first, {}, false);
     }
     if (choice == 3) {
       if(initializer->empty()) continue;
       auto a = initializer->selectAction();
       klee_message("Initializer");
-      return Action(Action::Type::Init, nullptr, a.first, nullptr, a.second);
+      return Action(Action::Type::Init, nullptr, a.first, nullptr, a.second, initializer->pobsAtTargets());
     }
   }
 }
@@ -172,6 +172,10 @@ void BidirectionalSearcher::update(ActionResult r) {
   } else {
     auto ir = std::get<InitResult>(r);
     branch->update(nullptr, {ir.state}, {});
+    for (auto pob : ir.pobs) {
+      backward->update(pob);
+      initializer->addPob(pob);
+    }
   }
 }
 

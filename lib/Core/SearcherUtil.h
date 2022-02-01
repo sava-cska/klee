@@ -19,14 +19,16 @@ struct Action {
   KBlock *location;      // Init
   ProofObligation *pob;  // Backward
   std::unordered_set<KBlock*> targets; // Init
+  bool makePobAtTargets; // Init
 
   Action(ExecutionState *es)
       : type(Action::Type::Forward), state(es), location(nullptr), pob(nullptr),
-        targets({}) {}
+        targets({}), makePobAtTargets(false) {}
 
   Action(Type t, ExecutionState *es, KBlock *loc, ProofObligation *pob,
-         std::unordered_set<KBlock *> targets)
-      : type(t), state(es), location(loc), pob(pob), targets(targets) {}
+         std::unordered_set<KBlock *> targets, bool makePobAtTargets)
+    : type(t), state(es), location(loc), pob(pob), targets(targets),
+      makePobAtTargets(makePobAtTargets) {}
 };
 
 struct SearcherConfig {
@@ -61,7 +63,9 @@ struct BackwardResult {
 struct InitResult {
   KBlock* location;
   ExecutionState* state;
-  InitResult(KBlock *_loc, ExecutionState *es) : location(_loc), state(es) {}
+  std::unordered_set<ProofObligation*> pobs;
+  InitResult(KBlock *_loc, ExecutionState *es, std::unordered_set<ProofObligation*> pobs) :
+    location(_loc), state(es), pobs(pobs) {}
 };
 
 using ActionResult = std::variant<ForwardResult, BackwardResult, InitResult>;

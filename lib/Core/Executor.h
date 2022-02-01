@@ -203,6 +203,9 @@ private:
   /// as addedStates and removedStates are used.
   std::pair<KBlock*, KBlock*> validity_core_init;
 
+  /// To avoid making many empty pobs in one place. //TODO
+  std::unordered_set<KBlock*> main_pobs_locs;
+
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
   /// (outside the normal search interface) until they terminate. When
@@ -682,7 +685,7 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  InitResult initBranch(KBlock *loc, std::unordered_set<KBlock *> &targets);
+  InitResult initBranch(KBlock *loc, std::unordered_set<KBlock *> &targets, bool pobsAtTargets);
   ForwardResult goForward(ExecutionState *state);
   BackwardResult goBackward(ExecutionState *state, ProofObligation *pob);
 

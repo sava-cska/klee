@@ -5139,7 +5139,7 @@ ActionResult Executor::executeAction(Action a) {
   case Action::Type::Backward:
     return goBackward(a.state, a.pob);
   case Action::Type::Init:
-    return initBranch(a.location, a.targets);
+    return initBranch(a.location, a.targets, a.makePobAtTargets);
   case Action::Type::Terminate:
     return nullptr;
   }
@@ -5367,7 +5367,7 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets) {
+InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets, bool pobsAtTargets) {
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5376,7 +5376,16 @@ InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targe
   processForest->addRoot(state);
   addedStates.push_back(state);
   state->targets.merge(targets);
-  return InitResult(loc, state);
+  std::unordered_set<ProofObligation*> pobs;
+  if(pobsAtTargets) {
+    for (auto target : targets) {
+      if(main_pobs_locs.count(target)) continue;
+      ProofObligation* pob = new ProofObligation(target, 0, 0);
+      pobs.insert(pob);
+      main_pobs_locs.insert(target);
+    }
+  }
+  return InitResult(loc, state, pobs);
 }
 
 ForwardResult Executor::goForward(ExecutionState* state) {

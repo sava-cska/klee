@@ -15,6 +15,7 @@ public:
   virtual void addPob(ProofObligation* pob) = 0;
   virtual void removePob(ProofObligation* pob) = 0;
   virtual void addValidityCoreInit(std::pair<KBlock*,KBlock*>) = 0;
+  virtual bool pobsAtTargets() = 0;
 };
 
 class SDInitializer : public Initializer {
@@ -24,6 +25,7 @@ public:
   void addPob(ProofObligation* pob) override;
   void removePob(ProofObligation* pob) override;
   void addValidityCoreInit(std::pair<KBlock*,KBlock*>) override;
+  bool pobsAtTargets() override;
 
   SDInitializer(std::unordered_set<KBlock *> targets) : pobs(targets) {}
 
@@ -39,6 +41,7 @@ public:
   void addPob(ProofObligation *pob) override;
   void removePob(ProofObligation* pob) override;
   void addValidityCoreInit(std::pair<KBlock*,KBlock*>) override;
+  bool pobsAtTargets() override;
 
   ForkInitializer(std::unordered_set<KBlock *> targets) : pobs(targets) {}
 
@@ -54,12 +57,13 @@ public:
   void addPob(ProofObligation *pob) override;
   void removePob(ProofObligation* pob) override;
   void addValidityCoreInit(std::pair<KBlock*,KBlock*>) override;
+  bool pobsAtTargets() override;
 
   ValidityCoreInitializer(std::unordered_set<KBlock *> targets) {};
   
 private:
   std::queue<std::pair<KBlock*, KBlock*>> validity_core_inits;
-  
+  std::unordered_set<KBlock *> knownLocs;
 };
 
 };

@@ -48,6 +48,8 @@ void SDInitializer::removePob(ProofObligation* pob) {
 
 void SDInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
 
+bool SDInitializer::pobsAtTargets() { return false; }
+
 
 bool ForkInitializer::empty() {
   for(auto i : pobs) {
@@ -103,6 +105,8 @@ std::pair<KBlock *, std::unordered_set<KBlock *>> ValidityCoreInitializer::selec
   return std::make_pair(v.first, std::unordered_set({v.second}));
 }
 
+bool ForkInitializer::pobsAtTargets() { return false; }
+
 bool ValidityCoreInitializer::empty() {
   return validity_core_inits.empty();
 }
@@ -112,6 +116,12 @@ void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
 void ValidityCoreInitializer::removePob(ProofObligation* pob) {}
 
 void ValidityCoreInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {
-  validity_core_inits.push(v);
+  if(!knownLocs.count(v.first)) {
+    validity_core_inits.push(v);
+    knownLocs.insert(v.first);
+  }
 }
+
+bool ValidityCoreInitializer::pobsAtTargets() { return true; }
+
 };

@@ -5269,14 +5269,8 @@ KBlock *Executor::calculateRootByValidityCore(ExecutionState &state) {
 
   if (!metaData.queryValidityCores.empty()) {
     SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
-    for (auto &ekp : core) {
-      KInstruction *inst = ekp.second;
-      if (inst && inst->parent->parent == kf &&
-          kf->getDistance(inst->parent).at(kb) < minDistance) {
-        minDistance = kf->getDistance(inst->parent).at(kb);
-        nearestRoot = inst->parent;
-      }
-    }
+    assert(!core.empty());
+    nearestRoot = core.back().second->parent;
   }
 
   return nearestRoot;
@@ -5317,7 +5311,7 @@ void Executor::run(ExecutionState &state) {
     // TODO verify _-_
     if (std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
-      if (br.newPob->location->instructions[0]->inst == initialState->initPC->inst) {
+      if (br.newPob && br.newPob->location->instructions[0]->inst == initialState->initPC->inst) {
         ExecutionState* state = initialState->copy();
         for (auto &constraint : br.newPob->condition) {
           state->constraints.push_back(constraint, br.newPob->condition.get_location(constraint));

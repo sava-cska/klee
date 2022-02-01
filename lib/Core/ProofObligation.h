@@ -13,7 +13,7 @@ class ExecutionState;
 class MemoryObject;
 
 class ProofObligation {
-
+public:
   ProofObligation *parent;
   std::unordered_set<ProofObligation *> children;
 

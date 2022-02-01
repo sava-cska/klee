@@ -17,6 +17,7 @@ public:
 
   virtual void addBranch(ExecutionState* state) = 0;
   virtual void update(ProofObligation* pob) = 0;
+  virtual void removePob(ProofObligation* pob) = 0;
   virtual bool empty() = 0;  
 };
 
@@ -30,6 +31,8 @@ public:
   void addBranch(ExecutionState* state) override;
 
   bool empty() override;
+
+  void removePob(ProofObligation* pob) override;
 
   BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
     for (auto location : locations) {

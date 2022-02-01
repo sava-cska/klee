@@ -28,4 +28,9 @@ BFSBackwardSearcher::selectAction() {
   backpropQueue.pop();
   return ret;
 }
+
+void BFSBackwardSearcher::removePob(ProofObligation* pob) {
+  pobs.erase(pob);
+}
+
 };

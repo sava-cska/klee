@@ -42,6 +42,10 @@ void SDInitializer::addPob(ProofObligation* pob) {
   pobs.insert(pob->location);
 }
 
+void SDInitializer::removePob(ProofObligation* pob) {
+  pobs.erase(pob->location);
+}
+
 void SDInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
 
 
@@ -87,6 +91,10 @@ void ForkInitializer::addPob(ProofObligation* pob) {
   pobs.insert(pob->location);
 }
 
+void ForkInitializer::removePob(ProofObligation* pob) {
+  pobs.erase(pob->location);
+}
+
 void ForkInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
 
 std::pair<KBlock *, std::unordered_set<KBlock *>> ValidityCoreInitializer::selectAction() {
@@ -100,6 +108,8 @@ bool ValidityCoreInitializer::empty() {
 }
 
 void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
+  
+void ValidityCoreInitializer::removePob(ProofObligation* pob) {}
 
 void ValidityCoreInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {
   validity_core_inits.push(v);

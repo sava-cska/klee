@@ -71,6 +71,7 @@ ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
   ex = cfg.executor;
 }
 
+void ForwardBidirectionalSearcher::closeProofObligation(ProofObligation* pob) {}
 
 Action BidirectionalSearcher::selectAction() {
   while (true) {
@@ -186,4 +187,13 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   initializer = new ValidityCoreInitializer(cfg.targets);
 }
 
+void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
+  initializer->removePob(pob);
+  backward->removePob(pob);
+  for(auto i : pob->children) {
+    closeProofObligation(i);
+  }
+  delete pob;
+}
+  
 } // namespace klee

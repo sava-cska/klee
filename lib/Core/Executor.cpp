@@ -5327,6 +5327,7 @@ void Executor::run(ExecutionState &state) {
         }
         klee_message("making a test.");
         interpreterHandler->processTestCase(*state, 0, 0, true);
+        searcher->closeProofObligation(br.newPob);
         delete state;
       }
     }
@@ -5424,8 +5425,10 @@ BackwardResult Executor::goBackward(ExecutionState *state,
       KInstruction *location = state->constraints.get_location(constraint);
       newPob->condition.push_back(constraint, location);
     }
+    pob->children.insert(newPob);
     return BackwardResult(newPob, pob);
   } else {
+    delete newPob;
     return BackwardResult(nullptr, pob);
   }
   // TODO: ERROR HANDLING

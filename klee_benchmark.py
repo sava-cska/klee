@@ -93,7 +93,7 @@ class TestRunner(object):
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + "o")
         source = os.path.join(instance_dir, source)
-        cmd = ["gcc", "-I", self.include_path, "-L", self.lib_path]
+        cmd = ["clang", "-I", self.include_path, "-L", self.lib_path]
         cmd += ["-DEXTERNAL"]
         cmd += ['-lkleeRuntest', '-fprofile-arcs', '-ftest-coverage']
         cmd += ["-o", compiled_file, source]

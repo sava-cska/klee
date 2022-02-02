@@ -60,6 +60,9 @@ private:
   BFSBackwardSearcher* backward;
   ValidityCoreInitializer* initializer;
   uint choice = 0;
+
+  // Temporary _-_
+  std::unordered_set<KBlock*> known_locs;
 };
 
 } // namespace klee

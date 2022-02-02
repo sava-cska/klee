@@ -80,7 +80,7 @@ Action BidirectionalSearcher::selectAction() {
       while (!forward->empty()) {
         auto &state = forward->selectState();
         KInstruction *prevKI = state.prevPC;
-
+        
         if (prevKI->inst->isTerminator() &&
             state.targets.empty() &&
             state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
@@ -88,35 +88,32 @@ Action BidirectionalSearcher::selectAction() {
           if (target) {
             state.targets.insert(target);
 
-            ProofObligation *pob = new ProofObligation(target);
-            backward->update(pob);
-            initializer->addPob(pob);
-
+            if(!known_locs.count(target)) {
+              ProofObligation *pob = new ProofObligation(target);
+              backward->update(pob);
+              initializer->addPob(pob);
+              known_locs.insert(target);
+            }
             ex->updateStates(&state);
-            // klee_message("Forward");
             return Action(&state);
           } else {
             ex->pauseState(state);
             ex->updateStates(nullptr);
           }
         } else {
-          // klee_message("Forward");
           return Action(&state);
         }
       }
-      // klee_message("Forward");
       return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
     }
     if (choice == 1) {
       if (branch->empty()) continue;
       auto& state = branch->selectState();
-      // klee_message("Branch");
       return Action(&state);
     }
     if (choice == 2) {
       if (backward->empty()) continue;
       auto a = backward->selectAction();
-      // klee_message("Backward");
       return Action(Action::Type::Backward, a.second, nullptr, a.first, {}, false);
     }
     if (choice == 3) {

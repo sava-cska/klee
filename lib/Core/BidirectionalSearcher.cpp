@@ -194,14 +194,17 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
   initializer->removePob(pob);
   backward->removePob(pob);
   for(auto i : pob->children) {
+    i->parent = nullptr;
     closeProofObligation(i);
   }
   ProofObligation *parent = pob->parent;
   if (parent) {
     parent->children.erase(pob);
-    closeProofObligation(parent);
   }
   delete pob;
+  if (parent) {
+    closeProofObligation(parent);
+  }
 }
 
 } // namespace klee

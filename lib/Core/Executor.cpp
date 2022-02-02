@@ -5369,7 +5369,9 @@ InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targe
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
   addedStates.push_back(state);
-  state->targets.merge(targets);
+  for (auto target: targets) {
+    state->targets.insert(target);
+  }
   std::unordered_set<ProofObligation*> pobs;
   if(pobsAtTargets) {
     for (auto target : targets) {

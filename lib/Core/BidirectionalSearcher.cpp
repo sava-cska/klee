@@ -199,7 +199,12 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
   for(auto i : pob->children) {
     closeProofObligation(i);
   }
+  ProofObligation *parent = pob->parent;
+  if (parent) {
+    parent->children.erase(pob);
+    closeProofObligation(parent);
+  }
   delete pob;
 }
-  
+
 } // namespace klee

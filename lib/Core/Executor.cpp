@@ -4344,7 +4344,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         terminateStateEarly(*unbound, "Instantiation source contains read from concrete array");
         return;
       }
-      
+
       ObjectPair p = lazyInstantiateVariable(*unbound, base, target ? target->inst : nullptr, size);
       assert(p.first && p.second);
 
@@ -5269,8 +5269,8 @@ KBlock *Executor::calculateRootByValidityCore(ExecutionState &state) {
 
   if (!metaData.queryValidityCores.empty()) {
     SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
-    assert(!core.empty());
-    nearestRoot = core.back().second->parent;
+    if(!core.empty())
+      nearestRoot = core.back().second->parent;
   }
 
   return nearestRoot;

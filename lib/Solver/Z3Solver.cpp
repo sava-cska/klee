@@ -357,8 +357,7 @@ bool Z3SolverImpl::internalRunSolver(
     }
 
     for (auto &constraint : z3_ast_expr_constraints) {
-      auto p = z3_ast_expr_unsat_core.insert(constraint);
-      if (p.second) {
+      if (z3_ast_expr_unsat_core.find(constraint) != z3_ast_expr_unsat_core.end()) {
         auto constraintLocation = z3_ast_expr_to_klee_expr[constraint];
         validityCore.push_back({constraintLocation.first, constraintLocation.second});
       }

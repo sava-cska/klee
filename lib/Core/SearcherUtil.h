@@ -44,7 +44,9 @@ struct ForwardResult {
   std::vector<ExecutionState *> addedStates;
   std::vector<ExecutionState *> removedStates;
   // _-_ In the future probably do not use references
+  // _-_ That's quite ugly, refactor later
   std::pair<KBlock*, KBlock*> validity_core_init;
+  KFunction* validity_core_function;
   ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
                 std::vector<ExecutionState *> &r)
       : current(_s), addedStates(a), removedStates(r){};
@@ -56,8 +58,12 @@ struct ForwardResult {
 struct BackwardResult {
   ProofObligation *newPob;
   ProofObligation *oldPob;
+  // _-_ That's quite ugly, refactor later
+  std::pair<KBlock*, KBlock*> validity_core_init;
+  KFunction* validity_core_function;
   BackwardResult(ProofObligation *_newPob, ProofObligation *_oldPob)
-      : newPob(_newPob), oldPob(_oldPob) {}
+    : newPob(_newPob), oldPob(_oldPob), validity_core_init(),
+      validity_core_function(nullptr) {}
 };
 
 struct InitResult {

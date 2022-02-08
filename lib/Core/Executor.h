@@ -202,6 +202,7 @@ private:
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
   std::pair<KBlock*, KBlock*> validity_core_init;
+  KFunction* validity_core_function;
 
   /// To avoid making many empty pobs in one place. //TODO
   std::unordered_set<KBlock*> main_pobs_locs;

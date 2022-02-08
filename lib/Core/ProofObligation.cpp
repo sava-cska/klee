@@ -28,4 +28,8 @@ void ProofObligation::unblock(ProofObligation & node) {
   node.unblocked.clear();
 }
 
+ProofObligation* makePob() {
+  
+}
+
 } // namespace klee

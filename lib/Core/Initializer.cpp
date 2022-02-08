@@ -46,7 +46,7 @@ void SDInitializer::removePob(ProofObligation* pob) {
   pobs.erase(pob->location);
 }
 
-void SDInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
+void SDInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v, KFunction* f) {}
 
 bool SDInitializer::pobsAtTargets() { return false; }
 
@@ -97,7 +97,7 @@ void ForkInitializer::removePob(ProofObligation* pob) {
   pobs.erase(pob->location);
 }
 
-void ForkInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {}
+void ForkInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v, KFunction* f) {}
 
 std::pair<KBlock *, std::unordered_set<KBlock *>> ValidityCoreInitializer::selectAction() {
   std::pair<KBlock*,KBlock*> v = validity_core_inits.front();
@@ -115,10 +115,17 @@ void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
   
 void ValidityCoreInitializer::removePob(ProofObligation* pob) {}
 
-void ValidityCoreInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v) {
-  if(!knownLocs.count(v.first)) {
-    validity_core_inits.push(v);
-    knownLocs.insert(v.first);
+void ValidityCoreInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v, KFunction* f) {
+  if(v.first->parent == f) {
+   if(!knownLocs.count(v.first)) {
+     validity_core_inits.push(v);
+      knownLocs.insert(v.first);
+    }
+  } else {
+    if(!knownLocs.count(f->entryKBlock)) {
+      validity_core_inits.push(std::make_pair(f->entryKBlock,v.second));
+      knownLocs.insert(f->entryKBlock);
+    }
   }
 }
 

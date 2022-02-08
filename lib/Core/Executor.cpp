@@ -1031,8 +1031,9 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
+  bool produce_unsat = (current.isIsolated() ? false : true);
   bool success = solver->evaluate(current.constraints, condition, res,
-                                  current.queryMetaData);
+                                  current.queryMetaData, produce_unsat);
     
   solver->setTimeout(time::Span());
   if (!success) {
@@ -2145,14 +2146,16 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
-      if (branches.first == nullptr && branches.second != nullptr) {
+      if (state.isIntegrated() && branches.first == nullptr && branches.second != nullptr) {
         KBlock* target = getKBlock(*bi->getSuccessor(0));
         target->failed_fork_count++;
         validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
-      } else if (branches.second == nullptr && branches.first != nullptr) {
+        validity_core_function = state.pc->parent->parent;
+      } else if (state.isIntegrated() && branches.second == nullptr && branches.first != nullptr) {
         KBlock* target = getKBlock(*bi->getSuccessor(1));
         target->failed_fork_count++;
         validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
+        validity_core_function = state.pc->parent->parent;
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -2715,7 +2718,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     break;
   }
- 
+
     // Memory instructions...
   case Instruction::Alloca: {
     AllocaInst *ai = cast<AllocaInst>(i);
@@ -5400,9 +5403,12 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   if (::dumpPForest) dumpPForest();
   ForwardResult ret(state, addedStates, removedStates);
   ret.validity_core_init = std::make_pair(nullptr,nullptr);
+  ret.validity_core_function = nullptr;
   if(validity_core_init.first != nullptr) {
     ret.validity_core_init = validity_core_init;
+    ret.validity_core_function = validity_core_function;
     validity_core_init = std::make_pair(nullptr,nullptr);
+    validity_core_function = nullptr;
   }
   states.insert(addedStates.begin(), addedStates.end());
 
@@ -5420,8 +5426,10 @@ BackwardResult Executor::goBackward(ExecutionState *state,
     check = AndExpr::create(check, constraint);
   }
   bool mayBeTrue;
+  bool produce_unsat = (state->isIsolated() ? false : true);
+  // _-_ Probably separate metadata.
   bool success = getSolver()->mayBeTrue(state->constraints, check, mayBeTrue,
-                                        state->queryMetaData);
+                                        state->queryMetaData, produce_unsat);
   
   // if(!success) У первого и второго success одно значение?
 
@@ -5434,7 +5442,11 @@ BackwardResult Executor::goBackward(ExecutionState *state,
     return BackwardResult(newPob, pob);
   } else {
     delete newPob;
-    return BackwardResult(nullptr, pob);
+    auto b = BackwardResult(nullptr, pob);
+    if(state->isIntegrated()) {
+      // TODO Target
+    }
+    return b;
   }
   // TODO: ERROR HANDLING
 }

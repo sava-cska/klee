@@ -45,16 +45,16 @@ public:
   }
 
   bool evaluate(const ConstraintSet &, ref<Expr>, Solver::Validity &result,
-                SolverQueryMetaData &metaData);
+                SolverQueryMetaData &metaData, bool produce_unsat = false);
 
   bool mustBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
-                  SolverQueryMetaData &metaData);
+                  SolverQueryMetaData &metaData, bool produce_unsat = false);
 
   bool mustBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
-                   SolverQueryMetaData &metaData);
+                   SolverQueryMetaData &metaData, bool produce_unsat = false);
 
   bool mayBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
-                 SolverQueryMetaData &metaData);
+                 SolverQueryMetaData &metaData, bool produce_unsat = false);
 
   bool mayBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
                   SolverQueryMetaData &metaData);

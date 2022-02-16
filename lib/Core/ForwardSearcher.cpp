@@ -333,7 +333,7 @@ GuidedForwardSearcher::GuidedForwardSearcher(
 ExecutionState &GuidedForwardSearcher::selectState() {
   unsigned size = reachingEnough ? targetedSearchers.size() + 1 : targetedSearchers.size();
   index = (index + 1) % size;
-  if (index == size && reachingEnough)
+  if (index == size-1 && reachingEnough)
     return baseSearcher->selectState();
   else {
     auto it = targetedSearchers.begin();
@@ -427,6 +427,7 @@ std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReache
 }
 
 bool GuidedForwardSearcher::empty() {
+  if(!reachingEnough && targetedSearchers.empty()) return true;
   return baseSearcher->empty();
 }
 

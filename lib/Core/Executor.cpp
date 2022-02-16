@@ -3341,7 +3341,7 @@ void Executor::updateStates(ActionResult r) {
   if(std::holds_alternative<ForwardResult>(r)) {
       auto fr = std::get<ForwardResult>(r);
       auto i = fr.current;
-      if(i->isIntegrated() && i->pc->inst == i->pc->parent->instructions[0]->inst) {
+      if(i && i->isIntegrated() && i->pc->inst == i->pc->parent->instructions[0]->inst) {
       emanager->states[i->pc->parent->basicBlock].insert(i->copy());
     }
   }

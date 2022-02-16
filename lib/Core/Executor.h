@@ -288,6 +288,8 @@ private:
 
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
+
+  ExecutionManager* emanager;
   
 public:
   
@@ -661,6 +663,8 @@ public:
   ArrayManager *getArrayManager();
 
   MemoryManager *getMemoryManager();
+
+  ExecutionManager* getExecutionManager();
 
   ExprOptimizer *getOptimizer();
 

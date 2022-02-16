@@ -496,7 +496,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       pathWriter(0), symPathWriter(0), specialFunctionHandler(nullptr), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
-      ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString) {
+      ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString), emanager(new ExecutionManager) {
 
   const time::Span maxTime{MaxTime};
   if (maxTime) timers.add(
@@ -3338,7 +3338,20 @@ void Executor::updateStates(ActionResult r) {
     }
   }
 
+  if(std::holds_alternative<ForwardResult>(r)) {
+      auto fr = std::get<ForwardResult>(r);
+      auto i = fr.current;
+      if(i->isIntegrated() && i->pc->inst == i->pc->parent->instructions[0]->inst) {
+      emanager->states[i->pc->parent->basicBlock].insert(i->copy());
+    }
+  }
+
   states.insert(addedStates.begin(), addedStates.end());
+  for(auto i : addedStates) {
+    if(i->isIntegrated() && i->pc->inst == i->pc->parent->instructions[0]->inst) {
+      emanager->states[i->pc->parent->basicBlock].insert(i->copy());
+    }
+  }
   addedStates.clear();
 
   for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
@@ -5050,6 +5063,8 @@ ArrayManager *Executor::getArrayManager() { return &arrayManager; }
 
 MemoryManager *Executor::getMemoryManager() { return memory.get(); }
 
+ExecutionManager *Executor::getExecutionManager() { return emanager; }
+
 ExprOptimizer *Executor::getOptimizer() { return &optimizer; }
 
 void Executor::dumpPForest() {
@@ -5322,7 +5337,7 @@ void Executor::run(ExecutionState &state) {
         for (auto &symbolic : br.newPob->symbolics) {
           state->symbolics.push_back(symbolic);
         }
-        klee_message("making a test.");
+        // klee_message("making a test.");
         interpreterHandler->processTestCase(*state, 0, 0, true);
         searcher->closeProofObligation(br.newPob);
         delete state;
@@ -5365,6 +5380,11 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 }
 
 InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets, bool pobsAtTargets) {
+  std::cerr << "initialing from " << loc->instructions[0]->getSourceLocation() << " to ";
+  for(auto i : targets) {
+    std::cerr << i->instructions[0]->getSourceLocation() << ", ";
+  }
+  std::cerr << std::endl;
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5434,6 +5454,8 @@ BackwardResult Executor::goBackward(ExecutionState *state,
   // if(!success) У первого и второго success одно значение?
 
   if (mayBeTrue) {
+    std::cerr << "Backward: from " << pob->location->instructions[0]->getSourceLocation() << " to "
+              << state->initPC->getSourceLocation() << std::endl;
     for (auto& constraint : state->constraints) {
       KInstruction *location = state->constraints.get_location(constraint);
       newPob->condition.push_back(constraint, location);
@@ -5441,6 +5463,8 @@ BackwardResult Executor::goBackward(ExecutionState *state,
     pob->children.insert(newPob);
     return BackwardResult(newPob, pob);
   } else {
+    std::cerr << "Backward failed: from " << pob->location->instructions[0]->getSourceLocation() << " to "
+              << state->initPC->getSourceLocation() << std::endl;
     delete newPob;
     auto b = BackwardResult(nullptr, pob);
     if(state->isIntegrated()) {

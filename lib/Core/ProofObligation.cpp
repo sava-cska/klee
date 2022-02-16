@@ -28,8 +28,21 @@ void ProofObligation::unblock(ProofObligation & node) {
   node.unblocked.clear();
 }
 
-ProofObligation* makePob() {
-  
-}
+// ProofObligation* PobManager::makePob(KBlock* location) {
+//   if(mainPobClosed[location] == true) {
+//     return nullptr;
+//   }
+//   if(mainPobs.count(location)) {
+//     return mainPobs[location];
+//   }
+//   auto pob = new ProofObligation(location);
+//   pobs.insert(pob);
+//   mainPobs[location] = pob;
+//   return pob;
+// }
 
+// ProofObligation* PobManager::makePob(KBlock* location, ProofObligation* parent) {
+  
+// }
+  
 } // namespace klee

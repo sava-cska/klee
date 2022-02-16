@@ -329,9 +329,9 @@ GuidedForwardSearcher::GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> _b
 {}
 
 ExecutionState &GuidedForwardSearcher::selectState() {
-  unsigned size = targetedSearchers.size();
-  index = (index + 1) % (size + 1);
-  if (index == size)
+  unsigned size = baseSearcher ? targetedSearchers.size() + 1 : targetedSearchers.size();
+  index = (index + 1) % size;
+  if (index == size && baseSearcher)
     return baseSearcher->selectState();
   else {
     auto it = targetedSearchers.begin();

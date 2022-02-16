@@ -74,14 +74,18 @@ private:
   void unblock(ProofObligation &node);
 };
 
-class PobManager {
-public:
-  std::unordered_set<ProofObligation*> pobs;
+// class PobManager {
+// public:
+//   std::unordered_set<ProofObligation*> pobs;
 
-  ProofObligation* makePob();
-  void closePob();
+//   // For now only empty pobs as main pobs;
+//   std::map<KBlock*, ProofObligation*> mainPobs;
+//   std::map<KBlock*, bool> mainPobClosed;
+
+//   ProofObligation* makePob(KBlock* location, ProofObligation* parent);
+//   ProofObligation* makePob(KBlock* location);
+//   void closePob(ProofObligation* pob);
   
-  
-};
+// };
 
 } // namespace klee

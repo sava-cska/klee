@@ -79,30 +79,31 @@ Action BidirectionalSearcher::selectAction() {
     if (choice == 0) {
       while (!forward->empty()) {
         auto &state = forward->selectState();
-        KInstruction *prevKI = state.prevPC;
+        // KInstruction *prevKI = state.prevPC;
         
-        if (prevKI->inst->isTerminator() &&
-            state.targets.empty() &&
-            state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-          KBlock *target = ex->calculateTargetByTransitionHistory(state);
-          if (target) {
-            state.targets.insert(target);
+        // if (prevKI->inst->isTerminator() &&
+        //     state.targets.empty() &&
+        //     state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
+        //   KBlock *target = ex->calculateTargetByTransitionHistory(state);
+        //   if (target) {
+        //     state.targets.insert(target);
 
-            if(!known_locs.count(target)) {
-              ProofObligation *pob = new ProofObligation(target);
-              backward->update(pob);
-              initializer->addPob(pob);
-              known_locs.insert(target);
-            }
-            ex->updateStates(&state);
-            return Action(&state);
-          } else {
-            ex->pauseState(state);
-            ex->updateStates(nullptr);
-          }
-        } else {
-          return Action(&state);
-        }
+        //     if(!known_locs.count(target)) {
+        //       ProofObligation *pob = new ProofObligation(target);
+        //       backward->update(pob);
+        //       initializer->addPob(pob);
+        //       known_locs.insert(target);
+        //     }
+        //     ex->updateStates(&state);
+        //     return Action(&state);
+        //   } else {
+        //     ex->pauseState(state);
+        //     ex->updateStates(nullptr);
+        //   }
+        // } else {
+        //   return Action(&state);
+        // }
+        return Action(&state);
       }
       return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
     }
@@ -159,7 +160,7 @@ void BidirectionalSearcher::update(ActionResult r) {
     }
 
     if(fr.validity_core_init.first != nullptr) {
-      initializer->addValidityCoreInit(fr.validity_core_init);
+      initializer->addValidityCoreInit(fr.validity_core_init, fr.validity_core_function);
     }
 
   } else if (std::holds_alternative<BackwardResult>(r)) {
@@ -185,8 +186,9 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
     cfg.initial_state->targets.insert(target);
   }
   forward->update(nullptr,{cfg.initial_state},{});
-  branch = new GuidedForwardSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()));
+  branch = new GuidedForwardSearcher(nullptr);
   backward = new BFSBackwardSearcher(cfg.targets);
+  backward->emanager = cfg.executor->getExecutionManager();
   initializer = new ValidityCoreInitializer(cfg.targets);
 }
 

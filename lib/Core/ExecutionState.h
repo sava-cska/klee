@@ -329,6 +329,12 @@ struct ExecutionStateIDCompare {
     return a->id < b->id;
   }
 };
+
+class ExecutionManager {
+public:
+  std::map<llvm::BasicBlock*, std::unordered_set<ExecutionState*>> states;
+};
+  
 }
 
 #endif /* KLEE_EXECUTIONSTATE_H */

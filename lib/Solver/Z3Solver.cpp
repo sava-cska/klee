@@ -342,7 +342,7 @@ bool Z3SolverImpl::internalRunSolver(
   ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, theSolver);
   runStatusCode = handleSolverResponse(theSolver, satisfiable, objects, values,
                                        hasSolution);
-  if (Z3ProduceUnsatCores && query.produce_unsat && satisfiable == Z3_L_FALSE) {
+  if (Z3ProduceUnsatCores && satisfiable == Z3_L_FALSE) {
     Z3_ast_vector unsatCore = Z3_solver_get_unsat_core(builder->ctx, theSolver);
     Z3_ast_vector_inc_ref(builder->ctx, unsatCore);
 

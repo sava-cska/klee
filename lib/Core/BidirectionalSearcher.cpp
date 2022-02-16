@@ -63,7 +63,7 @@ void ForwardBidirectionalSearcher::update(ActionResult r) {
 
 ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
   searcher = new GuidedForwardSearcher(
-      constructUserSearcher(*(Executor *)(cfg.executor)));
+      constructUserSearcher(*(Executor *)(cfg.executor)), true);
   for(auto target : cfg.targets) {
     cfg.initial_state->targets.insert(target);
   }
@@ -151,7 +151,7 @@ void BidirectionalSearcher::update(ActionResult r) {
     branch->update(brnch_cur, brnch_added, brnch_removed);
     auto reached = branch->collectAndClearReached();
     for(auto i : reached) {
-        backward->addBranch(i);
+      backward->addBranch(i);
     }
     forward->update(fwd_cur, fwd_added, fwd_removed);
     reached = forward->collectAndClearReached();
@@ -181,12 +181,12 @@ void BidirectionalSearcher::update(ActionResult r) {
 
 BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   ex = cfg.executor;
-  forward = new GuidedForwardSearcher(constructUserSearcher(*cfg.executor));
+  forward = new GuidedForwardSearcher(constructUserSearcher(*cfg.executor), true);
   for(auto target : cfg.targets) {
     cfg.initial_state->targets.insert(target);
   }
   forward->update(nullptr,{cfg.initial_state},{});
-  branch = new GuidedForwardSearcher(nullptr);
+  branch = new GuidedForwardSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new BFSBackwardSearcher(cfg.targets);
   backward->emanager = cfg.executor->getExecutionManager();
   initializer = new ValidityCoreInitializer(cfg.targets);

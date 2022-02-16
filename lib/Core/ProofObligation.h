@@ -27,8 +27,8 @@ public:
   size_t lvl;
   bool answered;
 
-  ProofObligation(KBlock *location, ProofObligation *parent, size_t lvl)
-      : parent(parent), location(location), lvl(lvl), answered(false) {}
+  ProofObligation(KBlock *_location, ProofObligation *_parent, size_t _lvl)
+      : parent(_parent), location(_location), lvl(_lvl), answered(false) {}
 
   ProofObligation(KBlock* location)
       : ProofObligation(location, nullptr, 0) {}

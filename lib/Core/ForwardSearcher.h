@@ -155,10 +155,11 @@ namespace klee {
     std::unique_ptr<ForwardSearcher> baseSearcher;
     std::map<KBlock*, std::unique_ptr<TargetedForwardSearcher>> targetedSearchers;
     unsigned index {1};
+    bool reachingEnough;
     void addTarget(KBlock *target);
 
   public:
-    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher);
+    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
     ~GuidedForwardSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,

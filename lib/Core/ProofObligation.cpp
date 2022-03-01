@@ -3,6 +3,8 @@
 
 namespace klee {
 
+size_t ProofObligation::counter = 0;
+
 void ProofObligation::addAsUnblocked(ExecutionState & state) {
   unblocked.insert(&state);
 }

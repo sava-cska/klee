@@ -5,6 +5,7 @@
 #include "klee/Expr/Constraints.h"
 #include "klee/Module/KModule.h"
 
+#include <string>
 #include <unordered_set>
 
 namespace klee {
@@ -14,6 +15,7 @@ class MemoryObject;
 
 class ProofObligation {
 public:
+  static size_t counter;
   ProofObligation *parent;
   std::unordered_set<ProofObligation *> children;
 
@@ -27,8 +29,10 @@ public:
   size_t lvl;
   bool answered;
 
+  size_t id;
+
   ProofObligation(KBlock *_location, ProofObligation *_parent, size_t _lvl)
-      : parent(_parent), location(_location), lvl(_lvl), answered(false) {}
+    : parent(_parent), location(_location), lvl(_lvl), answered(false), id(counter++) {}
 
   ProofObligation(KBlock* location)
       : ProofObligation(location, nullptr, 0) {}
@@ -66,6 +70,22 @@ public:
       current_pob = current_pob->parent;
     unblockTree(*current_pob);
     return current_pob;
+  }
+
+  std::string print() {
+    std::string ret;
+    ret += "Proof Obligation at " + location->instructions[0]->getSourceLocation() + " id: " + std::to_string(id) + '\n';
+    ret += "The conditions are:\n";
+    if(condition.empty()) ret += "None\n";
+    for(auto i : condition) {
+      ret += i->toString() + " at " + condition.get_location(i)->getSourceLocation() + '\n';
+    }
+    ret += "Children: ";
+    if(children.empty()) ret += "None";
+    for(auto i : children) {
+      ret += std::to_string(i->id) + " ";
+    }
+    return ret;
   }
 
 private:

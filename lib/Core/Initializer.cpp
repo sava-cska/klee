@@ -1,5 +1,7 @@
 #include "Initializer.h"
+#include "ExecutionState.h"
 #include "ProofObligation.h"
+#include <iostream>
 #include <utility>
 
 namespace klee {
@@ -46,7 +48,7 @@ void SDInitializer::removePob(ProofObligation* pob) {
   pobs.erase(pob->location);
 }
 
-void SDInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v, KFunction* f) {}
+void SDInitializer::addValidityCoreInit(std::pair<ExecutionState*,KBlock*> v) {}
 
 bool SDInitializer::pobsAtTargets() { return false; }
 
@@ -97,7 +99,7 @@ void ForkInitializer::removePob(ProofObligation* pob) {
   pobs.erase(pob->location);
 }
 
-void ForkInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v, KFunction* f) {}
+void ForkInitializer::addValidityCoreInit(std::pair<ExecutionState*,KBlock*> v) {}
 
 std::pair<KBlock *, std::unordered_set<KBlock *>> ValidityCoreInitializer::selectAction() {
   std::pair<KBlock*,KBlock*> v = validity_core_inits.front();
@@ -115,18 +117,19 @@ void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
   
 void ValidityCoreInitializer::removePob(ProofObligation* pob) {}
 
-void ValidityCoreInitializer::addValidityCoreInit(std::pair<KBlock*,KBlock*> v, KFunction* f) {
-  if(v.first->parent == f) {
-   if(!knownLocs.count(v.first)) {
-     validity_core_inits.push(v);
-      knownLocs.insert(v.first);
-    }
-  } else {
-    if(!knownLocs.count(f->entryKBlock)) {
-      validity_core_inits.push(std::make_pair(f->entryKBlock,v.second));
-      knownLocs.insert(f->entryKBlock);
-    }
+void ValidityCoreInitializer::addValidityCoreInit(std::pair<ExecutionState*,KBlock*> v) {
+  auto state = v.first;
+  SolverQueryMetaData metaData = state->queryMetaData;
+  assert(!metaData.queryValidityCores.empty());
+  SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
+  assert(!core.empty());
+  std::cerr << "<---- " << core.size() << " ---->\n";
+  for(auto i : core) {
+    std::cerr << i.first->toString() << "     " << i.second->getSourceLocation() <<"\n";
   }
+  validity_core_inits.push(std::make_pair(core.front().second->parent, core.back().second->parent));
+  validity_core_inits.push(std::make_pair(core.back().second->parent, v.second));
+  validity_core_inits.push(std::make_pair(state->initPC->parent,core.front().second->parent));
 }
 
 bool ValidityCoreInitializer::pobsAtTargets() { return true; }

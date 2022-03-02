@@ -75,9 +75,12 @@ void ForwardBidirectionalSearcher::closeProofObligation(ProofObligation* pob) {}
 
 Action BidirectionalSearcher::selectAction() {
   while (true) {
+    if(forward->empty() && branch->empty() && backward->empty() && initializer->empty())
+      return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
     choice = (choice + 1) % 4;
     if (choice == 0) {
       while (!forward->empty()) {
+        // klee_message("Forward");
         auto &state = forward->selectState();
         // KInstruction *prevKI = state.prevPC;
         
@@ -105,22 +108,24 @@ Action BidirectionalSearcher::selectAction() {
         // }
         return Action(&state);
       }
-      return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
+      continue;
     }
     if (choice == 1) {
       if (branch->empty()) continue;
+      // klee_message("Branch");
       auto& state = branch->selectState();
       return Action(&state);
     }
     if (choice == 2) {
       if (backward->empty()) continue;
+      // klee_message("Backward");
       auto a = backward->selectAction();
       return Action(Action::Type::Backward, a.second, nullptr, a.first, {}, false);
     }
     if (choice == 3) {
       if(initializer->empty()) continue;
       auto a = initializer->selectAction();
-      klee_message("Initializer");
+      // klee_message("Initializer");
       return Action(Action::Type::Init, nullptr, a.first, nullptr, a.second, initializer->pobsAtTargets());
     }
   }
@@ -160,7 +165,7 @@ void BidirectionalSearcher::update(ActionResult r) {
     }
 
     if(fr.validity_core_init.first != nullptr) {
-      initializer->addValidityCoreInit(fr.validity_core_init, fr.validity_core_function);
+      initializer->addValidityCoreInit(fr.validity_core_init);
     }
 
   } else if (std::holds_alternative<BackwardResult>(r)) {

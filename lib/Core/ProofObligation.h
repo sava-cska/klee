@@ -4,7 +4,9 @@
 
 #include "klee/Expr/Constraints.h"
 #include "klee/Module/KModule.h"
+#include "llvm/Support/raw_ostream.h"
 
+#include <sstream>
 #include <string>
 #include <unordered_set>
 
@@ -74,7 +76,11 @@ public:
 
   std::string print() {
     std::string ret;
-    ret += "Proof Obligation at " + location->instructions[0]->getSourceLocation() + " id: " + std::to_string(id) + '\n';
+    std::string s;
+    llvm::raw_string_ostream ss(s);
+    location->basicBlock->printAsOperand(ss, false);
+    ret += "Proof Obligation at " + ss.str();
+    ret += " id: " + std::to_string(id) + '\n';
     ret += "The conditions are:\n";
     if(condition.empty()) ret += "None\n";
     for(auto i : condition) {

@@ -998,7 +998,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
     seedMap.find(&current);
   bool isSeeding = it != seedMap.end();
-
+  
   if (!isSeeding && !isa<ConstantExpr>(condition) && 
       (MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
        MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.) &&
@@ -2149,13 +2149,13 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       if (state.isIntegrated() && branches.first == nullptr && branches.second != nullptr) {
         KBlock* target = getKBlock(*bi->getSuccessor(0));
         target->failed_fork_count++;
-        validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
-        validity_core_function = state.pc->parent->parent;
+        state.queryMetaData.queryValidityCores.back().second.push_back(std::make_pair(cond,ki));        
+        validity_core_init = std::make_pair(&state, target);
       } else if (state.isIntegrated() && branches.second == nullptr && branches.first != nullptr) {
         KBlock* target = getKBlock(*bi->getSuccessor(1));
         target->failed_fork_count++;
-        validity_core_init = std::make_pair(calculateRootByValidityCore(state), target);
-        validity_core_function = state.pc->parent->parent;
+        state.queryMetaData.queryValidityCores.back().second.push_back(std::make_pair(Expr::createIsZero(cond),ki));
+        validity_core_init = std::make_pair(&state, target);
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -5321,8 +5321,9 @@ void Executor::run(ExecutionState &state) {
   while (!haltExecution) {
     auto action = searcher->selectAction();
 
-    if (action.type == Action::Type::Terminate)
+    if (action.type == Action::Type::Terminate) {
       break;
+    }
 
     auto result = executeAction(action);
     updateStates(result);
@@ -5380,11 +5381,13 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 }
 
 InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets, bool pobsAtTargets) {
+  
   std::cerr << "initialing from " << loc->instructions[0]->getSourceLocation() << " to ";
   for(auto i : targets) {
     std::cerr << i->instructions[0]->getSourceLocation() << ", ";
   }
   std::cerr << std::endl;
+  
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5400,6 +5403,7 @@ InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targe
     for (auto target : targets) {
       if(main_pobs_locs.count(target)) continue;
       ProofObligation* pob = new ProofObligation(target, 0, 0);
+      std::cerr << std::endl << pob->print() << std::endl;
       pobs.insert(pob);
       main_pobs_locs.insert(target);
     }
@@ -5423,12 +5427,9 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   if (::dumpPForest) dumpPForest();
   ForwardResult ret(state, addedStates, removedStates);
   ret.validity_core_init = std::make_pair(nullptr,nullptr);
-  ret.validity_core_function = nullptr;
   if(validity_core_init.first != nullptr) {
     ret.validity_core_init = validity_core_init;
-    ret.validity_core_function = validity_core_function;
     validity_core_init = std::make_pair(nullptr,nullptr);
-    validity_core_function = nullptr;
   }
   states.insert(addedStates.begin(), addedStates.end());
 
@@ -5454,17 +5455,21 @@ BackwardResult Executor::goBackward(ExecutionState *state,
   // if(!success) У первого и второго success одно значение?
 
   if (mayBeTrue) {
-    std::cerr << "Backward: from " << pob->location->instructions[0]->getSourceLocation() << " to "
-              << state->initPC->getSourceLocation() << std::endl;
+    std::cerr << "Backward: from ";
+    pob->location->basicBlock->printAsOperand(errs(),false);
+    std::cerr << " to ";
+    state->initPC->parent->basicBlock->printAsOperand(errs(),false);
+    std::cerr << std::endl;
     for (auto& constraint : state->constraints) {
       KInstruction *location = state->constraints.get_location(constraint);
       newPob->condition.push_back(constraint, location);
     }
     pob->children.insert(newPob);
+    std::cerr << std::endl << newPob->print() << std::endl;
     return BackwardResult(newPob, pob);
   } else {
-    std::cerr << "Backward failed: from " << pob->location->instructions[0]->getSourceLocation() << " to "
-              << state->initPC->getSourceLocation() << std::endl;
+    std::cerr << "Backward failed: from " << pob->location->id << " to "
+              << state->initPC->parent->id << std::endl;
     delete newPob;
     auto b = BackwardResult(nullptr, pob);
     if(state->isIntegrated()) {

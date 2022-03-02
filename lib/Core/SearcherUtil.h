@@ -45,8 +45,7 @@ struct ForwardResult {
   std::vector<ExecutionState *> removedStates;
   // _-_ In the future probably do not use references
   // _-_ That's quite ugly, refactor later
-  std::pair<KBlock*, KBlock*> validity_core_init;
-  KFunction* validity_core_function;
+  std::pair<ExecutionState*, KBlock*> validity_core_init;
   ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
                 std::vector<ExecutionState *> &r)
       : current(_s), addedStates(a), removedStates(r){};

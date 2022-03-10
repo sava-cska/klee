@@ -25,26 +25,7 @@ void ProofObligation::unblockTree(ProofObligation & node) {
 }
 
 void ProofObligation::unblock(ProofObligation & node) {
-  // for (auto state : node.unblocked)
-  //   state->unblock(node);
   node.unblocked.clear();
 }
 
-// ProofObligation* PobManager::makePob(KBlock* location) {
-//   if(mainPobClosed[location] == true) {
-//     return nullptr;
-//   }
-//   if(mainPobs.count(location)) {
-//     return mainPobs[location];
-//   }
-//   auto pob = new ProofObligation(location);
-//   pobs.insert(pob);
-//   mainPobs[location] = pob;
-//   return pob;
-// }
-
-// ProofObligation* PobManager::makePob(KBlock* location, ProofObligation* parent) {
-  
-// }
-  
 } // namespace klee

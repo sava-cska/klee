@@ -40,7 +40,7 @@ public:
   explicit ForwardBidirectionalSearcher(SearcherConfig);
 
 private:
-  GuidedForwardSearcher* searcher;
+  GuidedSearcher* searcher;
   Executor* ex; // hack
 };
 
@@ -55,14 +55,14 @@ public:
 private:
 
   Executor* ex; // hack
-  GuidedForwardSearcher* forward;
-  GuidedForwardSearcher* branch;
+  std::unique_ptr<ForwardSearcher> forward;
+  GuidedSearcher* branch;
   BFSBackwardSearcher* backward;
   ValidityCoreInitializer* initializer;
   uint choice = 0;
 
   // Temporary _-_
-  std::unordered_set<KBlock*> known_locs;
+  std::unordered_set<KBlock*> knownLocs;
 };
 
 } // namespace klee

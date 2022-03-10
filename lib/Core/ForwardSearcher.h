@@ -149,7 +149,7 @@ namespace klee {
     void printName(llvm::raw_ostream &os) override;
   };
 
-  class GuidedForwardSearcher final : public ForwardSearcher {
+  class GuidedSearcher final : public ForwardSearcher {
 
   private:
     std::unique_ptr<ForwardSearcher> baseSearcher;
@@ -159,8 +159,8 @@ namespace klee {
     void addTarget(KBlock *target);
 
   public:
-    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
-    ~GuidedForwardSearcher() override = default;
+    GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
+    ~GuidedSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,

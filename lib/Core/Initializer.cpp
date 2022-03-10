@@ -48,10 +48,9 @@ void SDInitializer::removePob(ProofObligation* pob) {
   pobs.erase(pob->location);
 }
 
-void SDInitializer::addValidityCoreInit(std::pair<ExecutionState*,KBlock*> v) {}
+void SDInitializer::addValidityCoreInit(std::pair<ExecutionState *, KBlock *> v) {}
 
 bool SDInitializer::pobsAtTargets() { return false; }
-
 
 bool ForkInitializer::empty() {
   for(auto i : pobs) {
@@ -91,45 +90,45 @@ std::pair<KBlock*, std::unordered_set<KBlock*>> ForkInitializer::selectAction() 
   assert(0);
 }
 
-void ForkInitializer::addPob(ProofObligation* pob) {
+void ForkInitializer::addPob(ProofObligation *pob) {
   pobs.insert(pob->location);
 }
 
-void ForkInitializer::removePob(ProofObligation* pob) {
+void ForkInitializer::removePob(ProofObligation *pob) {
   pobs.erase(pob->location);
 }
 
-void ForkInitializer::addValidityCoreInit(std::pair<ExecutionState*,KBlock*> v) {}
+void ForkInitializer::addValidityCoreInit(std::pair<ExecutionState *, KBlock *> v) {}
 
-std::pair<KBlock *, std::unordered_set<KBlock *>> ValidityCoreInitializer::selectAction() {
-  std::pair<KBlock*,KBlock*> v = validity_core_inits.front();
-  validity_core_inits.pop();
-  return std::make_pair(v.first, std::unordered_set({v.second}));
+std::pair<KBlock *, std::unordered_set<KBlock *>>
+ValidityCoreInitializer::selectAction() {
+  std::pair<KBlock *,KBlock *> v = validityCoreInits.front();
+  validityCoreInits.pop();
+  return std::make_pair(v.first, std::unordered_set({ v.second }));
 }
 
 bool ForkInitializer::pobsAtTargets() { return false; }
 
 bool ValidityCoreInitializer::empty() {
-  return validity_core_inits.empty();
+  return validityCoreInits.empty();
 }
 
 void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
   
-void ValidityCoreInitializer::removePob(ProofObligation* pob) {}
+void ValidityCoreInitializer::removePob(ProofObligation *pob) {}
 
-void ValidityCoreInitializer::addValidityCoreInit(std::pair<ExecutionState*,KBlock*> v) {
+void ValidityCoreInitializer::addValidityCoreInit(std::pair<ExecutionState *, KBlock *> v) {
   auto state = v.first;
   SolverQueryMetaData metaData = state->queryMetaData;
   assert(!metaData.queryValidityCores.empty());
   SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
   assert(!core.empty());
-  std::cerr << "<---- " << core.size() << " ---->\n";
-  for(auto i : core) {
-    std::cerr << i.first->toString() << "     " << i.second->getSourceLocation() <<"\n";
-  }
-  validity_core_inits.push(std::make_pair(core.front().second->parent, core.back().second->parent));
-  validity_core_inits.push(std::make_pair(core.back().second->parent, v.second));
-  validity_core_inits.push(std::make_pair(state->initPC->parent,core.front().second->parent));
+  validityCoreInits.push(
+    std::make_pair(core.front().second->parent, core.back().second->parent));
+  validityCoreInits.push(
+    std::make_pair(core.back().second->parent, v.second));
+  validityCoreInits.push(
+    std::make_pair(state->initPC->parent,core.front().second->parent));
 }
 
 bool ValidityCoreInitializer::pobsAtTargets() { return true; }

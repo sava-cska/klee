@@ -41,10 +41,11 @@ public:
   }
 
   ExecutionManager* emanager;
+
 private:
   std::unordered_set<ProofObligation *> pobs;
   std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
-  std::set<std::pair<ProofObligation*,ExecutionState*>> used;
+  std::set<std::pair<ProofObligation *, ExecutionState *>> used;
 };
 
 };

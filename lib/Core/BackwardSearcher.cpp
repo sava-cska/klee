@@ -14,11 +14,13 @@ void BFSBackwardSearcher::addBranch(ExecutionState* state) {
 }
 
 bool BFSBackwardSearcher::empty() {
-  if(!backpropQueue.empty()) return false;
-  if(backpropQueue.empty()) {
+  if(!backpropQueue.empty())
+    return false;
+  else {
     for(auto i : pobs) {
       for(auto j : emanager->states[i->location->basicBlock]) {
-        if(!used.count(std::make_pair(i,j))) return false;
+        if(!used.count(std::make_pair(i, j)))
+          return false;
       }
     }
   }
@@ -34,9 +36,9 @@ BFSBackwardSearcher::selectAction() {
   if(backpropQueue.empty()) {
     for(auto i : pobs) {
       for(auto j : emanager->states[i->location->basicBlock]) {
-        if(!used.count(std::make_pair(i,j))) {
-          used.insert(std::make_pair(i,j));
-          return std::make_pair(i,j);
+        if(!used.count(std::make_pair(i, j))) {
+          used.insert(std::make_pair(i, j));
+          return std::make_pair(i, j);
         }
       }
     }

@@ -10,7 +10,6 @@
 namespace klee {
 class Initializer {
 public:
-  
   virtual std::pair<KBlock*, std::unordered_set<KBlock*>> selectAction() = 0;
   virtual bool empty() = 0;
   virtual void addPob(ProofObligation* pob) = 0;
@@ -63,7 +62,7 @@ public:
   ValidityCoreInitializer(std::unordered_set<KBlock *> targets) {};
   
 private:
-  std::queue<std::pair<KBlock*, KBlock*>> validity_core_inits;
+  std::queue<std::pair<KBlock*, KBlock*>> validityCoreInits;
   std::unordered_set<KBlock *> knownLocs;
 };
 

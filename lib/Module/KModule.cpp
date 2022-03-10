@@ -764,7 +764,7 @@ KBlock::KBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,
     basicBlock(block),
     numInstructions(0),
     trackCoverage(true),
-    failed_fork_count(0) {
+    failedForkCount(0) {
   numInstructions += block->size();
   instructions = instructionsKF;
 

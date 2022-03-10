@@ -324,18 +324,19 @@ void TargetedForwardSearcher::printName(llvm::raw_ostream &os) {
   os << "TargetedSearcher";
 }
 
-GuidedForwardSearcher::GuidedForwardSearcher(
+GuidedSearcher::GuidedSearcher(
   std::unique_ptr<ForwardSearcher> _baseSearcher,
   bool _reachingEnough) 
   : baseSearcher(std::move(_baseSearcher)), reachingEnough(_reachingEnough)
 {}
 
-ExecutionState &GuidedForwardSearcher::selectState() {
-  unsigned size = reachingEnough ? targetedSearchers.size() + 1 : targetedSearchers.size();
-  index = (index + 1) % size;
-  if (index == size-1 && reachingEnough)
+ExecutionState &GuidedSearcher::selectState() {
+  unsigned size = targetedSearchers.size();
+  index = (index + 1) % (size + 1);
+  if (reachingEnough && index == size)
     return baseSearcher->selectState();
   else {
+    index = index % size;
     auto it = targetedSearchers.begin();
     std::advance(it, index);
     KBlock *target = it->first;
@@ -344,7 +345,7 @@ ExecutionState &GuidedForwardSearcher::selectState() {
   }
 }
 
-void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
+void GuidedSearcher::updateTarget(KBlock *target, KBlock *from,
                                   KBlock *remove) {
 
   if (targetedSearchers.count(from)) {
@@ -361,7 +362,7 @@ void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
   }
 }
 
-void GuidedForwardSearcher::update(ExecutionState *current,
+void GuidedSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {
   
@@ -404,7 +405,7 @@ void GuidedForwardSearcher::update(ExecutionState *current,
   baseSearcher->update(current, addedStates, removedStates);
 }
 
-std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReached() {
+std::unordered_set<ExecutionState*> GuidedSearcher::collectAndClearReached() {
   std::unordered_set<ExecutionState*> ret;
   std::vector<KBlock *> targets;
   for(auto const& targetSearcher: targetedSearchers)
@@ -426,16 +427,15 @@ std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReache
   return ret;
 }
 
-bool GuidedForwardSearcher::empty() {
-  if(!reachingEnough && targetedSearchers.empty()) return true;
-  return baseSearcher->empty();
+bool GuidedSearcher::empty() {
+  return reachingEnough ? baseSearcher->empty() : targetedSearchers.empty();
 }
 
-void GuidedForwardSearcher::printName(llvm::raw_ostream &os) {
+void GuidedSearcher::printName(llvm::raw_ostream &os) {
   os << "GuidedSearcher";
 }
 
-void GuidedForwardSearcher::addTarget(KBlock *target) {
+void GuidedSearcher::addTarget(KBlock *target) {
   targetedSearchers[target] = std::make_unique<TargetedForwardSearcher>(target);
 }
 

@@ -1031,10 +1031,10 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
-  bool produce_unsat = (current.isIsolated() ? false : true);
+  bool produceUnsat = (current.isIsolated() ? false : true);
   bool success = solver->evaluate(current.constraints, condition, res,
-                                  current.queryMetaData, produce_unsat);
-    
+                                  current.queryMetaData, produceUnsat);
+
   solver->setTimeout(time::Span());
   if (!success) {
     current.pc = current.prevPC;
@@ -2146,16 +2146,18 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
-      if (state.isIntegrated() && branches.first == nullptr && branches.second != nullptr) {
+      if (state.isIntegrated() && !branches.first && branches.second) {
         KBlock* target = getKBlock(*bi->getSuccessor(0));
-        target->failed_fork_count++;
-        state.queryMetaData.queryValidityCores.back().second.push_back(std::make_pair(cond,ki));        
-        validity_core_init = std::make_pair(&state, target);
-      } else if (state.isIntegrated() && branches.second == nullptr && branches.first != nullptr) {
+        target->failedForkCount++;
+        state.queryMetaData.queryValidityCores.back().second.push_back(
+          std::make_pair(cond, ki));
+        validityCoreInit = std::make_pair(&state, target);
+      } else if (state.isIntegrated() && !branches.second && branches.first) {
         KBlock* target = getKBlock(*bi->getSuccessor(1));
-        target->failed_fork_count++;
-        state.queryMetaData.queryValidityCores.back().second.push_back(std::make_pair(Expr::createIsZero(cond),ki));
-        validity_core_init = std::make_pair(&state, target);
+        target->failedForkCount++;
+        state.queryMetaData.queryValidityCores.back().second.push_back(
+          std::make_pair(Expr::createIsZero(cond), ki));
+        validityCoreInit = std::make_pair(&state, target);
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -3339,16 +3341,18 @@ void Executor::updateStates(ActionResult r) {
   }
 
   if(std::holds_alternative<ForwardResult>(r)) {
-      auto fr = std::get<ForwardResult>(r);
-      auto i = fr.current;
-      if(i && i->isIntegrated() && i->pc->inst == i->pc->parent->instructions[0]->inst) {
+    auto fr = std::get<ForwardResult>(r);
+    auto i = fr.current;
+    if(i && i->isIntegrated() &&
+       i->pc->inst == i->pc->parent->instructions[0]->inst) {
       emanager->states[i->pc->parent->basicBlock].insert(i->copy());
     }
   }
 
   states.insert(addedStates.begin(), addedStates.end());
   for(auto i : addedStates) {
-    if(i->isIntegrated() && i->pc->inst == i->pc->parent->instructions[0]->inst) {
+    if(i->isIntegrated() &&
+       i->pc->inst == i->pc->parent->instructions[0]->inst) {
       emanager->states[i->pc->parent->basicBlock].insert(i->copy());
     }
   }
@@ -5277,18 +5281,13 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
 
 KBlock *Executor::calculateRootByValidityCore(ExecutionState &state) {
   SolverQueryMetaData metaData = state.queryMetaData;
-  BasicBlock *bb = state.getPCBlock();
-  KFunction *kf = kmodule->functionMap[bb->getParent()];
-  auto &callGraphDistance = kmodule->getBackwardDistance(kf);
-  KBlock *kb = kf->blockMap[bb];
-
   KBlock *nearestRoot = nullptr;
   unsigned int minDistance = -1;
 
   if (!metaData.queryValidityCores.empty()) {
     SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
     if(!core.empty())
-      nearestRoot = core.back().second->parent;
+      nearestRoot = core.front().second->parent;
   }
 
   return nearestRoot;
@@ -5308,11 +5307,6 @@ void Executor::run(ExecutionState &state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  // for (auto i : state.stack.back().kf->finalKBlocks) {
-  //   if(!isa<UnreachableInst>(i->instructions[i->numInstructions - 1]->inst)) {
-  //     cfg.targets.insert(i);
-  //   }
-  // }
   cfg.executor = this;
 
   processForest->addRoot(&state);
@@ -5321,9 +5315,8 @@ void Executor::run(ExecutionState &state) {
   while (!haltExecution) {
     auto action = searcher->selectAction();
 
-    if (action.type == Action::Type::Terminate) {
+    if (action.type == Action::Type::Terminate)
       break;
-    }
 
     auto result = executeAction(action);
     updateStates(result);
@@ -5338,7 +5331,6 @@ void Executor::run(ExecutionState &state) {
         for (auto &symbolic : br.newPob->symbolics) {
           state->symbolics.push_back(symbolic);
         }
-        // klee_message("making a test.");
         interpreterHandler->processTestCase(*state, 0, 0, true);
         searcher->closeProofObligation(br.newPob);
         delete state;
@@ -5381,13 +5373,6 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 }
 
 InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets, bool pobsAtTargets) {
-  
-  std::cerr << "initialing from " << loc->instructions[0]->getSourceLocation() << " to ";
-  for(auto i : targets) {
-    std::cerr << i->instructions[0]->getSourceLocation() << ", ";
-  }
-  std::cerr << std::endl;
-  
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5398,14 +5383,14 @@ InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targe
   for (auto target: targets) {
     state->targets.insert(target);
   }
+
   std::unordered_set<ProofObligation*> pobs;
   if(pobsAtTargets) {
     for (auto target : targets) {
-      if(main_pobs_locs.count(target)) continue;
+      if(mainPobsLocs.count(target)) continue;
       ProofObligation* pob = new ProofObligation(target, 0, 0);
-      std::cerr << std::endl << pob->print() << std::endl;
       pobs.insert(pob);
-      main_pobs_locs.insert(target);
+      mainPobsLocs.insert(target);
     }
   }
   return InitResult(loc, state, pobs);
@@ -5426,10 +5411,10 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
   ForwardResult ret(state, addedStates, removedStates);
-  ret.validity_core_init = std::make_pair(nullptr,nullptr);
-  if(validity_core_init.first != nullptr) {
-    ret.validity_core_init = validity_core_init;
-    validity_core_init = std::make_pair(nullptr,nullptr);
+  ret.validityCoreInit = std::make_pair(nullptr, nullptr);
+  if(validityCoreInit.first) {
+    ret.validityCoreInit = validityCoreInit;
+    validityCoreInit = std::make_pair(nullptr, nullptr);
   }
   states.insert(addedStates.begin(), addedStates.end());
 
@@ -5447,29 +5432,20 @@ BackwardResult Executor::goBackward(ExecutionState *state,
     check = AndExpr::create(check, constraint);
   }
   bool mayBeTrue;
-  bool produce_unsat = (state->isIsolated() ? false : true);
+  bool produceUnsat = (state->isIsolated() ? false : true);
   // _-_ Probably separate metadata.
   bool success = getSolver()->mayBeTrue(state->constraints, check, mayBeTrue,
-                                        state->queryMetaData, produce_unsat);
+                                        state->queryMetaData, produceUnsat);
   
   // if(!success) У первого и второго success одно значение?
 
   if (mayBeTrue) {
-    std::cerr << "Backward: from ";
-    pob->location->basicBlock->printAsOperand(errs(),false);
-    std::cerr << " to ";
-    state->initPC->parent->basicBlock->printAsOperand(errs(),false);
-    std::cerr << std::endl;
     for (auto& constraint : state->constraints) {
       KInstruction *location = state->constraints.get_location(constraint);
       newPob->condition.push_back(constraint, location);
     }
-    pob->children.insert(newPob);
-    std::cerr << std::endl << newPob->print() << std::endl;
     return BackwardResult(newPob, pob);
   } else {
-    std::cerr << "Backward failed: from " << pob->location->id << " to "
-              << state->initPC->parent->id << std::endl;
     delete newPob;
     auto b = BackwardResult(nullptr, pob);
     if(state->isIntegrated()) {

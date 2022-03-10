@@ -15,7 +15,7 @@ struct Action {
   enum class Type { Init, Forward, Backward, Terminate };
 
   Type type;
-  ExecutionState* state; // Forward, Backward
+  ExecutionState *state; // Forward, Backward
   KBlock *location;      // Init
   ProofObligation *pob;  // Backward
   std::unordered_set<KBlock*> targets; // Init
@@ -45,7 +45,7 @@ struct ForwardResult {
   std::vector<ExecutionState *> removedStates;
   // _-_ In the future probably do not use references
   // _-_ That's quite ugly, refactor later
-  std::pair<ExecutionState*, KBlock*> validity_core_init;
+  std::pair<ExecutionState *, KBlock *> validityCoreInit;
   ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
                 std::vector<ExecutionState *> &r)
       : current(_s), addedStates(a), removedStates(r){};
@@ -58,10 +58,10 @@ struct BackwardResult {
   ProofObligation *newPob;
   ProofObligation *oldPob;
   // _-_ That's quite ugly, refactor later
-  std::pair<KBlock*, KBlock*> validity_core_init;
+  std::pair<KBlock*, KBlock*> validityCoreInit;
   KFunction* validity_core_function;
   BackwardResult(ProofObligation *_newPob, ProofObligation *_oldPob)
-    : newPob(_newPob), oldPob(_oldPob), validity_core_init(),
+    : newPob(_newPob), oldPob(_oldPob), validityCoreInit(),
       validity_core_function(nullptr) {}
 };
 

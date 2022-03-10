@@ -66,7 +66,7 @@ namespace klee {
 
     // Number of times transfer to this Block via a branch
     // instruction was blocked due to unsatisfiable conditions.
-    size_t failed_fork_count;
+    size_t failedForkCount;
 
   public:
     explicit KBlock(KFunction*, llvm::BasicBlock*, KModule*,

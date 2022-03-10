@@ -201,10 +201,10 @@ private:
 
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
-  std::pair<ExecutionState*, KBlock*> validity_core_init;
+  std::pair<ExecutionState *, KBlock *> validityCoreInit;
 
   /// To avoid making many empty pobs in one place. //TODO
-  std::unordered_set<KBlock*> main_pobs_locs;
+  std::unordered_set<KBlock *> mainPobsLocs;
 
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
@@ -288,10 +288,10 @@ private:
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
 
-  ExecutionManager* emanager;
-  
+  ExecutionManager *emanager;
+
 public:
-  
+
 private:
 
   /// Return the typeid corresponding to a certain `type_info`

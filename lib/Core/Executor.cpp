@@ -5154,15 +5154,15 @@ void Executor::addHistoryResult(ExecutionState &state) {
       .insert(state.transitionLevel.begin(), state.transitionLevel.end());
 }
 
-ActionResult Executor::executeAction(Action a) {
-  switch(a.type) {
-  case Action::Type::Forward:
-    return goForward(a.state);
-  case Action::Type::Backward:
-    return goBackward(a.state, a.pob);
-  case Action::Type::Init:
-    return initBranch(a.location, a.targets, a.makePobAtTargets);
-  case Action::Type::Terminate:
+ActionResult Executor::executeAction(Action &action) {
+  switch(action.getKind()) {
+  case Action::Kind::Forward:
+    return goForward(cast<ForwardAction>(action));
+  case Action::Kind::Backward:
+    return goBackward(cast<BackwardAction>(action));
+  case Action::Kind::Initialize:
+    return initBranch(cast<InitializeAction>(action));
+  case Action::Kind::Terminate:
     return nullptr;
   }
 }
@@ -5313,9 +5313,9 @@ void Executor::run(ExecutionState &state) {
   searcher = std::make_unique<BidirectionalSearcher>(cfg);
 
   while (!haltExecution) {
-    auto action = searcher->selectAction();
+    auto &action = searcher->selectAction();
 
-    if (action.type == Action::Type::Terminate)
+    if (action.getKind() == Action::Kind::Terminate)
       break;
 
     auto result = executeAction(action);
@@ -5372,7 +5372,10 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets, bool pobsAtTargets) {
+InitializeResult Executor::initBranch(InitializeAction &action) {
+  KBlock* loc = action.location;
+  std::unordered_set<KBlock *> &targets = action.targets;
+  bool pobsAtTargets = action.makePobAtTargets;
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5393,23 +5396,23 @@ InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targe
       mainPobsLocs.insert(target);
     }
   }
-  return InitResult(loc, state, pobs);
+  return InitializeResult(loc, state, pobs);
 }
 
-ForwardResult Executor::goForward(ExecutionState* state) {
+ForwardResult Executor::goForward(ForwardAction &action) {
+  ExecutionState* state = action.state;
   KInstruction *prevKI = state->prevPC;
   if (prevKI->inst->isTerminator())
     addHistoryResult(*state);
 
   KInstruction *ki = state->pc;
-
   stepInstruction(*state);
-
   executeInstruction(*state, ki);
 
   timers.invoke();
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
+
   ForwardResult ret(state, addedStates, removedStates);
   ret.validityCoreInit = std::make_pair(nullptr, nullptr);
   if(validityCoreInit.first) {
@@ -5421,8 +5424,9 @@ ForwardResult Executor::goForward(ExecutionState* state) {
   return ret;
 }
 
-BackwardResult Executor::goBackward(ExecutionState *state,
-                                    ProofObligation *pob) {
+BackwardResult Executor::goBackward(BackwardAction &action) {
+  ExecutionState *state = action.state;
+  ProofObligation *pob = action.pob;
   timers.invoke();
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   Composer::tryRebuild(*pob, state, *newPob);

@@ -81,9 +81,9 @@ ObjectState::ObjectState(const MemoryObject *mo)
     flushMask(0),
     knownSymbolics(0),
     updates(0, 0),
+    manager(mo->parent),
     size(mo->size),
-    readOnly(false),
-    manager(mo->parent) {
+    readOnly(false) {
   if (!UseConstantArrays) {
     static unsigned id = 0;
     const Array *array =
@@ -101,9 +101,9 @@ ObjectState::ObjectState(unsigned _size, MemoryManager *_manager)
     flushMask(0),
     knownSymbolics(0),
     updates(0, 0),
+    manager(_manager),
     size(_size),
-    readOnly(false),
-    manager(_manager) {
+    readOnly(false) {
   if (!UseConstantArrays) {
     static unsigned id = 0;
     const Array *array =
@@ -121,9 +121,9 @@ ObjectState::ObjectState(const Array *array, MemoryManager *_manager)
     flushMask(0),
     knownSymbolics(0),
     updates(array, 0),
+    manager(_manager),
     size(array->size),
-    readOnly(false),
-    manager(_manager) {
+    readOnly(false) {
   makeSymbolic();
   memset(concreteStore, 0, size);
 }
@@ -136,9 +136,9 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
     flushMask(0),
     knownSymbolics(0),
     updates(array, 0),
+    manager(mo->parent),
     size(mo->size),
-    readOnly(false),
-    manager(mo->parent) {
+    readOnly(false) {
   makeSymbolic();
   memset(concreteStore, 0, size);
 }
@@ -151,9 +151,9 @@ ObjectState::ObjectState(const MemoryObject *mo, UpdateList ul)
     flushMask(0),
     knownSymbolics(0),
     updates(ul),
+    manager(mo->parent),
     size(mo->size),
-    readOnly(false),
-    manager(mo->parent) {
+    readOnly(false) {
   makeSymbolic();
   memset(concreteStore, 0, size);
 }
@@ -166,9 +166,9 @@ ObjectState::ObjectState(const ObjectState &os)
     flushMask(os.flushMask ? new BitArray(*os.flushMask, os.size) : 0),
     knownSymbolics(0),
     updates(os.updates),
+    manager(os.manager),
     size(os.size),
-    readOnly(false),
-    manager(os.manager) {
+    readOnly(false) {
   //assert(!os.readOnly && "no need to copy read only object?");
   if (os.knownSymbolics) {
     knownSymbolics = new ref<Expr>[size];

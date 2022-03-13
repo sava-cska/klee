@@ -30,7 +30,7 @@
 
 namespace klee {
 
-Action ForwardBidirectionalSearcher::selectAction() {
+Action &ForwardBidirectionalSearcher::selectAction() {
   while(!searcher->empty()) {
     auto &state = searcher->selectState();
     KInstruction *prevKI = state.prevPC;
@@ -42,16 +42,16 @@ Action ForwardBidirectionalSearcher::selectAction() {
       if (target) {
         state.targets.insert(target);
         ex->updateStates(&state);
-        return Action(&state);
+        return *(new ForwardAction(&state));
       } else {
         ex->pauseState(state);
         ex->updateStates(nullptr);
       }
     } else {
-      return Action(&state);
+      return *(new ForwardAction(&state));
     }
   }
-  return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
+  return *(new TerminateAction());
 }
 
 void ForwardBidirectionalSearcher::update(ActionResult r) {
@@ -73,32 +73,26 @@ ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
 
 void ForwardBidirectionalSearcher::closeProofObligation(ProofObligation* pob) {}
 
-Action BidirectionalSearcher::selectAction() {
+Action &BidirectionalSearcher::selectAction() {
   while (true) {
     if(forward->empty() && branch->empty() && backward->empty() && initializer->empty())
-      return Action(Action::Type::Terminate, nullptr, nullptr, nullptr, {}, false);
+      return *(new TerminateAction());
     choice = (choice + 1) % 4;
-    if (choice == 0) {
-      while (!forward->empty()) {
-        auto &state = forward->selectState();
-        return Action(&state);
-      }
-      continue;
+    if (choice == 0 && !forward->empty()) {
+      auto &state = forward->selectState();
+      return *(new ForwardAction(&state));
     }
-    if (choice == 1) {
-      if (branch->empty()) continue;
+    if (choice == 1 && !branch->empty()) {
       auto& state = branch->selectState();
-      return Action(&state);
+      return *(new ForwardAction(&state));
     }
-    if (choice == 2) {
-      if (backward->empty()) continue;
+    if (choice == 2 && !backward->empty()) {
       auto a = backward->selectAction();
-      return Action(Action::Type::Backward, a.second, nullptr, a.first, {}, false);
+      return *(new BackwardAction(a.second, a.first));
     }
-    if (choice == 3) {
-      if(initializer->empty()) continue;
+    if (choice == 3 && !initializer->empty()) {
       auto a = initializer->selectAction();
-      return Action(Action::Type::Init, nullptr, a.first, nullptr, a.second, initializer->pobsAtTargets());
+      return *(new InitializeAction(a.first, a.second, initializer->pobsAtTargets()));
     }
   }
 }
@@ -148,7 +142,7 @@ void BidirectionalSearcher::update(ActionResult r) {
       initializer->addPob(br.newPob);
     }
   } else {
-    auto ir = std::get<InitResult>(r);
+    auto ir = std::get<InitializeResult>(r);
     branch->update(nullptr, {ir.state}, {});
     for (auto pob : ir.pobs) {
       backward->update(pob);

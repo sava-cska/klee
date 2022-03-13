@@ -19,7 +19,7 @@
 
 ** TODO Refactor ~Searcher~ into multisearcher approach.
 To do that, the searcher has to return Action and accept Result from the
-executor. As of now, Action has 3 options: Forward, Backward, Init. The
+executor. As of now, Action has 3 options: Forward, Backward, Initialize. The
 searcher  (metasearcher) uses its subsearchers to make a decision and return
 Action  to the executor. (The action might contain metadata or should we
 delegate  searcher updates to the executor? Basically, we are choosing whether

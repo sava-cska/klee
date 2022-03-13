@@ -12,23 +12,66 @@ class ExecutionState;
 class Executor;
 
 struct Action {
-  enum class Type { Init, Forward, Backward, Terminate };
+  enum class Kind { Initialize, Forward, Backward, Terminate };
 
-  Type type;
-  ExecutionState *state; // Forward, Backward
-  KBlock *location;      // Init
-  ProofObligation *pob;  // Backward
-  std::unordered_set<KBlock*> targets; // Init
-  bool makePobAtTargets; // Init
+  Action() {}
 
-  Action(ExecutionState *es)
-      : type(Action::Type::Forward), state(es), location(nullptr), pob(nullptr),
-        targets({}), makePobAtTargets(false) {}
+  virtual Kind getKind() const = 0;
 
-  Action(Type t, ExecutionState *es, KBlock *loc, ProofObligation *pob,
-         std::unordered_set<KBlock *> targets, bool makePobAtTargets)
-    : type(t), state(es), location(loc), pob(pob), targets(targets),
-      makePobAtTargets(makePobAtTargets) {}
+  static bool classof(const Action *) { return true; }
+};
+
+struct TerminateAction : Action {
+  ExecutionState *state;
+
+  TerminateAction() {}
+
+  Kind getKind() const { return Kind::Terminate; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Terminate;
+  }
+  static bool classof(const TerminateAction *) { return true; }
+};
+
+struct ForwardAction : Action {
+  ExecutionState *state;
+
+  ForwardAction(ExecutionState *_state) : state(_state) {}
+
+  Kind getKind() const { return Kind::Forward; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Forward;
+  }
+  static bool classof(const ForwardAction *) { return true; }
+};
+
+struct BackwardAction : Action {
+  ExecutionState *state;
+  ProofObligation *pob;
+
+  BackwardAction(ExecutionState *_state, ProofObligation *_pob)
+    : state(_state), pob(_pob) {}
+
+  Kind getKind() const { return Kind::Backward; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Backward;
+  }
+  static bool classof(const BackwardAction *) { return true; }
+};
+
+struct InitializeAction : Action {
+  KBlock *location;
+  std::unordered_set<KBlock *> targets;
+  bool makePobAtTargets;
+
+  InitializeAction(KBlock *_location, std::unordered_set<KBlock *> _targets, bool _makePobAtTargets)
+    : location(_location), targets(_targets), makePobAtTargets(_makePobAtTargets) {}
+
+  Kind getKind() const { return Kind::Initialize; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Initialize;
+  }
+  static bool classof(const InitializeAction *) { return true; }
 };
 
 struct SearcherConfig {
@@ -65,14 +108,14 @@ struct BackwardResult {
       validity_core_function(nullptr) {}
 };
 
-struct InitResult {
+struct InitializeResult {
   KBlock* location;
   ExecutionState* state;
   std::unordered_set<ProofObligation*> pobs;
-  InitResult(KBlock *_loc, ExecutionState *es, std::unordered_set<ProofObligation*> pobs) :
+  InitializeResult(KBlock *_loc, ExecutionState *es, std::unordered_set<ProofObligation*> pobs) :
     location(_loc), state(es), pobs(pobs) {}
 };
 
-using ActionResult = std::variant<ForwardResult, BackwardResult, InitResult>;
+using ActionResult = std::variant<ForwardResult, BackwardResult, InitializeResult>;
 
 }

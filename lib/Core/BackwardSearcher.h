@@ -18,14 +18,16 @@ public:
   virtual void addBranch(ExecutionState* state) = 0;
   virtual void update(ProofObligation* pob) = 0;
   virtual void removePob(ProofObligation* pob) = 0;
-  virtual bool empty() = 0;  
+  virtual bool empty() = 0;
 };
 
-class BFSBackwardSearcher : BackwardSearcher {
+class BFSBackwardSearcher : public BackwardSearcher {
 public:
 
+  ExecutionManager* emanager;
+
   void update(ProofObligation* pob) override;
-  
+
   std::pair<ProofObligation*, ExecutionState*> selectAction() override;
 
   void addBranch(ExecutionState* state) override;
@@ -34,13 +36,13 @@ public:
 
   void removePob(ProofObligation* pob) override;
 
-  BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
+  BFSBackwardSearcher(ExecutionManager *_emanager, std::unordered_set<KBlock *> locations) {
+    emanager = _emanager;
     for (auto location : locations) {
       pobs.insert(new ProofObligation(location));
     }
-  }
 
-  ExecutionManager* emanager;
+  }
 
 private:
   std::unordered_set<ProofObligation *> pobs;

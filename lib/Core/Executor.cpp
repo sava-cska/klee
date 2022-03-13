@@ -3330,7 +3330,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 void Executor::updateStates(ActionResult r) {
   if (searcher) {
     // ultra hot fix
-    if(std::holds_alternative<ForwardResult>(r)) {
+    if (std::holds_alternative<ForwardResult>(r)) {
       auto fr = std::get<ForwardResult>(r);
       fr.addedStates = addedStates;
       fr.removedStates = removedStates;
@@ -3340,7 +3340,7 @@ void Executor::updateStates(ActionResult r) {
     }
   }
 
-  if(std::holds_alternative<ForwardResult>(r)) {
+  if (std::holds_alternative<ForwardResult>(r)) {
     auto fr = std::get<ForwardResult>(r);
     auto i = fr.current;
     if(i && i->isIntegrated() &&
@@ -3350,8 +3350,8 @@ void Executor::updateStates(ActionResult r) {
   }
 
   states.insert(addedStates.begin(), addedStates.end());
-  for(auto i : addedStates) {
-    if(i->isIntegrated() &&
+  for (auto i : addedStates) {
+    if (i->isIntegrated() &&
        i->pc->inst == i->pc->parent->instructions[0]->inst) {
       emanager->states[i->pc->parent->basicBlock].insert(i->copy());
     }
@@ -5162,8 +5162,10 @@ ActionResult Executor::executeAction(Action &action) {
     return goBackward(cast<BackwardAction>(action));
   case Action::Kind::Initialize:
     return initBranch(cast<InitializeAction>(action));
-  case Action::Kind::Terminate:
+  case Action::Kind::Terminate: {
+    haltExecution = true;
     return nullptr;
+  }
   }
 }
 
@@ -5314,12 +5316,9 @@ void Executor::run(ExecutionState &state) {
 
   while (!haltExecution) {
     auto &action = searcher->selectAction();
-
-    if (action.getKind() == Action::Kind::Terminate)
-      break;
-
     auto result = executeAction(action);
     updateStates(result);
+
     // TODO verify _-_
     if (std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
@@ -5376,6 +5375,7 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
   KBlock* loc = action.location;
   std::unordered_set<KBlock *> &targets = action.targets;
   bool pobsAtTargets = action.makePobAtTargets;
+
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5402,6 +5402,7 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
 ForwardResult Executor::goForward(ForwardAction &action) {
   ExecutionState* state = action.state;
   KInstruction *prevKI = state->prevPC;
+
   if (prevKI->inst->isTerminator())
     addHistoryResult(*state);
 
@@ -5427,6 +5428,7 @@ ForwardResult Executor::goForward(ForwardAction &action) {
 BackwardResult Executor::goBackward(BackwardAction &action) {
   ExecutionState *state = action.state;
   ProofObligation *pob = action.pob;
+
   timers.invoke();
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   Composer::tryRebuild(*pob, state, *newPob);

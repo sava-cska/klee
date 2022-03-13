@@ -28,6 +28,7 @@ public:
   virtual Action& selectAction() = 0;
   virtual void update(ActionResult) = 0;
   virtual void closeProofObligation(ProofObligation*) = 0;
+  virtual bool empty() = 0;
 
 };
 
@@ -36,6 +37,7 @@ public:
   Action& selectAction() override;
   void update(ActionResult) override;
   void closeProofObligation(ProofObligation*) override;
+  bool empty() override;
 
   explicit ForwardBidirectionalSearcher(SearcherConfig);
 
@@ -49,20 +51,24 @@ public:
   Action& selectAction() override;
   void update(ActionResult) override;
   void closeProofObligation(ProofObligation*) override;
+  bool empty() override;
 
   explicit BidirectionalSearcher(SearcherConfig);
 
 private:
+  enum class StepKind { Initialize, Forward, Branch, Backward, Terminate };
 
   Executor* ex; // hack
   std::unique_ptr<ForwardSearcher> forward;
   GuidedSearcher* branch;
-  BFSBackwardSearcher* backward;
-  ValidityCoreInitializer* initializer;
+  BackwardSearcher* backward;
+  Initializer* initializer;
   uint choice = 0;
 
   // Temporary _-_
   std::unordered_set<KBlock*> knownLocs;
+
+  StepKind nextStep();
 };
 
 } // namespace klee

@@ -73,28 +73,64 @@ ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
 
 void ForwardBidirectionalSearcher::closeProofObligation(ProofObligation* pob) {}
 
+bool ForwardBidirectionalSearcher::empty() {
+  return searcher->empty();
+}
+
+BidirectionalSearcher::StepKind
+BidirectionalSearcher::nextStep() {
+  choice = (choice + 1) % 4;
+  if (choice == 0 && !forward->empty())
+    return StepKind::Forward;
+  else if (choice == 1 && !branch->empty())
+    return StepKind::Branch;
+  else if (choice == 2 && !backward->empty())
+    return StepKind::Backward;
+  else if (choice == 3 && !initializer->empty())
+    return StepKind::Initialize;
+  else
+    return StepKind::Terminate;
+
+}
+
 Action &BidirectionalSearcher::selectAction() {
-  while (true) {
-    if(forward->empty() && branch->empty() && backward->empty() && initializer->empty())
-      return *(new TerminateAction());
-    choice = (choice + 1) % 4;
-    if (choice == 0 && !forward->empty()) {
-      auto &state = forward->selectState();
-      return *(new ForwardAction(&state));
-    }
-    if (choice == 1 && !branch->empty()) {
-      auto& state = branch->selectState();
-      return *(new ForwardAction(&state));
-    }
-    if (choice == 2 && !backward->empty()) {
-      auto a = backward->selectAction();
-      return *(new BackwardAction(a.second, a.first));
-    }
-    if (choice == 3 && !initializer->empty()) {
-      auto a = initializer->selectAction();
-      return *(new InitializeAction(a.first, a.second, initializer->pobsAtTargets()));
-    }
+  Action *action = nullptr;
+  switch (nextStep()) {
+
+  case StepKind::Forward: {
+    auto &state = forward->selectState();
+    action = new ForwardAction(&state);
+    break;
   }
+
+  case StepKind::Branch : {
+    auto& state = branch->selectState();
+    action = new ForwardAction(&state);
+    break;
+  }
+
+  case StepKind::Backward : {
+    auto pobState = backward->selectAction();
+    action = new BackwardAction(pobState.second, pobState.first);
+    break;
+  }
+
+  case StepKind::Initialize : {
+    auto initAndTargets = initializer->selectAction();
+    action = new InitializeAction(
+      initAndTargets.first,
+      initAndTargets.second,
+      initializer->pobsAtTargets());
+    break;
+  }
+
+  case StepKind::Terminate : {
+    action = new TerminateAction();
+    break;
+  }
+
+  }
+  return *action;
 }
 
 void BidirectionalSearcher::update(ActionResult r) {
@@ -159,8 +195,7 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   }
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new BFSBackwardSearcher(cfg.targets);
-  backward->emanager = cfg.executor->getExecutionManager();
+  backward = new BFSBackwardSearcher(cfg.executor->getExecutionManager(), cfg.targets);
   initializer = new ValidityCoreInitializer(cfg.targets);
 }
 
@@ -179,6 +214,10 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
   if (parent) {
     closeProofObligation(parent);
   }
+}
+
+bool BidirectionalSearcher::empty() {
+  return forward->empty() && branch->empty() && backward->empty() && initializer->empty();
 }
 
 } // namespace klee

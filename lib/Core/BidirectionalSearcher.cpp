@@ -79,18 +79,21 @@ bool ForwardBidirectionalSearcher::empty() {
 
 BidirectionalSearcher::StepKind
 BidirectionalSearcher::nextStep() {
-  choice = (choice + 1) % 4;
-  if (choice == 0 && !forward->empty())
-    return StepKind::Forward;
-  else if (choice == 1 && !branch->empty())
-    return StepKind::Branch;
-  else if (choice == 2 && !backward->empty())
-    return StepKind::Backward;
-  else if (choice == 3 && !initializer->empty())
-    return StepKind::Initialize;
-  else
-    return StepKind::Terminate;
+  unsigned int tick = choice;
+  do {
+    unsigned int i = choice;
+    choice = (choice + 1) % 4;
+    if (i == 0 && !forward->empty())
+      return StepKind::Forward;
+    else if (i == 1 && !branch->empty())
+      return StepKind::Branch;
+    else if (i == 2 && !backward->empty())
+      return StepKind::Backward;
+    else if (i == 3 && !initializer->empty())
+      return StepKind::Initialize;
+  } while (tick != choice);
 
+  return StepKind::Terminate;
 }
 
 Action &BidirectionalSearcher::selectAction() {

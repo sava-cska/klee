@@ -11,10 +11,10 @@ import time
 
 class TestRunner(object):
 
-    def __init__(self, source_dir, timeout, keep_output, output, builddir):
+    def __init__(self, source_dir, timeout, keep_output, output, builddir, llvm):
         self.source_directory = source_dir
         self.base_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-        
+        self.llvm = llvm
         if builddir:
             self.build_directory = builddir
         else:
@@ -50,6 +50,8 @@ class TestRunner(object):
 
     def compile(self, source):
         print(f"Compiling {source}")
+        path_to_clang = os.path.join(self.llvm,"bin","clang") if self.llvm else "clang"
+        path_to_llvm_link = os.path.join(self.llvm,"bin","llvm-link") if self.llvm else "llvm-link"
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         os.mkdir(instance_dir)
         shutil.copy(os.path.join(self.source_directory, source), instance_dir)
@@ -57,15 +59,15 @@ class TestRunner(object):
         
         compiler_options = ["-O0", "-Xclang", "-disable-O0-optnone"]
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + '.bc')
-        cmd = ["clang", "-I", self.include_path, "-c", "-Wno-everything",  "-g", "-emit-llvm", "-o", compiled_file, source] + compiler_options
+        cmd = [path_to_clang, "-I", self.include_path, "-c", "-Wno-everything",  "-g", "-emit-llvm", "-o", compiled_file, source] + compiler_options
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         compiled_library =  os.path.join(instance_dir, "library.bc")
         include_path=os.path.join(self.include_path, "klee-test-comp.c")
-        cmd = ["clang", "-c", "-g", "-emit-llvm", "-o", compiled_library, include_path] + compiler_options
+        cmd = [path_to_clang, "-c", "-g", "-emit-llvm", "-o", compiled_library, include_path] + compiler_options
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        cmd = ["llvm-link", "-o", compiled_file]
+        cmd = [path_to_llvm_link, "-o", compiled_file]
         cmd += [compiled_library, compiled_file]
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -91,7 +93,7 @@ class TestRunner(object):
         instance_dir = os.path.join(self.tmp,os.path.splitext(source)[0])
         compiled_file = os.path.join(instance_dir, os.path.basename(source) + "o")
         source = os.path.join(instance_dir, source)
-        cmd = ["gcc", "-I", self.include_path, "-L", self.lib_path]
+        cmd = ["clang", "-I", self.include_path, "-L", self.lib_path]
         cmd += ["-DEXTERNAL"]
         cmd += ['-lkleeRuntest', '-fprofile-arcs', '-ftest-coverage']
         cmd += ["-o", compiled_file, source]
@@ -132,9 +134,10 @@ def main():
     parser.add_argument("--klee-output", default=None, help='where to keep klee output, default: not to keep')
     parser.add_argument("--output", required=True, help="where to keep coverage output, required")
     parser.add_argument("--builddir", default=None, help="build directory, default: build")
+    parser.add_argument("--llvm", default=None)
     args = parser.parse_args()
 
-    wrapper = TestRunner(args.source, args.t, args.klee_output, args.output, args.builddir)
+    wrapper = TestRunner(args.source, args.t, args.klee_output, args.output, args.builddir, args.llvm)
     count = 1;
     num_sources = len([name for name in os.listdir(args.source)])
     print(f"{num_sources} total.")

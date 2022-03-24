@@ -279,6 +279,7 @@ bool Z3SolverImpl::internalRunSolver(
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
 
   ConstantArrayFinder constant_arrays_in_query;
+  std::vector<Z3ASTHandle> z3_ast_expr_constraints;
   std::unordered_map<
     Z3ASTHandle,
     std::pair<ref<Expr>, KInstruction *>,
@@ -291,6 +292,7 @@ bool Z3SolverImpl::internalRunSolver(
       Z3ASTHandle p = builder->buildFreshBoolConst(constraint->toString().c_str());
       KInstruction *location = query.constraints.get_location(constraint);
       z3_ast_expr_to_klee_expr.insert({p, std::make_pair(constraint, location)});
+      z3_ast_expr_constraints.push_back(p);
       Z3_solver_assert_and_track(builder->ctx, theSolver, z3Constraint, p);
     } else {
       Z3_solver_assert(builder->ctx, theSolver, z3Constraint);
@@ -346,11 +348,16 @@ bool Z3SolverImpl::internalRunSolver(
 
     unsigned size = Z3_ast_vector_size(builder->ctx, unsatCore);
     SolverQueryMetaData::core_ty validityCore;
+    std::unordered_set<Z3ASTHandle, Z3ASTHandleHash, Z3ASTHandleCmp> z3_ast_expr_unsat_core;
 
     for (unsigned index = 0; index < size; ++index) {
       Z3ASTHandle constraint = Z3ASTHandle(
         Z3_ast_vector_get(builder->ctx, unsatCore, index), builder->ctx);
-      if (z3_ast_expr_to_klee_expr.count(constraint)) {
+      z3_ast_expr_unsat_core.insert(constraint);
+    }
+
+    for (auto &constraint : z3_ast_expr_constraints) {
+      if (z3_ast_expr_unsat_core.find(constraint) != z3_ast_expr_unsat_core.end()) {
         auto constraintLocation = z3_ast_expr_to_klee_expr[constraint];
         validityCore.push_back({constraintLocation.first, constraintLocation.second});
       }

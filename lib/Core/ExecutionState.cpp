@@ -201,6 +201,17 @@ ExecutionState *ExecutionState::withKBlock(KBlock *kb) const {
   return newState;
 }
 
+ExecutionState *ExecutionState::withKInstruction(KInstruction* ki) const {
+  assert(stack.size() == 0);
+  ExecutionState* newState = new ExecutionState(*this);
+  newState->pushFrame(nullptr, ki->parent->parent);
+  newState->stackBalance = 0;
+  newState->initPC = &ki;
+  newState->pc = newState->initPC;
+  newState->prevPC = newState->pc;
+  return newState;
+}
+
 ExecutionState *ExecutionState::copy() const {
   return new ExecutionState(*this);
 }

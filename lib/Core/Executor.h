@@ -699,7 +699,6 @@ public:
 
   KBlock *calculateTargetByTransitionHistory(ExecutionState &state);
   KBlock *calculateTargetByBlockHistory(ExecutionState &state);
-  KBlock *calculateRootByValidityCore(ExecutionState &state); 
   void initializeRoots(ExecutionState *initialState);
   void addState(ExecutionState &state);
 };

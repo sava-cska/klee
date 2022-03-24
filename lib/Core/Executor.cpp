@@ -5260,31 +5260,6 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
   return nearestBlock;
 }
 
-KBlock *Executor::calculateRootByValidityCore(ExecutionState &state) {
-  SolverQueryMetaData metaData = state.queryMetaData;
-  BasicBlock *bb = state.getPCBlock();
-  KFunction *kf = kmodule->functionMap[bb->getParent()];
-  auto &callGraphDistance = kmodule->getBackwardDistance(kf);
-  KBlock *kb = kf->blockMap[bb];
-
-  KBlock *nearestRoot = nullptr;
-  unsigned int minDistance = -1;
-
-  if (!metaData.queryValidityCores.empty()) {
-    SolverQueryMetaData::core_ty core = metaData.queryValidityCores.back().second;
-    for (auto &ekp : core) {
-      KInstruction *inst = ekp.second;
-      if (inst && inst->parent->parent == kf &&
-          kf->getDistance(inst->parent).at(kb) < minDistance) {
-        minDistance = kf->getDistance(inst->parent).at(kb);
-        nearestRoot = inst->parent;
-      }
-    }
-  }
-
-  return nearestRoot;
-}
-
 void Executor::addState(ExecutionState &state) {
   addedStates.push_back(&state);
 }

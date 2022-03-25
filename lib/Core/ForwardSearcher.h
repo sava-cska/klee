@@ -167,8 +167,6 @@ namespace klee {
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
 
-    void updateTarget(KBlock *target, KBlock *from, KBlock *remove);
-
     std::unordered_set<ExecutionState*> collectAndClearReached();
     
     bool empty() override;

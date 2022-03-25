@@ -18,6 +18,7 @@
 #include "Memory.h"
 #include "PForest.h"
 #include "ForwardSearcher.h"
+#include "ProofObligation.h"
 #include "SearcherUtil.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
@@ -5274,11 +5275,6 @@ void Executor::run(ExecutionState &state) {
 
   SearcherConfig cfg;
   cfg.initial_state = &state;
-  // for (auto i : state.stack.back().kf->finalKBlocks) {
-  //   if(!isa<UnreachableInst>(i->instructions[i->numInstructions - 1]->inst)) {
-  //     cfg.targets.insert(i);
-  //   }
-  // }
   cfg.executor = this;
 
   processForest->addRoot(&state);
@@ -5287,25 +5283,29 @@ void Executor::run(ExecutionState &state) {
   while (!haltExecution) {
     auto action = searcher->selectAction();
 
-    if (action.type == Action::Type::Terminate)
+    if (action.type == Action::Type::Terminate) {
       break;
+    }
 
     auto result = executeAction(action);
     updateStates(result);
-    // TODO verify _-_
+
     if (std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
-      if (br.newPob->location->instructions[0]->inst == initialState->initPC->inst) {
-        ExecutionState* state = initialState->copy();
-        for (auto &constraint : br.newPob->condition) {
-          state->constraints.push_back(constraint, br.newPob->condition.get_location(constraint));
+      for(auto i : br.newPobs) {
+        if(i->location->instructions[0]->inst == initialState->initPC->inst) {
+          ExecutionState *state = initialState->copy();
+          for (auto &constraint : i->condition) {
+            state->constraints.push_back(
+                constraint, i->condition.get_location(constraint));
+          }
+          for (auto &symbolic : i->symbolics) {
+            state->symbolics.push_back(symbolic);
+          }
+          interpreterHandler->processTestCase(*state, 0, 0, true);
+          searcher->closeProofObligation(i);
+          delete state;
         }
-        for (auto &symbolic : br.newPob->symbolics) {
-          state->symbolics.push_back(symbolic);
-        }
-        klee_message("making a test.");
-        interpreterHandler->processTestCase(*state, 0, 0, true);
-        delete state;
       }
     }
   }

@@ -361,23 +361,6 @@ ExecutionState &GuidedForwardSearcher::selectState() {
   }
 }
 
-void GuidedForwardSearcher::updateTarget(KBlock *target, KBlock *from,
-                                  KBlock *remove) {
-
-  if (targetedSearchers.count(from)) {
-    for(auto state: targetedSearchers[from]->states_set) {
-      state->targets.insert(target);
-    }
-  }
-  
-  if (targetedSearchers.count(remove)) {
-    for(auto state: targetedSearchers[remove]->states_set) {
-      state->targets.erase(remove);
-    }
-    targetedSearchers.erase(remove);
-  }
-}
-
 void GuidedForwardSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {

@@ -199,6 +199,9 @@ private:
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
   std::vector<ExecutionState *> removedStates;
 
+  /// Used for validity-core initialization in the same manner
+  /// as addedStates and removedStates are used.
+  std::pair<ExecutionState*, KBlock*> validity_core_init;
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
   /// (outside the normal search interface) until they terminate. When

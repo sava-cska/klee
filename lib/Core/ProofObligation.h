@@ -3,9 +3,14 @@
 #include "Memory.h"
 
 #include "klee/Expr/Constraints.h"
+#include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
+#include "llvm/Support/raw_ostream.h"
 
+#include <sstream>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace klee {
 
@@ -13,65 +18,45 @@ class ExecutionState;
 class MemoryObject;
 
 class ProofObligation {
-
-  ProofObligation *parent;
-  std::unordered_set<ProofObligation *> children;
-
-  std::unordered_set<ExecutionState *> unblocked;
-  std::unordered_set<llvm::BasicBlock *> blocking_locs;
+private:
+  static size_t counter;
+  size_t id;
 
 public:
+  ProofObligation *parent;
+  std::unordered_set<ProofObligation *> children;
+  std::vector<KInstruction*> stack;
+
   KBlock* location;
   ConstraintSet condition;
+
+  // Indicates that this proof obligation was pushed from the outer stack frame, and so,
+  // it is actually at the return statement of the current basic block.
+  bool at_return;
+
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
-  size_t lvl;
-  bool answered;
 
-  ProofObligation(KBlock *location, ProofObligation *parent, size_t lvl)
-      : parent(parent), location(location), lvl(lvl), answered(false) {}
-
-  ProofObligation(KBlock* location)
-      : ProofObligation(location, nullptr, 0) {}
-
-  ProofObligation makeChild(KBlock * location, size_t lvl,
-                               ConstraintSet &&condition) {
-    ProofObligation child(location, this, lvl);
-    child.condition = std::move(condition);
-    return child;
+  ProofObligation(KBlock *_location, ProofObligation *_parent, bool at_return = false)
+    : id(counter++), parent(_parent), stack(parent->stack), location(_location), at_return(at_return) {
+    parent->children.insert(this);
   }
 
-  void addAsUnblocked(ExecutionState &state);
+  explicit ProofObligation(ProofObligation *pob)
+      : id(counter++), parent(pob->parent), stack(pob->stack),
+        location(pob->location), condition(pob->condition),
+        at_return(pob->at_return) {
+    parent->children.insert(this);
+  }
 
-  void block(ExecutionState &state);
-
-  bool isUnreachable() const noexcept {
-    return unblocked.empty() && children.empty();
+  ~ProofObligation() {
+    if(parent) {
+      parent->children.erase(this);
+    }
   }
 
   bool isOriginPob() const noexcept { return !parent; }
 
-  ProofObligation *propagateUnreachability() {
-    auto current_pob = this;
-    while (isUnreachable() && parent) {
-      parent->children.erase(current_pob);
-      current_pob->answered = true;
-      current_pob = parent;
-    }
-    return current_pob;
-  }
-
-  ProofObligation *propagateReachability() {
-    auto current_pob = this;
-    while (current_pob->parent)
-      current_pob = current_pob->parent;
-    unblockTree(*current_pob);
-    return current_pob;
-  }
-
-private:
-  void unblockTree(ProofObligation &node);
-
-  void unblock(ProofObligation &node);
+  std::string print();
 };
 
 } // namespace klee

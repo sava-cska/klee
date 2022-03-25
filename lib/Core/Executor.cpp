@@ -55,6 +55,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/Support/Casting.h"
 #include <memory>
 #include <optional>
 #include <variant>
@@ -5408,7 +5409,8 @@ ForwardResult Executor::goForward(ExecutionState* state) {
 BackwardResult Executor::goBackward(ExecutionState *state,
                                     ProofObligation *pob) {
   timers.invoke();
-  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
+
+  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, false);
   Composer::tryRebuild(*pob, state, *newPob);
 
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
@@ -5416,19 +5418,47 @@ BackwardResult Executor::goBackward(ExecutionState *state,
     check = AndExpr::create(check, constraint);
   }
   bool mayBeTrue;
+  // _-_ Probably separate metadata.
   bool success = getSolver()->mayBeTrue(state->constraints, check, mayBeTrue,
-                                        state->queryMetaData);
+                                        state->queryMetaData, true);
+  assert(success && "Solver failure during backward propagation.");
   
-  // if(!success) У первого и второго success одно значение?
-
+  std::vector<ProofObligation*> newPobs;
   if (mayBeTrue) {
     for (auto& constraint : state->constraints) {
-      KInstruction *location = state->constraints.get_location(constraint);
+      auto location = state->constraints.get_location(constraint);
       newPob->condition.push_back(constraint, location);
     }
-    return BackwardResult(newPob, pob);
+
+    // goBackward assumes that the state and the proof obligation are stack-compatible
+    // so we only need to pop the right amount of stack frames from the proof obligation.
+    for (auto it = state->stack.rbegin();
+         it != std::prev(state->stack.rend()) && !newPob->stack.empty(); it++) {
+      newPob->stack.pop_back();
+    }
+
+    // If the state initial location is a "right after call" location,
+    // the proof obligation is transferred to every return point of the call.
+    if(state->initPC->parent->getKBlockType() == KBlockType::Call &&
+       state->initPC->inst->getOpcode() == Instruction::Br) {
+      KCallBlock* b = dyn_cast<KCallBlock>(state->initPC->parent);
+      KFunction* kf = kmodule->functionMap[b->calledFunction];
+      for(auto i : kf->finalKBlocks) {
+        ProofObligation* callPob = new ProofObligation(newPob);
+        callPob->at_return = true;
+        callPob->location = i;
+        callPob->stack.push_back(state->initPC->parent->instructions[0]);
+        newPobs.push_back(callPob);
+      }
+      delete newPob;
+    } else {
+      newPobs.push_back(newPob);
+    }
+    return BackwardResult(newPobs, pob);
   } else {
-    return BackwardResult(nullptr, pob);
+    delete newPob;
+    auto b = BackwardResult(newPobs, pob);
+    // TODO Summaries
+    return b;
   }
-  // TODO: ERROR HANDLING
 }

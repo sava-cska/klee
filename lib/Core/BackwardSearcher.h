@@ -10,6 +10,8 @@
 
 namespace klee {
 
+bool checkStack(ExecutionState* state, ProofObligation* pob);
+
 class BackwardSearcher {
 public:
 
@@ -17,6 +19,7 @@ public:
 
   virtual void addBranch(ExecutionState* state) = 0;
   virtual void update(ProofObligation* pob) = 0;
+  virtual void removePob(ProofObligation* pob) = 0;
   virtual bool empty() = 0;  
 };
 
@@ -31,15 +34,15 @@ public:
 
   bool empty() override;
 
-  BFSBackwardSearcher(std::unordered_set<KBlock *> locations) {
-    for (auto location : locations) {
-      pobs.insert(new ProofObligation(location));
-    }
+  void removePob(ProofObligation* pob) override;
+
+  BFSBackwardSearcher() {
   }
 
 private:
   std::unordered_set<ProofObligation *> pobs;
   std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
+  std::set<std::pair<ProofObligation*,ExecutionState*>> used;
 };
 
 };

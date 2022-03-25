@@ -3,29 +3,26 @@
 
 namespace klee {
 
-void ProofObligation::addAsUnblocked(ExecutionState & state) {
-  unblocked.insert(&state);
-}
+size_t ProofObligation::counter = 0;
 
-void ProofObligation::block(ExecutionState & state) {
-  auto it = unblocked.find(&state);
-  assert(it != unblocked.end());
-  unblocked.erase(it);
-  blocking_locs.insert(state.getInitPCBlock());
-}
-
-void ProofObligation::unblockTree(ProofObligation & node) {
-  for (auto child : node.children) {
-    unblock(node);
-    unblockTree(node);
-    node.answered = true;
+std::string ProofObligation::print() {
+  std::string ret;
+  std::string s;
+  llvm::raw_string_ostream ss(s);
+  location->basicBlock->printAsOperand(ss, false);
+  ret += "Proof Obligation at " + ss.str();
+  ret += " id: " + std::to_string(id) + '\n';
+  ret += "The conditions are:\n";
+  if(condition.empty()) ret += "None\n";
+  for(auto i : condition) {
+    ret += i->toString() + '\n';
   }
-}
-
-void ProofObligation::unblock(ProofObligation & node) {
-  // for (auto state : node.unblocked)
-  //   state->unblock(node);
-  node.unblocked.clear();
+  ret += "Children: ";
+  if(children.empty()) ret += "None";
+  for(auto i : children) {
+    ret += std::to_string(i->id) + " ";
+  }
+  return ret;
 }
 
 } // namespace klee

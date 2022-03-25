@@ -5344,7 +5344,7 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targets) {
+InitResult Executor::initBranch(KBlock* loc, std::set<Target> &targets) {
   timers.invoke();
   ExecutionState* state = initialState->withKBlock(loc);
   prepareSymbolicArgs(*state, loc->parent);
@@ -5352,7 +5352,9 @@ InitResult Executor::initBranch(KBlock* loc, std::unordered_set<KBlock *> &targe
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
   addedStates.push_back(state);
-  state->targets.merge(targets);
+  for (auto target: targets) {
+    state->targets.insert(target);
+  }
   return InitResult(loc, state);
 }
 

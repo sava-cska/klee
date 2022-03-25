@@ -127,6 +127,7 @@ namespace klee {
         states;
 
     KBlock* target;
+    bool at_return;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
@@ -139,7 +140,7 @@ namespace klee {
   public:
     std::unordered_set<ExecutionState*> reachedOnLastUpdate;
     std::unordered_set<ExecutionState*> states_set;
-    TargetedForwardSearcher(KBlock *targetBB);
+    TargetedForwardSearcher(KBlock* target, bool at_return = false);
     ~TargetedForwardSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
@@ -153,13 +154,13 @@ namespace klee {
 
   private:
     std::unique_ptr<ForwardSearcher> baseSearcher;
-    std::map<KBlock*, std::unique_ptr<TargetedForwardSearcher>> targetedSearchers;
+    std::map<Target, std::unique_ptr<TargetedForwardSearcher>> targetedSearchers;
     unsigned index {1};
-    void addTarget(KBlock *target);
     bool reachingEnough;
+    void addTarget(Target target);
 
   public:
-    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher);
+    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
     ~GuidedForwardSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,

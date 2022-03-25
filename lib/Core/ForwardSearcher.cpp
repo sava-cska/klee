@@ -26,6 +26,7 @@
 #include "klee/System/Time.h"
 
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -143,10 +144,13 @@ void RandomSearcher::printName(llvm::raw_ostream &os) {
   os << "RandomSearcher\n";
 }
 
-TargetedForwardSearcher::TargetedForwardSearcher(KBlock *targetBB)
+TargetedForwardSearcher::TargetedForwardSearcher(KBlock* target, bool at_return)
   : states(std::make_unique<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>>()),
-    target(targetBB),
-    distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {}
+    target(target), at_return(at_return),
+    distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {
+  assert(!at_return || target->instructions[target->numInstructions - 1]->inst->getOpcode() ==
+         Instruction::Ret);
+}
 
 ExecutionState &TargetedForwardSearcher::selectState() {
   return *states->choose(0.0);
@@ -225,6 +229,16 @@ TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetPostTargetW
 TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetTargetWeight(ExecutionState *es, double &weight) {
   std::vector<KBlock*> localTargets = {target};
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
+
+  if(at_return && res == Done) {
+    if(es->prevPC->inst->getOpcode() == Instruction::Ret) {
+      return Done;
+    } else {
+      weight = 0;
+      return Continue;
+    }
+  }
+
   weight = weight * (1.0 / 2.0); // number on [0,0.5)-real-interval
   return res;
 }
@@ -282,7 +296,8 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       reachedOnLastUpdate.insert(current);
       break;
     case Miss:
-      current->targets.erase(target);
+      Target t(target, at_return);
+      current->targets.erase(t);
       states->remove(current);
       states_set.erase(current);
       break;
@@ -303,14 +318,16 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       reachedOnLastUpdate.insert(state);
       break;
     case Miss:
-      state->targets.erase(target);
+      Target t(target, at_return);
+      state->targets.erase(t);
       break;
     }
   }
 
   // remove states
   for (const auto state : removedStates) {
-    state->targets.erase(target);
+    Target t(target, at_return);
+    state->targets.erase(t);
     states->remove(state);
     states_set.erase(state);
   }
@@ -338,7 +355,7 @@ ExecutionState &GuidedForwardSearcher::selectState() {
   else {
     auto it = targetedSearchers.begin();
     std::advance(it, index);
-    KBlock *target = it->first;
+    Target target = it->first;
     assert(targetedSearchers.find(target) != targetedSearchers.end() && !targetedSearchers[target]->empty());
     return targetedSearchers[target]->selectState();
   }
@@ -365,9 +382,9 @@ void GuidedForwardSearcher::update(ExecutionState *current,
                               const std::vector<ExecutionState *> &addedStates,
                               const std::vector<ExecutionState *> &removedStates) {
   
-  std::map<KBlock*, std::vector<ExecutionState *>> addedTStates;
-  std::map<KBlock*, std::vector<ExecutionState *>> removedTStates;
-  std::set<KBlock*> targets;
+  std::map<Target, std::vector<ExecutionState *>> addedTStates;
+  std::map<Target, std::vector<ExecutionState *>> removedTStates;
+  std::set<Target> targets;
   
   for (const auto state : addedStates) {
     for (auto i : state->targets) {
@@ -406,7 +423,7 @@ void GuidedForwardSearcher::update(ExecutionState *current,
 
 std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReached() {
   std::unordered_set<ExecutionState*> ret;
-  std::vector<KBlock *> targets;
+  std::vector<Target> targets;
   for(auto const& targetSearcher: targetedSearchers)
     targets.push_back(targetSearcher.first);
   for (auto target : targets) {
@@ -435,8 +452,8 @@ void GuidedForwardSearcher::printName(llvm::raw_ostream &os) {
   os << "GuidedSearcher";
 }
 
-void GuidedForwardSearcher::addTarget(KBlock *target) {
-  targetedSearchers[target] = std::make_unique<TargetedForwardSearcher>(target);
+void GuidedForwardSearcher::addTarget(Target target) {
+  targetedSearchers[target] = std::make_unique<TargetedForwardSearcher>(target.targetBlock, target.at_return);
 }
 
 WeightedRandomSearcher::WeightedRandomSearcher(WeightType type, RNG &rng)

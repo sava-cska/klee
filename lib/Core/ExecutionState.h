@@ -24,6 +24,7 @@
 #include "TimingSolver.h"
 #include "klee/System/Time.h"
 
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
@@ -163,6 +164,22 @@ struct TransitionHash {
 
 typedef std::pair<ref<const MemoryObject>, const Array *> Symbolic;
 
+struct Target {
+  KBlock* targetBlock;
+  bool at_return;
+
+  Target(KBlock* targetBlock, bool at_return) :
+    targetBlock(targetBlock), at_return(at_return) {}
+
+  bool operator<(const Target& other) const {
+    if (targetBlock == other.targetBlock) {
+      return at_return < other.at_return;
+    } else {
+      return targetBlock < other.targetBlock;
+    }
+  }
+};
+
 /// @brief ExecutionState representing a path under exploration
 class ExecutionState : public Indexer<ExecutionState> {
   using BaseIndexer = Indexer<ExecutionState>;
@@ -274,7 +291,10 @@ public:
   bool redundant;
 
   /// @brief The target basic block that the state must achieve
-  std::unordered_set<KBlock*> targets;
+  std::set<Target> targets;
+
+
+
   Path path;
 
 public:

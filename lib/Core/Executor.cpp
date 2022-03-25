@@ -5344,10 +5344,10 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-InitResult Executor::initBranch(KBlock* loc, std::set<Target> &targets) {
+InitResult Executor::initBranch(KInstruction* loc, std::set<Target> &targets) {
   timers.invoke();
-  ExecutionState* state = initialState->withKBlock(loc);
-  prepareSymbolicArgs(*state, loc->parent);
+  ExecutionState* state = initialState->withKInstruction(loc);
+  prepareSymbolicArgs(*state, loc->parent->parent);
   if (statsTracker)
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);

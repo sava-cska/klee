@@ -681,7 +681,7 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  InitResult initBranch(KBlock *loc, std::set<Target> &targets);
+  InitResult initBranch(KInstruction *loc, std::set<Target> &targets);
   ForwardResult goForward(ExecutionState *state);
   BackwardResult goBackward(ExecutionState *state, ProofObligation *pob);
 

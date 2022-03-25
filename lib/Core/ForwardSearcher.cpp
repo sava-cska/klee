@@ -324,14 +324,16 @@ void TargetedForwardSearcher::printName(llvm::raw_ostream &os) {
   os << "TargetedSearcher";
 }
 
-GuidedForwardSearcher::GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> _baseSearcher) 
-  : baseSearcher(std::move(_baseSearcher))
+GuidedForwardSearcher::GuidedForwardSearcher(
+  std::unique_ptr<ForwardSearcher> _baseSearcher,
+  bool _reachingEnough)
+  : baseSearcher(std::move(_baseSearcher)), reachingEnough(_reachingEnough)
 {}
 
 ExecutionState &GuidedForwardSearcher::selectState() {
-  unsigned size = targetedSearchers.size();
-  index = (index + 1) % (size + 1);
-  if (index == size)
+  unsigned size = reachingEnough ? targetedSearchers.size() + 1 : targetedSearchers.size();
+  index = (index + 1) % size;
+  if (index == size-1 && reachingEnough)
     return baseSearcher->selectState();
   else {
     auto it = targetedSearchers.begin();
@@ -413,16 +415,19 @@ std::unordered_set<ExecutionState*> GuidedForwardSearcher::collectAndClearReache
         ret.insert(state);
       }
       targetedSearchers[target]->reachedOnLastUpdate.clear();
-      for(auto state: targetedSearchers[target]->states_set) {
-        state->targets.erase(target);
+      if (reachingEnough) {
+        for(auto state: targetedSearchers[target]->states_set) {
+          state->targets.erase(target);
+        }
+        targetedSearchers.erase(target);
       }
-      targetedSearchers.erase(target);
     }
   }
   return ret;
 }
 
 bool GuidedForwardSearcher::empty() {
+  if(!reachingEnough && targetedSearchers.empty()) return true;
   return baseSearcher->empty();
 }
 

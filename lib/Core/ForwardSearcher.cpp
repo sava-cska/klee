@@ -144,13 +144,10 @@ void RandomSearcher::printName(llvm::raw_ostream &os) {
   os << "RandomSearcher\n";
 }
 
-TargetedForwardSearcher::TargetedForwardSearcher(KBlock* target, bool at_return)
+TargetedForwardSearcher::TargetedForwardSearcher(KBlock* target, bool at_end)
   : states(std::make_unique<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>>()),
-    target(target), at_return(at_return),
-    distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {
-  assert(!at_return || target->instructions[target->numInstructions - 1]->inst->getOpcode() ==
-         Instruction::Ret);
-}
+    target(target), at_end(at_end),
+    distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {}
 
 ExecutionState &TargetedForwardSearcher::selectState() {
   return *states->choose(0.0);
@@ -230,8 +227,8 @@ TargetedForwardSearcher::WeightResult TargetedForwardSearcher::tryGetTargetWeigh
   std::vector<KBlock*> localTargets = {target};
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
 
-  if(at_return && res == Done) {
-    if(es->prevPC->inst->getOpcode() == Instruction::Ret) {
+  if(at_end && res == Done) {
+    if(es->prevPC == es->prevPC->parent->getLastInstruction()) {
       return Done;
     } else {
       weight = 0;
@@ -296,7 +293,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       reachedOnLastUpdate.insert(current);
       break;
     case Miss:
-      Target t(target, at_return);
+      Target t(target, at_end);
       current->targets.erase(t);
       states->remove(current);
       states_set.erase(current);
@@ -318,7 +315,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
       reachedOnLastUpdate.insert(state);
       break;
     case Miss:
-      Target t(target, at_return);
+      Target t(target, at_end);
       state->targets.erase(t);
       break;
     }
@@ -326,7 +323,7 @@ void TargetedForwardSearcher::update(ExecutionState *current,
 
   // remove states
   for (const auto state : removedStates) {
-    Target t(target, at_return);
+    Target t(target, at_end);
     state->targets.erase(t);
     states->remove(state);
     states_set.erase(state);
@@ -436,7 +433,7 @@ void GuidedForwardSearcher::printName(llvm::raw_ostream &os) {
 }
 
 void GuidedForwardSearcher::addTarget(Target target) {
-  targetedSearchers[target] = std::make_unique<TargetedForwardSearcher>(target.targetBlock, target.at_return);
+  targetedSearchers[target] = std::make_unique<TargetedForwardSearcher>(target.targetBlock, target.at_end);
 }
 
 WeightedRandomSearcher::WeightedRandomSearcher(WeightType type, RNG &rng)

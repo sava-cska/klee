@@ -127,7 +127,7 @@ namespace klee {
         states;
 
     KBlock* target;
-    bool at_return;
+    bool at_end;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);

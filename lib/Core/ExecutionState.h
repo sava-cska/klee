@@ -166,14 +166,14 @@ typedef std::pair<ref<const MemoryObject>, const Array *> Symbolic;
 
 struct Target {
   KBlock* targetBlock;
-  bool at_return;
+  bool at_end;
 
   Target(KBlock* targetBlock, bool at_return) :
-    targetBlock(targetBlock), at_return(at_return) {}
+    targetBlock(targetBlock), at_end(at_return) {}
 
   bool operator<(const Target& other) const {
     if (targetBlock == other.targetBlock) {
-      return at_return < other.at_return;
+      return at_end < other.at_end;
     } else {
       return targetBlock < other.targetBlock;
     }

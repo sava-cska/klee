@@ -28,6 +28,7 @@
 #include <cassert>
 #include <iomanip>
 #include <map>
+#include <optional>
 #include <set>
 #include <queue>
 #include <sstream>
@@ -94,7 +95,8 @@ ExecutionState::ExecutionState(KFunction *kf) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
-    targets()
+    targets(),
+    path({kf->entryKBlock->basicBlock})
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
@@ -115,7 +117,8 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     forkDisabled(false),
     isolated(false),
     redundant(false),
-    targets()
+    targets(),
+    path({kb->basicBlock})
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
@@ -159,7 +162,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
     redundant(state.redundant),
-    targets(state.targets)
+    targets(state.targets),
+    path(state.path)
 {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
@@ -392,7 +396,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
   ConstraintManager m(constraints);
   for (const auto &constraint : commonConstraints)
     m.addConstraint(constraint, oldConstraints.get_location(constraint));
-  m.addConstraint(OrExpr::create(inA, inB), nullptr);
+  m.addConstraint(OrExpr::create(inA, inB), std::nullopt);
 
   return true;
 }
@@ -431,7 +435,7 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
   }
 }
 
-void ExecutionState::addConstraint(ref<Expr> e,  KInstruction *loc, bool *sat) {
+void ExecutionState::addConstraint(ref<Expr> e, std::optional<size_t> loc, bool *sat) {
   ConstraintManager c(constraints);
   c.addConstraint(e, loc, sat);
 }

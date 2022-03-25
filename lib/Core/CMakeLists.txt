@@ -34,6 +34,7 @@ klee_add_component(kleeCore
   UserSearcher.cpp
   Composer.cpp
   ProofObligation.cpp
+  Path.cpp
 )
 
 # TODO: Work out what the correct LLVM components are for

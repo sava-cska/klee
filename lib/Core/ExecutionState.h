@@ -10,6 +10,7 @@
 #ifndef KLEE_EXECUTIONSTATE_H
 #define KLEE_EXECUTIONSTATE_H
 
+#include "Path.h"
 #include "ProofObligation.h"
 
 #include "AddressSpace.h"
@@ -274,6 +275,7 @@ public:
 
   /// @brief The target basic block that the state must achieve
   std::unordered_set<KBlock*> targets;
+  Path path;
 
 public:
   #ifdef KLEE_UNITTEST
@@ -303,7 +305,7 @@ public:
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
-  void addConstraint(ref<Expr> e, KInstruction *loc, bool *sat = 0);
+  void addConstraint(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
   int resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &);
   void exctractForeignSymbolics(std::vector<Symbolic> &);
 

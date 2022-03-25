@@ -18,6 +18,7 @@
 #include "klee/Support/IntEvaluation.h" // FIXME: Use APInt
 
 #include <map>
+#include <optional>
 #include <set>
 
 using namespace klee;
@@ -207,7 +208,7 @@ void ImpliedValue::checkForImpliedValues(Solver *S, ref<Expr> e,
   reads = std::vector< ref<ReadExpr> >(readsSet.begin(), readsSet.end());
 
   ConstraintSet assumption;
-  assumption.push_back(EqExpr::create(e, value), nullptr);
+  assumption.push_back(EqExpr::create(e, value), std::nullopt);
 
   // obscure... we need to make sure that all the read indices are
   // bounds checked. if we don't do this we can end up constructing
@@ -220,7 +221,7 @@ void ImpliedValue::checkForImpliedValues(Solver *S, ref<Expr> e,
     ReadExpr *re = i->get();
     assumption.push_back(UltExpr::create(re->index, 
                                          ConstantExpr::alloc(re->updates.root->size, 
-                                                             Context::get().getPointerWidth())), nullptr);
+                                                             Context::get().getPointerWidth())), std::nullopt);
   }
 
   for (const auto &var : reads) {

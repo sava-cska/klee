@@ -11,6 +11,7 @@
 #include "klee/Solver/Solver.h"
 #include "klee/Solver/SolverImpl.h"
 
+#include <optional>
 #include <vector>
 
 namespace klee {
@@ -109,7 +110,7 @@ bool ValidatingSolver::computeInitialValues(
         bindings.push_back(EqExpr::create(
             ReadExpr::create(UpdateList(array, 0),
                              ConstantExpr::alloc(j, array->getDomain())),
-            ConstantExpr::alloc(value, array->getRange())), nullptr);
+            ConstantExpr::alloc(value, array->getRange())), std::nullopt);
       }
     }
     ConstraintManager tmp(bindings);

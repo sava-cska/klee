@@ -17,6 +17,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include <map>
+#include <optional>
 #include <stack>
 
 using namespace klee;
@@ -150,13 +151,13 @@ public:
   }
 };
 
-bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, KInstruction *location, bool *sat) {
+bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, std::optional<size_t> location, bool *sat) {
   ConstraintSet old;
   bool changed = false;
 
   std::swap(constraints, old);
   for (auto &ce : old) {
-    KInstruction *loc = old.get_location(ce);
+    auto loc = old.get_location(ce);
     ref<Expr> e = visitor.visit(ce);
 
     if (e!=ce) {
@@ -196,7 +197,7 @@ ref<Expr> ConstraintManager::simplifyExpr(const ConstraintSet &constraints,
   return ExprReplaceVisitor2(equalities).visit(e);
 }
 
-void ConstraintManager::addConstraintInternal(const ref<Expr> &e, KInstruction *location, bool *sat) {
+void ConstraintManager::addConstraintInternal(const ref<Expr> &e, std::optional<size_t> location, bool *sat) {
   // rewrite any known equalities and split Ands into different conjuncts
 
   switch (e->getKind()) {
@@ -238,7 +239,7 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e, KInstruction *
   }
 }
 
-void ConstraintManager::addConstraint(const ref<Expr> &e, KInstruction *location, bool *sat) {
+void ConstraintManager::addConstraint(const ref<Expr> &e, std::optional<size_t> location, bool *sat) {
   ref<Expr> simplified = simplifyExpr(constraints, e);
   addConstraintInternal(simplified, location, sat);
 }
@@ -258,14 +259,16 @@ klee::ConstraintSet::constraint_iterator ConstraintSet::end() const {
 
 size_t ConstraintSet::size() const noexcept { return constraints.size(); }
 
-void ConstraintSet::push_back(const ref<Expr> &e, KInstruction *loc) {
+void ConstraintSet::push_back(const ref<Expr> &e, std::optional<size_t> loc) {
   constraints.push_back(e);
-  mapToLocations.insert({e, loc});
+  if(loc) {
+   mapToLocations.insert({e, *loc});
+  }
 }
 
-KInstruction *ConstraintSet::get_location(const ref<Expr> &e) const {
+std::optional<size_t> ConstraintSet::get_location(const ref<Expr> &e) const {
   if (mapToLocations.count(e))
     return mapToLocations.at(e);
   else
-    return nullptr;
+    return std::nullopt;
 }

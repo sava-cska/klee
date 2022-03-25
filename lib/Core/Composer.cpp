@@ -91,7 +91,7 @@ bool Composer::tryRebuild(const ProofObligation old, ExecutionState *state, Proo
   bool success = true;
   Composer composer(state);
   for(auto& constraint : old.condition) {
-    KInstruction *loc = old.condition.get_location(constraint);
+    auto loc = old.condition.get_location(constraint);
     ref<Expr> rebuilt_constraint;
     if (composer.tryRebuild(constraint, rebuilt_constraint))
       rebuilded.condition.push_back(rebuilt_constraint, loc);

@@ -56,6 +56,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include <memory>
+#include <optional>
 #include <variant>
 #if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
@@ -2016,6 +2017,7 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
     PHINode *first = static_cast<PHINode*>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
   }
+  state.path.append(dst);
 }
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
@@ -3963,7 +3965,7 @@ ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state,
   ref<Expr> res = Expr::createTempRead(array, e->getWidth());
   ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
   llvm::errs() << "Making symbolic: " << eq << "\n";
-  state.addConstraint(eq, nullptr);
+  state.addConstraint(eq, std::nullopt);
   return res;
 }
 
@@ -4841,7 +4843,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
       // If the particular constraint operated on in this iteration through
       // the loop isn't implied then add it to the list of constraints.
       if (!mustBeTrue)
-        cm.addConstraint(*pi, nullptr);
+        cm.addConstraint(*pi, std::nullopt);
     }
     if (pi!=pie) break;
   }

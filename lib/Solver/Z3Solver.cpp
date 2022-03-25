@@ -282,7 +282,7 @@ bool Z3SolverImpl::internalRunSolver(
   std::vector<Z3ASTHandle> z3_ast_expr_constraints;
   std::unordered_map<
     Z3ASTHandle,
-    std::pair<ref<Expr>, KInstruction *>,
+    std::pair<ref<Expr>, std::optional<size_t>>,
     Z3ASTHandleHash,
     Z3ASTHandleCmp>
       z3_ast_expr_to_klee_expr;
@@ -290,7 +290,7 @@ bool Z3SolverImpl::internalRunSolver(
     Z3ASTHandle z3Constraint = builder->construct(constraint);
     if (Z3ProduceUnsatCores) {
       Z3ASTHandle p = builder->buildFreshBoolConst(constraint->toString().c_str());
-      KInstruction *location = query.constraints.get_location(constraint);
+      auto location = query.constraints.get_location(constraint);
       z3_ast_expr_to_klee_expr.insert({p, std::make_pair(constraint, location)});
       z3_ast_expr_constraints.push_back(p);
       Z3_solver_assert_and_track(builder->ctx, theSolver, z3Constraint, p);

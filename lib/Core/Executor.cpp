@@ -1031,8 +1031,9 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
+  bool produce_unsat = !current.isIsolated();
   bool success = solver->evaluate(current.constraints, condition, res,
-                                  current.queryMetaData);
+                                  current.queryMetaData, produce_unsat);
   solver->setTimeout(time::Span());
   if (!success) {
     current.pc = current.prevPC;

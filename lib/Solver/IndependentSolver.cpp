@@ -415,7 +415,7 @@ bool IndependentSolver::computeValidity(const Query& query,
   ConstraintSet required;
   IndependentElementSet eltsClosure =
     getIndependentConstraints(query, required);
-  return solver->impl->computeValidity(Query(required, query.expr), result, metaData);
+  return solver->impl->computeValidity(Query(required, query.expr, query.produce_unsat), result, metaData);
 }
 
 bool IndependentSolver::computeTruth(const Query& query,
@@ -424,7 +424,7 @@ bool IndependentSolver::computeTruth(const Query& query,
   ConstraintSet required;
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
-  return solver->impl->computeTruth(Query(required, query.expr), isValid, metaData);
+  return solver->impl->computeTruth(Query(required, query.expr, query.produce_unsat), isValid, metaData);
 }
 
 bool IndependentSolver::computeValue(const Query& query,
@@ -433,7 +433,7 @@ bool IndependentSolver::computeValue(const Query& query,
   ConstraintSet required;
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
-  return solver->impl->computeValue(Query(required, query.expr), result, metaData);
+  return solver->impl->computeValue(Query(required, query.expr, query.produce_unsat), result, metaData);
 }
 
 // Helper function used only for assertions to make sure point created

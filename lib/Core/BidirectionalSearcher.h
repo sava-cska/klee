@@ -27,7 +27,7 @@ public:
 
   virtual Action& selectAction() = 0;
   virtual void update(ActionResult) = 0;
-  virtual void closeProofObligation(ProofObligation*) = 0;
+  virtual void removeProofObligation(ProofObligation*) = 0;
   virtual bool empty() = 0;
 
 };
@@ -36,7 +36,7 @@ class ForwardBidirectionalSearcher : public IBidirectionalSearcher {
 public:
   Action& selectAction() override;
   void update(ActionResult) override;
-  void closeProofObligation(ProofObligation*) override;
+  void removeProofObligation(ProofObligation*) override;
   bool empty() override;
 
   explicit ForwardBidirectionalSearcher(SearcherConfig);
@@ -50,7 +50,7 @@ class BidirectionalSearcher : public IBidirectionalSearcher {
 public:
   Action& selectAction() override;
   void update(ActionResult) override;
-  void closeProofObligation(ProofObligation*) override;
+  void removeProofObligation(ProofObligation*) override;
   bool empty() override;
 
   explicit BidirectionalSearcher(SearcherConfig);
@@ -66,9 +66,10 @@ private:
   uint choice = 0;
 
   // Temporary _-_
-  std::unordered_set<KBlock*> knownLocs;
+  std::unordered_set<llvm::BasicBlock*> mainLocs;
 
-  StepKind nextStep();
+  StepKind selectStep();
+  void removePob(ProofObligation*);
 };
 
 } // namespace klee

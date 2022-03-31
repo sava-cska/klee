@@ -158,7 +158,7 @@ private:
   ExecutionResult results;
 
     // The program state just before any instructions are excecuted.
-  ExecutionState* initialState;
+  ExecutionState* emptyState;
 
   static const char *TerminateReasonNames[];
 
@@ -288,9 +288,10 @@ private:
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
 
-  ExecutionManager *emanager;
-
 public:
+
+  ExecutionManager *emanager;
+  ExecutionState* initialState;
 
 private:
 
@@ -317,7 +318,7 @@ private:
 
   void stepInstruction(ExecutionState &state);
   // Refactor _-_
-  void updateStates(ActionResult);
+  void updateResult(ActionResult);
 public:
   void updateStates(ExecutionState* state);
 private:

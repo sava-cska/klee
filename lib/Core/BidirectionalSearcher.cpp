@@ -67,19 +67,21 @@ ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
   for(auto target : cfg.targets) {
     cfg.initial_state->targets.insert(target);
   }
-  searcher->update(nullptr,{cfg.initial_state},{});
+  searcher->update(nullptr, {cfg.initial_state}, {});
   ex = cfg.executor;
 }
 
-void ForwardBidirectionalSearcher::closeProofObligation(ProofObligation* pob) {}
+void ForwardBidirectionalSearcher::removeProofObligation(ProofObligation* pob) {}
 
 bool ForwardBidirectionalSearcher::empty() {
   return searcher->empty();
 }
 
 BidirectionalSearcher::StepKind
-BidirectionalSearcher::nextStep() {
+BidirectionalSearcher::selectStep() {
   unsigned int tick = choice;
+  if (empty())
+    return StepKind::Terminate;
   do {
     unsigned int i = choice;
     choice = (choice + 1) % 4;
@@ -98,40 +100,55 @@ BidirectionalSearcher::nextStep() {
 
 Action &BidirectionalSearcher::selectAction() {
   Action *action = nullptr;
-  switch (nextStep()) {
+  while (!action) {
+    switch (selectStep()) {
 
-  case StepKind::Forward: {
-    auto &state = forward->selectState();
-    action = new ForwardAction(&state);
-    break;
-  }
+    case StepKind::Forward: {
+      auto &state = forward->selectState();
+      KInstruction *prevKI = state.prevPC;
+      if (prevKI->inst->isTerminator() &&
+          state.targets.empty() &&
+          state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
+        KBlock *target = ex->calculateTargetByTransitionHistory(state);
+        if (target) {
+          state.targets.insert(target);
+          ex->updateStates(&state);
+          action = new ForwardAction(&state);
+        } else {
+          ex->pauseState(state);
+          ex->updateStates(nullptr);
+        }
+      } else
+        action = new ForwardAction(&state);
+      break;
+    }
 
-  case StepKind::Branch : {
-    auto& state = branch->selectState();
-    action = new ForwardAction(&state);
-    break;
-  }
+    case StepKind::Branch : {
+      auto& state = branch->selectState();
+      action = new ForwardAction(&state);
+      break;
+    }
 
-  case StepKind::Backward : {
-    auto pobState = backward->selectAction();
-    action = new BackwardAction(pobState.second, pobState.first);
-    break;
-  }
+    case StepKind::Backward : {
+      auto pobState = backward->selectAction();
+      action = new BackwardAction(pobState.second, pobState.first);
+      break;
+    }
 
-  case StepKind::Initialize : {
-    auto initAndTargets = initializer->selectAction();
-    action = new InitializeAction(
-      initAndTargets.first,
-      initAndTargets.second,
-      initializer->pobsAtTargets());
-    break;
-  }
+    case StepKind::Initialize : {
+      auto initAndTargets = initializer->selectAction();
+      action = new InitializeAction(
+        initAndTargets.first,
+        initAndTargets.second);
+      break;
+    }
 
-  case StepKind::Terminate : {
-    action = new TerminateAction();
-    break;
-  }
+    case StepKind::Terminate : {
+      action = new TerminateAction();
+      break;
+    }
 
+    }
   }
   return *action;
 }
@@ -165,13 +182,20 @@ void BidirectionalSearcher::update(ActionResult r) {
     branch->update(brnchCur, brnchAdded, brnchRemoved);
     auto reached = branch->collectAndClearReached();
     for(auto i : reached) {
-      backward->addBranch(i);
+      if (ex->initialState->getInitPCBlock() == i->getInitPCBlock() || i->maxLevel == 1) {
+        ex->emanager->states[i->pc->parent->basicBlock].insert(i->copy());
+      }
     }
 
     forward->update(fwdCur, fwdAdded, fwdRemoved);
 
-    if(fr.validityCoreInit.first != nullptr) {
+    if(fr.current && fr.validityCoreInit.first) {
       initializer->addValidityCoreInit(fr.validityCoreInit);
+      if (mainLocs.count(fr.validityCoreInit.second->basicBlock) == 0) {
+        mainLocs.insert(fr.validityCoreInit.second->basicBlock);
+        ProofObligation* pob = new ProofObligation(fr.validityCoreInit.second, 0, 0);
+        backward->update(pob);
+      }
     }
 
   } else if (std::holds_alternative<BackwardResult>(r)) {
@@ -183,44 +207,39 @@ void BidirectionalSearcher::update(ActionResult r) {
   } else {
     auto ir = std::get<InitializeResult>(r);
     branch->update(nullptr, {ir.state}, {});
-    for (auto pob : ir.pobs) {
-      backward->update(pob);
-      initializer->addPob(pob);
-    }
   }
 }
 
 BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   ex = cfg.executor;
-  forward = constructUserSearcher(*cfg.executor);
+  forward = std::unique_ptr<ForwardSearcher>(
+    new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), true));
   for(auto target : cfg.targets) {
     cfg.initial_state->targets.insert(target);
   }
-  forward->update(nullptr,{cfg.initial_state},{});
+  forward->update(nullptr, {cfg.initial_state}, {});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new BFSBackwardSearcher(cfg.executor->getExecutionManager(), cfg.targets);
   initializer = new ValidityCoreInitializer(cfg.targets);
 }
 
-void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
-  initializer->removePob(pob);
-  backward->removePob(pob);
-  for(auto i : pob->children) {
-    i->parent = nullptr;
-    closeProofObligation(i);
+void BidirectionalSearcher::removeProofObligation(ProofObligation* pob) {
+  while (pob->parent) {
+    pob = pob->parent;
   }
-  ProofObligation *parent = pob->parent;
-  if (parent) {
-    parent->children.erase(pob);
-  }
+  removePob(pob);
   delete pob;
-  if (parent) {
-    closeProofObligation(parent);
+}
+
+void BidirectionalSearcher::removePob(ProofObligation* pob) {
+  backward->removePob(pob);
+  for (auto child : pob->children) {
+    removePob(child);
   }
 }
 
 bool BidirectionalSearcher::empty() {
-  return forward->empty() && branch->empty() && backward->empty() && initializer->empty();
+  return forward->empty() && backward->empty() && initializer->empty(); // && branch->empty()
 }
 
 } // namespace klee

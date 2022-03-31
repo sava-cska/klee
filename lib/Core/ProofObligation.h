@@ -21,31 +21,27 @@ public:
   ProofObligation *parent;
   std::unordered_set<ProofObligation *> children;
 
-  std::unordered_set<ExecutionState *> unblocked;
-  std::unordered_set<llvm::BasicBlock *> blockingLocs;
-
 public:
+  KBlock *root;
   KBlock *location;
   ConstraintSet condition;
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
   size_t lvl;
-  bool answered;
-
   size_t id;
 
   ProofObligation(KBlock *_location, ProofObligation *_parent, size_t _lvl)
-    : parent(_parent), location(_location), lvl(_lvl), answered(false), id(counter++) {}
+    : parent(_parent), location(_location), lvl(_lvl), id(counter++) {
+      root = parent ? parent->root : location;
+      if (parent) {
+        parent->children.insert(this);
+      }
+    }
 
   ProofObligation(KBlock* location) : ProofObligation(location, nullptr, 0) {}
 
-  ProofObligation makeChild(KBlock * location, size_t lvl, ConstraintSet &&condition);
-  void block(ExecutionState &state);
-  bool isUnreachable() const noexcept;
-  bool isOriginPob() const noexcept;
-  void unblockTree(ProofObligation &node);
-  void unblock(ProofObligation &node);
-  ProofObligation *propagateUnreachability();
-  ProofObligation *propagateReachability();
+  ~ProofObligation();
+
+  void addCondition(ref<Expr> e, KInstruction *loc, bool *sat = 0);
   std::string print();
 };
 

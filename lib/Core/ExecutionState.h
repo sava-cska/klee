@@ -208,6 +208,7 @@ public:
   std::unordered_multiset<llvm::BasicBlock *> multilevel;
   std::unordered_set<llvm::BasicBlock *> level;
   std::unordered_set<Transition, TransitionHash> transitionLevel;
+  unsigned int maxLevel;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
@@ -269,8 +270,6 @@ public:
   bool forkDisabled;
 
   bool isolated;
-
-  bool redundant;
 
   /// @brief The target basic block that the state must achieve
   std::unordered_set<KBlock*> targets;

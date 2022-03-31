@@ -5,44 +5,9 @@ namespace klee {
 
 size_t ProofObligation::counter = 0;
 
-ProofObligation ProofObligation::makeChild(KBlock * location, size_t lvl,
-                              ConstraintSet &&condition) {
-  ProofObligation child(location, this, lvl);
-  child.condition = std::move(condition);
-  return child;
-}
-
-void ProofObligation::block(ExecutionState & state) {
-  auto it = unblocked.find(&state);
-  assert(it != unblocked.end());
-  unblocked.erase(it);
-  blockingLocs.insert(state.getInitPCBlock());
-}
-
-bool ProofObligation::isUnreachable() const noexcept {
-  return unblocked.empty() && children.empty();
-}
-
-bool ProofObligation::isOriginPob() const noexcept { return !parent; }
-
-void ProofObligation::unblockTree(ProofObligation &node) {
-  for (auto child : node.children) {
-    unblock(*child);
-    unblockTree(*child);
-    node.answered = true;
-  }
-}
-
-void ProofObligation::unblock(ProofObligation & node) {
-  node.unblocked.clear();
-}
-
-ProofObligation *ProofObligation::propagateReachability() {
-  auto current_pob = this;
-  while (current_pob->parent)
-    current_pob = current_pob->parent;
-  unblockTree(*current_pob);
-  return current_pob;
+void ProofObligation::addCondition(ref<Expr> e,  KInstruction *loc, bool *sat) {
+  ConstraintManager c(condition);
+  c.addConstraint(e, loc, sat);
 }
 
 std::string ProofObligation::print() {
@@ -62,7 +27,18 @@ std::string ProofObligation::print() {
   for(auto i : children) {
     ret += std::to_string(i->id) + " ";
   }
+  ret += "\n";
   return ret;
+}
+
+ProofObligation::~ProofObligation() {
+  auto forDestruct = children;
+  for (auto &child : forDestruct) {
+    delete child;
+  }
+  if (parent) {
+    parent->children.erase(this);
+  }
 }
 
 } // namespace klee

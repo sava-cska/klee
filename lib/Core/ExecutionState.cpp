@@ -86,6 +86,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     stackBalance(0),
     incomingBBIndex(-1),
     depth(0),
+    maxLevel(0),
     ptreeNode(nullptr),
     steppedInstructions(0),
     steppedMemoryInstructions(0),
@@ -93,7 +94,6 @@ ExecutionState::ExecutionState(KFunction *kf) :
     coveredNew(false),
     forkDisabled(false),
     isolated(false),
-    redundant(false),
     targets()
 {
   pushFrame(nullptr, kf);
@@ -107,6 +107,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     stackBalance(0),
     incomingBBIndex(-1),
     depth(0),
+    maxLevel(0),
     ptreeNode(nullptr),
     steppedInstructions(0),
     steppedMemoryInstructions(0),
@@ -114,7 +115,6 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     coveredNew(false),
     forkDisabled(false),
     isolated(false),
-    redundant(false),
     targets()
 {
   pushFrame(nullptr, kf);
@@ -140,6 +140,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     multilevel(state.multilevel),
     level(state.level),
     transitionLevel(state.transitionLevel),
+    maxLevel(state.maxLevel),
     addressSpace(state.addressSpace),
     constraints(state.constraints),
     pathOS(state.pathOS),
@@ -158,7 +159,6 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     coveredNew(state.coveredNew),
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
-    redundant(state.redundant),
     targets(state.targets)
 {
   for (const auto &cur_mergehandler: openMergeStack)
@@ -513,6 +513,8 @@ BasicBlock *ExecutionState::getPCBlock() const {
 
 void ExecutionState::addLevel(BasicBlock *srcbb, BasicBlock *dstbb) {
   multilevel.insert(srcbb);
+  if (multilevel.count(srcbb) > maxLevel)
+    maxLevel = multilevel.count(srcbb);
   level.insert(srcbb);
   transitionLevel.insert(std::make_pair(srcbb, dstbb));
 }

@@ -62,10 +62,9 @@ struct BackwardAction : Action {
 struct InitializeAction : Action {
   KBlock *location;
   std::unordered_set<KBlock *> targets;
-  bool makePobAtTargets;
 
-  InitializeAction(KBlock *_location, std::unordered_set<KBlock *> _targets, bool _makePobAtTargets)
-    : location(_location), targets(_targets), makePobAtTargets(_makePobAtTargets) {}
+  InitializeAction(KBlock *_location, std::unordered_set<KBlock *> _targets)
+    : location(_location), targets(_targets) {}
 
   Kind getKind() const { return Kind::Initialize; }
   static bool classof(const Action *A) {
@@ -89,8 +88,8 @@ struct ForwardResult {
   // _-_ In the future probably do not use references
   // _-_ That's quite ugly, refactor later
   std::pair<ExecutionState *, KBlock *> validityCoreInit;
-  ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
-                std::vector<ExecutionState *> &r)
+  ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
+                const std::vector<ExecutionState *> &r)
       : current(_s), addedStates(a), removedStates(r){};
   // Way too easy to mistake for ...
   ForwardResult(ExecutionState *_s)
@@ -111,9 +110,8 @@ struct BackwardResult {
 struct InitializeResult {
   KBlock* location;
   ExecutionState* state;
-  std::unordered_set<ProofObligation*> pobs;
-  InitializeResult(KBlock *_loc, ExecutionState *es, std::unordered_set<ProofObligation*> pobs) :
-    location(_loc), state(es), pobs(pobs) {}
+  InitializeResult(KBlock *_location, ExecutionState *_state) :
+    location(_location), state(_state) {}
 };
 
 using ActionResult = std::variant<ForwardResult, BackwardResult, InitializeResult>;

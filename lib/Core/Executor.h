@@ -320,7 +320,7 @@ private:
   // Refactor _-_
   void updateResult(ActionResult);
 public:
-  void updateStates(ExecutionState* state);
+  void updateStates(ExecutionState *state);
 private:
   void transferToBasicBlock(llvm::BasicBlock *dst,
                             llvm::BasicBlock *src,

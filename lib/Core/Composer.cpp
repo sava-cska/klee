@@ -87,22 +87,22 @@ bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *state, ref<Expr>
   return composer.tryRebuild(expr, res);
 }
 
-bool Composer::tryRebuild(const ProofObligation old, ExecutionState *state, ProofObligation &rebuilded) {
+bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, ProofObligation &rebuilt) {
   bool success = true;
   Composer composer(state);
   for(auto& constraint : old.condition) {
     KInstruction *loc = old.condition.get_location(constraint);
-    ref<Expr> rebuilt_constraint;
-    if (composer.tryRebuild(constraint, rebuilt_constraint))
-      rebuilded.condition.push_back(rebuilt_constraint, loc);
-    else {
-      success = false;
-      break;
+    ref<Expr> rebuiltConstraint;
+    success = composer.tryRebuild(constraint, rebuiltConstraint);
+    if (success) {
+      rebuilt.addCondition(rebuiltConstraint, loc, &success);
     }
+    if (!success)
+      break;
   }
   std::vector<Symbolic> foreign;
   composer.copy->exctractForeignSymbolics(foreign);
-  rebuilded.symbolics.insert(rebuilded.symbolics.end(), foreign.begin(), foreign.end());
+  rebuilt.symbolics.insert(rebuilt.symbolics.end(), foreign.begin(), foreign.end());
   return success;
 }
 

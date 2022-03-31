@@ -39,14 +39,14 @@ public:
   BFSBackwardSearcher(ExecutionManager *_emanager, std::unordered_set<KBlock *> locations) {
     emanager = _emanager;
     for (auto location : locations) {
-      pobs.insert(new ProofObligation(location));
+      pobs.push_back(new ProofObligation(location));
     }
 
   }
 
 private:
-  std::unordered_set<ProofObligation *> pobs;
-  std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
+  std::vector<ProofObligation *> pobs;
+  std::vector<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
   std::set<std::pair<ProofObligation *, ExecutionState *>> used;
 };
 

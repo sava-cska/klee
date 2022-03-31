@@ -3988,7 +3988,11 @@ ObjectState *Executor::bindObjectInState(ExecutionState &state,
                                          const MemoryObject *mo,
                                          bool isAlloca,
                                          const Array *array) {
-  ObjectState *os = array ? new ObjectState(mo, array) : new ObjectState(mo);
+  ObjectState *os = nullptr;
+  if (array)
+    os = array->binding ? const_cast<ObjectState *>(array->binding) : new ObjectState(mo, array);
+  else
+    os = new ObjectState(mo);
   state.addressSpace.bindObject(mo, os);
 
   // Its possible that multiple bindings of the same mo in the state
@@ -4478,7 +4482,18 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
   if (!replayKTest) {
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
-    const Array *array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
+    const Array *array = nullptr;
+    auto isKleeSymbolic = [=](Symbolic x){ return !x.first->isLazyInstantiated() && x.first->address == mo->address; };
+    auto kleeSymbolic = std::find_if(
+      state.symbolics.begin(),
+      state.symbolics.end(),
+      isKleeSymbolic);
+    if (kleeSymbolic != state.symbolics.end()) {
+      array = const_cast<Array *>(kleeSymbolic->second);
+    } else {
+      array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
+    }
+
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);
     const_cast<Array*>(array)->binding = os;
     state.addSymbolic(mo, array);

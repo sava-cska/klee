@@ -114,7 +114,7 @@ namespace klee {
   };
 
   /// TargetedSearcher picks a state /*COMMENT*/.
-  class TargetedForwardSearcher final : public ForwardSearcher {
+  class TargetedSearcher final : public ForwardSearcher {
   public:
     enum WeightResult : std::uint8_t {
       Continue,
@@ -126,8 +126,9 @@ namespace klee {
     std::unique_ptr<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>>
         states;
 
-    KBlock* target;
+    KBlock *target;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
+    std::vector<ExecutionState *> reachedOnLastUpdate;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
     WeightResult tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets);
@@ -137,23 +138,24 @@ namespace klee {
     WeightResult tryGetWeight(ExecutionState* es, double &weight);
 
   public:
-    std::unordered_set<ExecutionState*> reachedOnLastUpdate;
     std::unordered_set<ExecutionState*> states_set;
-    TargetedForwardSearcher(KBlock *targetBB);
-    ~TargetedForwardSearcher() override = default;
+    TargetedSearcher(KBlock *targetBB);
+    ~TargetedSearcher() override;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
+    std::vector<ExecutionState *> reached();
+    void removeReached();
   };
 
   class GuidedSearcher final : public ForwardSearcher {
 
   private:
     std::unique_ptr<ForwardSearcher> baseSearcher;
-    std::map<KBlock*, std::unique_ptr<TargetedForwardSearcher>> targetedSearchers;
+    std::map<KBlock*, std::unique_ptr<TargetedSearcher>> targetedSearchers;
     unsigned index {1};
     bool reachingEnough;
     void addTarget(KBlock *target);
@@ -168,8 +170,8 @@ namespace klee {
 
     void updateTarget(KBlock *target, KBlock *from, KBlock *remove);
 
-    std::unordered_set<ExecutionState*> collectAndClearReached();
-    
+    std::unordered_set<ExecutionState *> collectAndClearReached();
+
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
   };

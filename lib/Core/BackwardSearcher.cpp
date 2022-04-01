@@ -27,7 +27,7 @@ void BFSBackwardSearcher::addBranch(ExecutionState* state) {
   for(auto i : pobs) {
     if(i->location->basicBlock == state->getPCBlock()) {
       auto state_copy = state->copy();
-      backpropQueue.push(std::make_pair(i, state_copy));
+      backpropQueue.push_back(std::make_pair(i, state_copy));
     }
   }
 }
@@ -38,13 +38,13 @@ bool BFSBackwardSearcher::empty() {
 }
 
 void BFSBackwardSearcher::update(ProofObligation* pob) {
-  pobs.insert(pob);
+  pobs.push_back(pob);
 }
 
 std::pair<ProofObligation *, ExecutionState *>
 BFSBackwardSearcher::selectAction() {
   auto ret = backpropQueue.front();
-  backpropQueue.pop();
+  backpropQueue.erase(backpropQueue.begin());
   return ret;
 }
 

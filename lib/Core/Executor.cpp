@@ -499,7 +499,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       pathWriter(0), symPathWriter(0), specialFunctionHandler(nullptr), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
-      ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString) {
+      ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString), emanager(new ExecutionManager) {
 
   const time::Span maxTime{MaxTime};
   if (maxTime) timers.add(
@@ -1001,7 +1001,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
     seedMap.find(&current);
   bool isSeeding = it != seedMap.end();
-
+  
   if (!isSeeding && !isa<ConstantExpr>(condition) && 
       (MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
        MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.) &&
@@ -1036,7 +1036,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   solver->setTimeout(timeout);
   bool produce_unsat = !current.isIsolated();
   bool success = solver->evaluate(current.constraints, condition, res,
-                                  current.queryMetaData, produce_unsat);
+                                  current.queryMetaData, produceUnsat);
+
   solver->setTimeout(time::Span());
   if (!success) {
     current.pc = current.prevPC;
@@ -2149,14 +2150,19 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
-      if (state.isIntegrated() && branches.first == nullptr && branches.second != nullptr) {
-        KBlock* target = getKBlock(*bi->getSuccessor(0));
-        state.queryMetaData.queryValidityCores.back().second.push_back(std::make_pair(cond,state.path.getCurrentIndex()));
-        validity_core_init = std::make_pair(&state, target);
-      } else if (state.isIntegrated() && branches.second == nullptr && branches.first != nullptr) {
-        KBlock* target = getKBlock(*bi->getSuccessor(1));
-        state.queryMetaData.queryValidityCores.back().second.push_back(std::make_pair(Expr::createIsZero(cond),state.path.getCurrentIndex()));
-        validity_core_init = std::make_pair(&state, target);
+      // _-_ Is it ok that it does not produce unsat cores sometimes?
+      if (!state.queryMetaData.queryValidityCores.empty()) {
+        if (state.isIntegrated() && !branches.first && branches.second) {
+          KBlock* target = getKBlock(*bi->getSuccessor(0));
+          state.queryMetaData.queryValidityCores.back().second.push_back(
+            std::make_pair(cond, state.path.getCurrentIndex()));
+          validityCoreInit = std::make_pair(&state, target);
+        } else if (state.isIntegrated() && !branches.second && branches.first) {
+          KBlock* target = getKBlock(*bi->getSuccessor(1));
+          state.queryMetaData.queryValidityCores.back().second.push_back(
+            std::make_pair(Expr::createIsZero(cond), state.path.getCurrentIndex()));
+          validityCoreInit = std::make_pair(&state, target);
+        }
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -2719,7 +2725,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     break;
   }
- 
+
     // Memory instructions...
   case Instruction::Alloca: {
     AllocaInst *ai = cast<AllocaInst>(i);
@@ -3326,10 +3332,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 }
 
 // TODO: Refactor
-void Executor::updateStates(ActionResult r) {
+void Executor::updateResult(ActionResult r) {
   if (searcher) {
     // ultra hot fix
-    if(std::holds_alternative<ForwardResult>(r)) {
+    if (std::holds_alternative<ForwardResult>(r)) {
       auto fr = std::get<ForwardResult>(r);
       fr.addedStates = addedStates;
       fr.removedStates = removedStates;
@@ -3362,9 +3368,10 @@ void Executor::updateStates(ActionResult r) {
   }
   removedStates.clear();
 }
+
 // ultra bad
 void Executor::updateStates(ExecutionState* state) {
-  updateStates(ForwardResult(state));
+  updateResult(ForwardResult(state));
 }
 
 template <typename SqType, typename TypeIt>
@@ -3496,7 +3503,7 @@ void Executor::doDumpStates() {
   for (const auto &state : states) {
       terminateStateEarly(*state, "Execution halting.");
   }
-  updateStates(ForwardResult(nullptr, addedStates, removedStates));
+  updateResult(ForwardResult(nullptr, addedStates, removedStates));
   for (auto es : isolatedStates) {
     processForest->remove(es->ptreeNode);
     delete es;
@@ -3532,7 +3539,7 @@ void Executor::seed(ExecutionState &initialState) {
     timers.invoke();
     if (::dumpStates) dumpStates();
     if (::dumpPForest) dumpPForest();
-    updateStates(ForwardResult(&state,addedStates,removedStates));
+    updateResult(ForwardResult(&state, addedStates, removedStates));
 
     if ((stats::instructions % 1000) == 0) {
       int numSeeds = 0, numStates = 0;
@@ -3577,11 +3584,11 @@ void Executor::executeStep(ExecutionState &state) {
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
 
-  updateStates(ForwardResult(&state,addedStates,removedStates));
+  updateResult(ForwardResult(&state, addedStates, removedStates));
 
   if (!checkMemoryUsage()) {
     // update searchers when states were terminated early due to memory pressure
-    updateStates(ForwardResult(nullptr,addedStates,removedStates));
+    updateResult(ForwardResult(nullptr, addedStates, removedStates));
   }
 }
 
@@ -3984,7 +3991,11 @@ ObjectState *Executor::bindObjectInState(ExecutionState &state,
                                          const MemoryObject *mo,
                                          bool isAlloca,
                                          const Array *array) {
-  ObjectState *os = array ? new ObjectState(mo, array) : new ObjectState(mo);
+  ObjectState *os = nullptr;
+  if (array)
+    os = array->binding ? const_cast<ObjectState *>(array->binding) : new ObjectState(mo, array);
+  else
+    os = new ObjectState(mo);
   state.addressSpace.bindObject(mo, os);
 
   // Its possible that multiple bindings of the same mo in the state
@@ -4348,7 +4359,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         terminateStateEarly(*unbound, "Instantiation source contains read from concrete array");
         return;
       }
-      
+
       ObjectPair p = lazyInstantiateVariable(*unbound, base, target ? target->inst : nullptr, size);
       assert(p.first && p.second);
 
@@ -4474,7 +4485,18 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
   if (!replayKTest) {
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
-    const Array *array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
+    const Array *array = nullptr;
+    auto isKleeSymbolic = [=](Symbolic x){ return !x.first->isLazyInstantiated() && x.first->address == mo->address; };
+    auto kleeSymbolic = std::find_if(
+      state.symbolics.begin(),
+      state.symbolics.end(),
+      isKleeSymbolic);
+    if (kleeSymbolic != state.symbolics.end()) {
+      array = const_cast<Array *>(kleeSymbolic->second);
+    } else {
+      array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
+    }
+
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);
     const_cast<Array*>(array)->binding = os;
     state.addSymbolic(mo, array);
@@ -5051,6 +5073,8 @@ ArrayManager *Executor::getArrayManager() { return &arrayManager; }
 
 MemoryManager *Executor::getMemoryManager() { return memory.get(); }
 
+ExecutionManager *Executor::getExecutionManager() { return emanager; }
+
 ExprOptimizer *Executor::getOptimizer() { return &optimizer; }
 
 void Executor::dumpPForest() {
@@ -5136,16 +5160,18 @@ void Executor::addHistoryResult(ExecutionState &state) {
       .insert(state.transitionLevel.begin(), state.transitionLevel.end());
 }
 
-ActionResult Executor::executeAction(Action a) {
-  switch(a.type) {
-  case Action::Type::Forward:
-    return goForward(a.state);
-  case Action::Type::Backward:
-    return goBackward(a.state, a.pob);
-  case Action::Type::Init:
-    return initBranch(a.location, a.targets);
-  case Action::Type::Terminate:
+ActionResult Executor::executeAction(Action &action) {
+  switch(action.getKind()) {
+  case Action::Kind::Forward:
+    return goForward(cast<ForwardAction>(action));
+  case Action::Kind::Backward:
+    return goBackward(cast<BackwardAction>(action));
+  case Action::Kind::Initialize:
+    return initBranch(cast<InitializeAction>(action));
+  case Action::Kind::Terminate: {
+    haltExecution = true;
     return nullptr;
+  }
   }
 }
 
@@ -5267,8 +5293,9 @@ void Executor::addState(ExecutionState &state) {
 
 void Executor::run(ExecutionState &state) {
   initialState = state.copy();
-  initialState->stack.clear();
-  initialState->isolated = true;
+  emptyState = state.copy();
+  emptyState->stack.clear();
+  emptyState->isolated = true;
 
   timers.reset();
   states.insert(&state);
@@ -5281,31 +5308,27 @@ void Executor::run(ExecutionState &state) {
   searcher = std::make_unique<BidirectionalSearcher>(cfg);
 
   while (!haltExecution) {
-    auto action = searcher->selectAction();
-
-    if (action.type == Action::Type::Terminate) {
-      break;
-    }
-
+    auto &action = searcher->selectAction();
     auto result = executeAction(action);
-    updateStates(result);
+    updateResult(result);
 
     if (std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
-      for(auto i : br.newPobs) {
-        if(i->location->instructions[0]->inst == initialState->initPC->inst) {
-          ExecutionState *state = initialState->copy();
-          for (auto &constraint : i->condition) {
-            state->constraints.push_back(
-                constraint, i->condition.get_location(constraint));
-          }
-          for (auto &symbolic : i->symbolics) {
-            state->symbolics.push_back(symbolic);
-          }
-          interpreterHandler->processTestCase(*state, 0, 0, true);
-          searcher->closeProofObligation(i);
-          delete state;
+      if (br.newPob && br.newPob->location->instructions[0]->inst == emptyState->initPC->inst) {
+        ExecutionState *replayState = initialState->copy();
+        for (auto &constraint : br.newPob->condition) {
+          replayState->addConstraint(constraint, br.newPob->condition.get_location(constraint));
         }
+        for (auto &symbolic : br.newPob->symbolics) {
+          replayState->symbolics.push_back(symbolic);
+        }
+
+        replayState->targets.insert(br.newPob->root);
+        states.insert(replayState);
+        processForest->addRoot(replayState);
+        updateResult(ForwardResult(nullptr, {replayState}, {}));
+
+        searcher->removeProofObligation(br.newPob);
       }
     }
   }
@@ -5344,7 +5367,11 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
   addHistoryResult(state);
 }
 
-InitResult Executor::initBranch(KInstruction* loc, std::set<Target> &targets) {
+
+InitializeResult Executor::initBranch(InitializeAction &action) {
+  KInstruction* loc = action.location;
+  std::set<Target> &targets = action.targets;
+
   timers.invoke();
   ExecutionState* state = initialState->withKInstruction(loc);
   prepareSymbolicArgs(*state, loc->parent->parent);
@@ -5355,58 +5382,63 @@ InitResult Executor::initBranch(KInstruction* loc, std::set<Target> &targets) {
   for (auto target: targets) {
     state->targets.insert(target);
   }
-  return InitResult(loc, state);
+  return InitializeResult(loc, state);
 }
 
-ForwardResult Executor::goForward(ExecutionState* state) {
+ForwardResult Executor::goForward(ForwardAction &action) {
+  ExecutionState* state = action.state;
   KInstruction *prevKI = state->prevPC;
+
   if (prevKI->inst->isTerminator())
     addHistoryResult(*state);
 
   KInstruction *ki = state->pc;
-
   stepInstruction(*state);
-
   executeInstruction(*state, ki);
 
   timers.invoke();
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
+
   ForwardResult ret(state, addedStates, removedStates);
-  ret.validity_core_init = std::make_pair(nullptr,nullptr);
-  if(validity_core_init.first != nullptr) {
-    ret.validity_core_init = validity_core_init;
-    validity_core_init = std::make_pair(nullptr,nullptr);
+  ret.validityCoreInit = std::make_pair(nullptr, nullptr);
+  if(validityCoreInit.first) {
+    ret.validityCoreInit = validityCoreInit;
+    validityCoreInit = std::make_pair(nullptr, nullptr);
   }
   states.insert(addedStates.begin(), addedStates.end());
 
   return ret;
 }
 
-BackwardResult Executor::goBackward(ExecutionState *state,
-                                    ProofObligation *pob) {
+BackwardResult Executor::goBackward(BackwardAction &action) {
+  ExecutionState *state = action.state;
+  ProofObligation *pob = action.pob;
+
   timers.invoke();
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, false);
-  Composer::tryRebuild(*pob, state, *newPob);
+  if(!Composer::tryRebuild(*pob, state, *newPob))
+    return BackwardResult(nullptr, pob);
+
+  ConstraintSet constraints = newPob->condition;
+  newPob->condition = state->constraints;
+  bool sat = true;
+  for (auto& constraint : constraints) {
+    KInstruction *location = constraints.get_location(constraint);
+    newPob->addCondition(constraint, location, &sat);
+  }
 
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
-  for(auto& constraint : newPob->condition) {
-    check = AndExpr::create(check, constraint);
-  }
   bool mayBeTrue;
-  // _-_ Probably separate metadata.
-  bool success = getSolver()->mayBeTrue(state->constraints, check, mayBeTrue,
-                                        state->queryMetaData, true);
-  assert(success && "Solver failure during backward propagation.");
-  
-  std::vector<ProofObligation*> newPobs;
-  if (mayBeTrue) {
-    for (auto& constraint : state->constraints) {
-      auto location = state->constraints.get_location(constraint);
-      newPob->condition.push_back(constraint, location);
-    }
+  SolverQueryMetaData queryMetaData;
+  bool produceUnsat = !state->isIsolated();
+  if (sat) {
+    bool success = getSolver()->mayBeTrue(newPob->condition, check, mayBeTrue,
+                                        queryMetaData, produceUnsat);
+  }
 
+  if (sat && mayBeTrue) {
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
     for (auto it = state->stack.rbegin();
@@ -5414,6 +5446,7 @@ BackwardResult Executor::goBackward(ExecutionState *state,
       newPob->stack.pop_back();
     }
 
+    std::vector<ProofObligation*> newPobs;
     // If the state initial location is a "right after call" location,
     // the proof obligation is transferred to every return point of the call.
     if(state->initPC->parent->getKBlockType() == KBlockType::Call &&
@@ -5434,8 +5467,9 @@ BackwardResult Executor::goBackward(ExecutionState *state,
     return BackwardResult(newPobs, pob);
   } else {
     delete newPob;
-    auto b = BackwardResult(newPobs, pob);
+    auto b = BackwardResult(nullptr, pob);
     // TODO Summaries
     return b;
   }
+
 }

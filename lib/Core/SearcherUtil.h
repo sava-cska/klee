@@ -14,22 +14,65 @@ class ExecutionState;
 class Executor;
 
 struct Action {
-  enum class Type { Init, Forward, Backward, Terminate };
+  enum class Kind { Initialize, Forward, Backward, Terminate };
 
-  Type type;
-  ExecutionState *state;    // Forward, Backward
-  KInstruction *location;   // Init
-  ProofObligation *pob;     // Backward
-  std::set<Target> targets; // Init
+  Action() {}
 
-  explicit Action(ExecutionState *es)
-      : type(Action::Type::Forward), state(es), location(nullptr), pob(nullptr),
-        targets({}) {}
+  virtual Kind getKind() const = 0;
 
-  Action(Type t, ExecutionState *es, KInstruction *loc, ProofObligation *pob,
-         std::set<Target> targets)
-    : type(t), state(es), location(loc), pob(pob), targets(targets)
-  {}
+  static bool classof(const Action *) { return true; }
+};
+
+struct TerminateAction : Action {
+  ExecutionState *state;
+
+  TerminateAction() {}
+
+  Kind getKind() const { return Kind::Terminate; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Terminate;
+  }
+  static bool classof(const TerminateAction *) { return true; }
+};
+
+struct ForwardAction : Action {
+  ExecutionState *state;
+
+  ForwardAction(ExecutionState *_state) : state(_state) {}
+
+  Kind getKind() const { return Kind::Forward; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Forward;
+  }
+  static bool classof(const ForwardAction *) { return true; }
+};
+
+struct BackwardAction : Action {
+  ExecutionState *state;
+  ProofObligation *pob;
+
+  BackwardAction(ExecutionState *_state, ProofObligation *_pob)
+    : state(_state), pob(_pob) {}
+
+  Kind getKind() const { return Kind::Backward; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Backward;
+  }
+  static bool classof(const BackwardAction *) { return true; }
+};
+
+struct InitializeAction : Action {
+  KBlock *location;
+  std::unordered_set<KBlock *> targets;
+
+  InitializeAction(KBlock *_location, std::unordered_set<KBlock *> _targets)
+    : location(_location), targets(_targets) {}
+
+  Kind getKind() const { return Kind::Initialize; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Initialize;
+  }
+  static bool classof(const InitializeAction *) { return true; }
 };
 
 struct SearcherConfig {
@@ -41,9 +84,11 @@ struct ForwardResult {
   ExecutionState *current;
   std::vector<ExecutionState *> addedStates;
   std::vector<ExecutionState *> removedStates;
-  std::pair<ExecutionState*, KBlock*> validity_core_init;
-  ForwardResult(ExecutionState *_s, std::vector<ExecutionState *> &a,
-                std::vector<ExecutionState *> &r)
+  // _-_ In the future probably do not use references
+  // _-_ That's quite ugly, refactor later
+  std::pair<ExecutionState *, KBlock *> validityCoreInit;
+  ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
+                const std::vector<ExecutionState *> &r)
       : current(_s), addedStates(a), removedStates(r){};
 
   ForwardResult(ExecutionState *_s)
@@ -58,14 +103,14 @@ struct BackwardResult {
     : newPobs(_newPobs), oldPob(_oldPob) {}
 };
 
-struct InitResult {
+struct InitializeResult {
   KInstruction* location;
   ExecutionState* state;
 
-  InitResult(KInstruction *_loc, ExecutionState *es) :
+  InitializeResult(KInstruction *_loc, ExecutionState *es) :
     location(_loc), state(es) {}
 };
 
-using ActionResult = std::variant<ForwardResult, BackwardResult, InitResult>;
+using ActionResult = std::variant<ForwardResult, BackwardResult, InitializeResult>;
 
 }

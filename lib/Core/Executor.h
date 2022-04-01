@@ -158,7 +158,7 @@ private:
   ExecutionResult results;
 
     // The program state just before any instructions are excecuted.
-  ExecutionState* initialState;
+  ExecutionState* emptyState;
 
   static const char *TerminateReasonNames[];
 
@@ -201,7 +201,8 @@ private:
 
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
-  std::pair<ExecutionState*, KBlock*> validity_core_init;
+  std::pair<ExecutionState *, KBlock *> validityCoreInit;
+  
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
   /// (outside the normal search interface) until they terminate. When
@@ -283,9 +284,12 @@ private:
 
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
-  
+
 public:
-  
+
+  ExecutionManager *emanager;
+  ExecutionState* initialState;
+
 private:
 
   /// Return the typeid corresponding to a certain `type_info`
@@ -311,9 +315,9 @@ private:
 
   void stepInstruction(ExecutionState &state);
   // Refactor _-_
-  void updateStates(ActionResult);
+  void updateResult(ActionResult);
 public:
-  void updateStates(ExecutionState* state);
+  void updateStates(ExecutionState *state);
 private:
   void transferToBasicBlock(llvm::BasicBlock *dst,
                             llvm::BasicBlock *src,
@@ -657,6 +661,8 @@ public:
 
   MemoryManager *getMemoryManager();
 
+  ExecutionManager* getExecutionManager();
+
   ExprOptimizer *getOptimizer();
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
@@ -681,11 +687,11 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  InitResult initBranch(KInstruction *loc, std::set<Target> &targets);
-  ForwardResult goForward(ExecutionState *state);
-  BackwardResult goBackward(ExecutionState *state, ProofObligation *pob);
+  InitializeResult initBranch(InitializeAction &action);
+  ForwardResult goForward(ForwardAction &action);
+  BackwardResult goBackward(BackwardAction &action);
 
-  ActionResult executeAction(Action a);
+  ActionResult executeAction(Action &action);
 
   KBlock *getStartLocation(const ExecutionState &state);
   KBlock *getLastExecutedLocation(const ExecutionState &state);

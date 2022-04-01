@@ -5,6 +5,11 @@ namespace klee {
 
 size_t ProofObligation::counter = 0;
 
+void ProofObligation::addCondition(ref<Expr> e,  KInstruction *loc, bool *sat) {
+  ConstraintManager c(condition);
+  c.addConstraint(e, loc, sat);
+}
+
 std::string ProofObligation::print() {
   std::string ret;
   std::string s;

@@ -114,7 +114,7 @@ namespace klee {
   };
 
   /// TargetedSearcher picks a state /*COMMENT*/.
-  class TargetedForwardSearcher final : public ForwardSearcher {
+  class TargetedSearcher final : public ForwardSearcher {
   public:
     enum WeightResult : std::uint8_t {
       Continue,
@@ -129,6 +129,7 @@ namespace klee {
     KBlock* target;
     bool at_end;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
+    std::vector<ExecutionState *> reachedOnLastUpdate;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
     WeightResult tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets);
@@ -138,37 +139,39 @@ namespace klee {
     WeightResult tryGetWeight(ExecutionState* es, double &weight);
 
   public:
-    std::unordered_set<ExecutionState*> reachedOnLastUpdate;
     std::unordered_set<ExecutionState*> states_set;
-    TargetedForwardSearcher(KBlock* target, bool at_return = false);
-    ~TargetedForwardSearcher() override = default;
+    TargetedSearcher(KBlock* target, bool at_return = false);
+    ~TargetedSearcher() override = default;
+
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
+    std::vector<ExecutionState *> reached();
+    void removeReached();
   };
 
-  class GuidedForwardSearcher final : public ForwardSearcher {
+  class GuidedSearcher final : public ForwardSearcher {
 
   private:
     std::unique_ptr<ForwardSearcher> baseSearcher;
-    std::map<Target, std::unique_ptr<TargetedForwardSearcher>> targetedSearchers;
+    std::map<Target, std::unique_ptr<TargetedSearcher>> targetedSearchers;
     unsigned index {1};
     bool reachingEnough;
     void addTarget(Target target);
 
   public:
-    GuidedForwardSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
-    ~GuidedForwardSearcher() override = default;
+    GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
+    ~GuidedSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
 
-    std::unordered_set<ExecutionState*> collectAndClearReached();
-    
+    std::unordered_set<ExecutionState *> collectAndClearReached();
+
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
   };

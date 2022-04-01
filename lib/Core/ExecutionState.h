@@ -226,6 +226,7 @@ public:
   std::unordered_multiset<llvm::BasicBlock *> multilevel;
   std::unordered_set<llvm::BasicBlock *> level;
   std::unordered_set<Transition, TransitionHash> transitionLevel;
+  unsigned int maxLevel;
 
   /// @brief Address space used by this state (e.g. Global and Heap)
   AddressSpace addressSpace;
@@ -287,8 +288,6 @@ public:
   bool forkDisabled;
 
   bool isolated;
-
-  bool redundant;
 
   /// @brief The target basic block that the state must achieve
   std::set<Target> targets;
@@ -352,6 +351,12 @@ struct ExecutionStateIDCompare {
     return a->id < b->id;
   }
 };
+
+class ExecutionManager {
+public:
+  std::map<llvm::BasicBlock *, std::unordered_set<ExecutionState *>> states;
+};
+
 }
 
 #endif /* KLEE_EXECUTIONSTATE_H */

@@ -141,7 +141,7 @@ namespace klee {
   public:
     std::unordered_set<ExecutionState*> states_set;
     TargetedSearcher(KBlock* target, bool at_return = false);
-    ~TargetedSearcher() override = default;
+    ~TargetedSearcher() override;
 
     ExecutionState &selectState() override;
     void update(ExecutionState *current,

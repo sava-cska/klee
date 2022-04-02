@@ -30,53 +30,6 @@
 
 namespace klee {
 
-Action &ForwardBidirectionalSearcher::selectAction() {
-  while(!searcher->empty()) {
-    auto &state = searcher->selectState();
-    KInstruction *prevKI = state.prevPC;
-
-    if (prevKI->inst->isTerminator() &&
-        state.targets.empty() &&
-        state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-      KBlock *target = ex->calculateTargetByTransitionHistory(state);
-      if (target) {
-        state.targets.insert(target);
-        ex->updateStates(&state);
-        return *(new ForwardAction(&state));
-      } else {
-        ex->pauseState(state);
-        ex->updateStates(nullptr);
-      }
-    } else {
-      return *(new ForwardAction(&state));
-    }
-  }
-  return *(new TerminateAction());
-}
-
-void ForwardBidirectionalSearcher::update(ActionResult r) {
-  if(std::holds_alternative<ForwardResult>(r)) {
-    auto fr = std::get<ForwardResult>(r);
-    searcher->update(fr.current, fr.addedStates, fr.removedStates);
-  }
-}
-
-ForwardBidirectionalSearcher::ForwardBidirectionalSearcher(SearcherConfig cfg) {
-  searcher = new GuidedSearcher(
-      constructUserSearcher(*(Executor *)(cfg.executor)), true);
-  for(auto target : cfg.targets) {
-    cfg.initial_state->targets.insert(target);
-  }
-  searcher->update(nullptr, {cfg.initial_state}, {});
-  ex = cfg.executor;
-}
-
-void ForwardBidirectionalSearcher::removeProofObligation(ProofObligation* pob) {}
-
-bool ForwardBidirectionalSearcher::empty() {
-  return searcher->empty();
-}
-
 BidirectionalSearcher::StepKind
 BidirectionalSearcher::selectStep() {
   unsigned int tick = choice;
@@ -105,21 +58,7 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
-      KInstruction *prevKI = state.prevPC;
-      if (prevKI->inst->isTerminator() &&
-          state.targets.empty() &&
-          state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-        KBlock *target = ex->calculateTargetByTransitionHistory(state);
-        if (target) {
-          state.targets.insert(target);
-          ex->updateStates(&state);
-          action = new ForwardAction(&state);
-        } else {
-          ex->pauseState(state);
-          ex->updateStates(nullptr);
-        }
-      } else
-        action = new ForwardAction(&state);
+      action = new ForwardAction(&state);
       break;
     }
 
@@ -198,8 +137,8 @@ void BidirectionalSearcher::update(ActionResult r) {
       }
     }
 
-    if(fr.validity_core_init.first != nullptr) {
-      initializer->addValidityCoreInit(fr.validity_core_init);
+    if(fr.validityCoreInit.first != nullptr) {
+      initializer->addValidityCoreInit(fr.validityCoreInit);
     }
 
   } else if (std::holds_alternative<BackwardResult>(r)) {
@@ -216,9 +155,9 @@ void BidirectionalSearcher::update(ActionResult r) {
 
 BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   ex = cfg.executor;
-  forward = new GuidedForwardSearcher(constructUserSearcher(*cfg.executor), true);
+  forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   forward->update(nullptr,{cfg.initial_state},{});
-  branch = new GuidedForwardSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
+  branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new BFSBackwardSearcher;
   initializer = new ValidityCoreInitializer;
 }

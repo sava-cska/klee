@@ -56,7 +56,7 @@ public:
 
   bool isOriginPob() const noexcept { return !parent; }
 
-  void addCondition(ref<Expr> e, KInstruction *loc, bool *sat = 0);
+  void addCondition(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
   std::string print();
 };
 

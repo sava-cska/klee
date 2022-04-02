@@ -1034,7 +1034,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
-  bool produce_unsat = !current.isIsolated();
+  bool produceUnsat = !current.isIsolated();
   bool success = solver->evaluate(current.constraints, condition, res,
                                   current.queryMetaData, produceUnsat);
 
@@ -5314,21 +5314,23 @@ void Executor::run(ExecutionState &state) {
 
     if (std::holds_alternative<BackwardResult>(result)) {
       auto br = std::get<BackwardResult>(result);
-      if (br.newPob && br.newPob->location->instructions[0]->inst == emptyState->initPC->inst) {
-        ExecutionState *replayState = initialState->copy();
-        for (auto &constraint : br.newPob->condition) {
-          replayState->addConstraint(constraint, br.newPob->condition.get_location(constraint));
-        }
-        for (auto &symbolic : br.newPob->symbolics) {
-          replayState->symbolics.push_back(symbolic);
-        }
+      for(auto pob : br.newPobs) {
+        if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
+          ExecutionState *replayState = initialState->copy();
+          for (auto &constraint : pob->condition) {
+            replayState->addConstraint(
+                constraint, pob->condition.get_location(constraint));
+          }
+          for (auto &symbolic : pob->symbolics) {
+            replayState->symbolics.push_back(symbolic);
+          }
 
-        replayState->targets.insert(br.newPob->root);
-        states.insert(replayState);
-        processForest->addRoot(replayState);
-        updateResult(ForwardResult(nullptr, {replayState}, {}));
-
-        searcher->removeProofObligation(br.newPob);
+          // replayState->targets.insert(pob->root);
+          states.insert(replayState);
+          processForest->addRoot(replayState);
+          updateResult(ForwardResult(nullptr, {replayState}, {}));
+          // searcher->removeProofObligation(pob);
+        }
       }
     }
   }
@@ -5419,13 +5421,13 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, false);
   if(!Composer::tryRebuild(*pob, state, *newPob))
-    return BackwardResult(nullptr, pob);
+    return BackwardResult({}, pob);
 
   ConstraintSet constraints = newPob->condition;
   newPob->condition = state->constraints;
   bool sat = true;
   for (auto& constraint : constraints) {
-    KInstruction *location = constraints.get_location(constraint);
+    auto location = constraints.get_location(constraint);
     newPob->addCondition(constraint, location, &sat);
   }
 
@@ -5467,9 +5469,8 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
     return BackwardResult(newPobs, pob);
   } else {
     delete newPob;
-    auto b = BackwardResult(nullptr, pob);
+    auto b = BackwardResult({}, pob);
     // TODO Summaries
     return b;
   }
-
 }

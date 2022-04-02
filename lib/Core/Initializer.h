@@ -22,28 +22,16 @@ public:
 
 class ValidityCoreInitializer: public Initializer {
 public:
-  std::pair<KInstruction*, std::set<Target>> selectAction() override;
-  bool empty() override;
-  void addPob(ProofObligation *pob) override;
-  void removePob(ProofObligation* pob) override;
-  void addValidityCoreInit(std::pair<ExecutionState*,KBlock*>) override;
-
-private:
-  std::queue<std::pair<KInstruction*, std::set<Target>>> validity_core_inits;
-};
-
-class ValidityCoreInitializer: public Initializer {
-public:
-  std::pair<KBlock *, std::unordered_set<KBlock *>> selectAction() override;
+  std::pair<KInstruction *, std::set<Target>> selectAction() override;
   bool empty() override;
   void addPob(ProofObligation *pob) override;
   void removePob(ProofObligation* pob) override;
   void addValidityCoreInit(std::pair<ExecutionState *,KBlock *>) override;
 
-  ValidityCoreInitializer(std::unordered_set<KBlock *> targets) {};
+  ValidityCoreInitializer() {};
 
 private:
-  std::queue<std::pair<KBlock *, KBlock *>> validityCoreInits;
+  std::queue<std::pair<KInstruction *, Target>> validityCoreInits;
   std::unordered_map<llvm::BasicBlock *, std::unordered_set<llvm::BasicBlock *>> initializedLocs;
 };
 

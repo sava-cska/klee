@@ -50,8 +50,8 @@ private:
 
   Executor* ex; // hack
 
-  GuidedForwardSearcher* forward;
-  GuidedForwardSearcher* branch;
+  GuidedSearcher* forward;
+  GuidedSearcher* branch;
   BFSBackwardSearcher* backward;
   ValidityCoreInitializer* initializer;
 

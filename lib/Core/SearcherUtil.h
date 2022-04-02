@@ -62,10 +62,10 @@ struct BackwardAction : Action {
 };
 
 struct InitializeAction : Action {
-  KBlock *location;
-  std::unordered_set<KBlock *> targets;
+  KInstruction *location;
+  std::set<Target> targets;
 
-  InitializeAction(KBlock *_location, std::unordered_set<KBlock *> _targets)
+  InitializeAction(KInstruction *_location, std::set<Target> _targets)
     : location(_location), targets(_targets) {}
 
   Kind getKind() const { return Kind::Initialize; }

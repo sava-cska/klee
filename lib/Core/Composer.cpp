@@ -6,6 +6,7 @@
 #include "Composer.h"
 #include "ExecutionState.h"
 #include "PForest.h"
+#include "klee/Expr/ArrayExprVisitor.h"
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprUtil.h"
@@ -39,6 +40,16 @@ std::map<const ExecutionState *, ExprVisitor::visited_ty,
 ExprVisitor::Action ComposeVisitor::visitRead(const ReadExpr &read) {
   ref<Expr> result = processRead(read);
   return faultyPtr.isNull() ? Action::changeTo(result) : Action::abort();
+}
+
+ExprVisitor::Action ComposeVisitor::visitConcat(const ConcatExpr &concat) {
+  ReadExpr *base = ArrayExprHelper::hasOrderedReads(concat);
+  if (base) {
+    ref<Expr> result = processOrderedRead(concat, *base);
+    return faultyPtr.isNull() ? Action::changeTo(result) : Action::abort();
+  } else {
+    return Action::doChildren();
+  }
 }
 
 ExprVisitor::Action ComposeVisitor::visitSelect(const SelectExpr &select) {
@@ -141,7 +152,6 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
   for(auto op = rl.begin(), e = rl.end(); op != e; op++) {
     const MemoryObject *mo = op->first;
-    const ObjectState *os = op->second;
 
     ref<Expr> inBounds = mo->getBoundsCheckPointer(ptr, size);
 
@@ -188,12 +198,97 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
   return true;
 }
 
-ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
-  ref<Expr> refRe = new ReadExpr(re);
+
+ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array *array) {
   ExecutionState *state = caller->copy;
   assert(state && "no context passed");
 
   std::map<const MemoryObject *, ref<Expr>> &readCache = Composer::globalReadCache[state];
+
+  if(!object) {
+    return nullptr;
+  }
+
+  auto cachedRead = readCache.find(object);
+  if(cachedRead != readCache.end()) {
+    ref<Expr> res = cachedRead->second;
+    return res;
+  }
+
+  if(object->isLazyInstantiated()) {
+    auto LI = visit(object->lazyInstantiatedSource);
+
+    ref<Expr> result;
+    if (tryDeref(LI, object->size, result)) {
+      readCache[object] = result;
+      return result;
+    } else {
+      return nullptr;
+    }
+  } else {
+    ref<Expr> prevVal;
+
+    if((array->index >= 0 && diffLevel > 0) ||
+       (array->index > 0 && diffLevel < 0)) {
+      prevVal = reindexArray(array);
+      readCache[object] = prevVal;
+      return prevVal;
+    }
+
+    const llvm::Value *allocSite = object->allocSite;
+    if(!allocSite)
+      return nullptr;
+
+    KFunction *kf1 = state->stack.back().kf;
+    KBlock *pckb1 = kf1->blockMap[state->getPCBlock()];
+
+    if(isa<Argument>(allocSite)) {
+      const Argument *arg = cast<Argument>(allocSite);
+      const Function *f   = arg->getParent();
+      const KFunction *kf = caller->executor->getKFunction(f);
+      const unsigned argN = arg->getArgNo();
+      prevVal =
+        kf->function == kf1->function ?
+          caller->executor->getArgumentCell(*state, kf, argN).value : nullptr;
+    } else if(isa<Instruction>(allocSite)) {
+      const Instruction *inst = cast<Instruction>(allocSite);
+      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
+      bool isFinalPCKb1 =
+        std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
+      if (isa<PHINode>(inst))
+        prevVal = caller->executor->eval(ki, state->incomingBBIndex, *state, false).value;
+      else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
+        Function *f =
+          isa<CallInst>(inst) ?
+            dyn_cast<CallInst>(inst)->getCalledFunction() :
+            dyn_cast<InvokeInst>(inst)->getCalledFunction();
+        prevVal =
+          isFinalPCKb1 && f == kf1->function ?
+            caller->executor->getDestCell(*state, state->prevPC).value : nullptr;
+      } else {
+        const Instruction *inst = cast<Instruction>(allocSite);
+        const Function *f = inst->getParent()->getParent();
+        const KFunction *kf = caller->executor->getKFunction(f);
+        prevVal =
+          kf->function == kf1->function ?
+            caller->executor->getDestCell(*state, ki).value : nullptr;
+      }
+    }
+
+    if(prevVal.isNull()) {
+      ObjectState os = ObjectState(object, array);
+      prevVal = os.read(0, 8 * os.size);
+    }
+
+    readCache[object] = prevVal;
+    return prevVal;
+  }
+}
+
+ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
+  ref<Expr> refRe = new ReadExpr(re);
+  ExecutionState *state = caller->copy;
+  assert(state && "no context passed");
 
   ref<ObjectState> OS;
   if(re.updates.root->isForeign ||
@@ -203,103 +298,41 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
     return res;
   }
 
-  const MemoryObject *object = re.updates.root->binding ? re.updates.root->binding->getObject() : nullptr;
-  if(!object) {
-    return refRe;
-  }
-
+  const MemoryObject *object =
+    re.updates.root->binding ? re.updates.root->binding->getObject() : nullptr;
   OS = new ObjectState(object);
-
-  if(object->isLazyInstantiated()) {
-    auto cachedLIexpr = readCache.find(object);
-    if(cachedLIexpr != readCache.end()) {
-      ref<Expr> res = cachedLIexpr->second;
-      OS->write(0, res);
-      res = shareUpdates(OS, re);
-      return res;
-    }
-
-    auto LI = visit(object->lazyInstantiatedSource);
-
-    ref<Expr> result;
-    if (tryDeref(LI, OS->size, result)) {
-      readCache[object] = result;
-      OS->write(0, result);
-      result = shareUpdates(OS, re);
-      return result;
-    } else {
-      return refRe;
-    }
-  }
-
-  auto cachedLIexpr = readCache.find(object);
-  if(cachedLIexpr != readCache.end()) {
-    ref<Expr> res = cachedLIexpr->second;
+  ref<Expr> res = processObject(object, re.updates.root);
+  if (!res.isNull()) {
     OS->write(0, res);
     res = shareUpdates(OS, re);
+  }
+  return res;
+}
+
+
+ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExpr &base) {
+  ref<ConcatExpr> refCe = new ConcatExpr(ce);
+  ExecutionState *state = caller->copy;
+  assert(state && "no context passed");
+
+  ref<Expr> index = visit(base.index);
+  ref<ObjectState> OS;
+  if(base.updates.root->isForeign ||
+    base.updates.root->isConstantArray()) {
+    OS = new ObjectState(base.updates.root, caller->executor->getMemoryManager());
+    ref<Expr> res = OS->read(index, ce.getWidth());
     return res;
   }
 
-  ref<Expr> prevVal;
+  const MemoryObject *object =
+    base.updates.root->binding ? base.updates.root->binding->getObject() : nullptr;
+  OS = new ObjectState(object);
+  ref<Expr> res = processObject(object, base.updates.root);
 
-  if((re.updates.root->index >= 0 && diffLevel > 0) ||
-    (re.updates.root->index > 0 && diffLevel < 0)) {
-    prevVal = reindexRead(re);
-    readCache[object] = prevVal;
-    OS->write(0, prevVal);
-    ref<Expr> res = shareUpdates(OS, re);
-    return res;
+  if (!res.isNull()) {
+    OS->write(0, res);
+    res = OS->read(index, ce.getWidth());
   }
-
-  const llvm::Value *allocSite = object->allocSite;
-  if(!allocSite)
-    return new ReadExpr(re);
-
-  KFunction *kf1 = state->stack.back().kf;
-  KBlock *pckb1 = kf1->blockMap[state->getPCBlock()];
-
-  if(isa<Argument>(allocSite)) {
-    const Argument *arg = cast<Argument>(allocSite);
-    const Function *f   = arg->getParent();
-    const KFunction *kf = caller->executor->getKFunction(f);
-    const unsigned argN = arg->getArgNo();
-    prevVal =
-      kf->function == kf1->function ?
-        caller->executor->getArgumentCell(*state, kf, argN).value : nullptr;
-  } else if(isa<Instruction>(allocSite)) {
-    const Instruction *inst = cast<Instruction>(allocSite);
-    const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
-    bool isFinalPCKb1 =
-      std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
-    if (isa<PHINode>(inst))
-      prevVal = caller->executor->eval(ki, state->incomingBBIndex, *state, false).value;
-    else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
-      Function *f =
-        isa<CallInst>(inst) ?
-          dyn_cast<CallInst>(inst)->getCalledFunction() :
-          dyn_cast<InvokeInst>(inst)->getCalledFunction();
-      prevVal =
-        isFinalPCKb1 && f == kf1->function ?
-          caller->executor->getDestCell(*state, state->prevPC).value : nullptr;
-    } else {
-      const Instruction *inst = cast<Instruction>(allocSite);
-      const Function *f = inst->getParent()->getParent();
-      const KFunction *kf = caller->executor->getKFunction(f);
-      prevVal =
-        kf->function == kf1->function ?
-          caller->executor->getDestCell(*state, ki).value : nullptr;
-    }
-  } else {
-    return new ReadExpr(re);
-  }
-
-  if(prevVal.isNull()) {
-    return new ReadExpr(re);
-  }
-
-  readCache[object] = prevVal;
-  OS->write(0, prevVal);
-  ref<Expr> res = shareUpdates(OS, re);
   return res;
 }
 
@@ -314,12 +347,11 @@ ref<Expr> ComposeVisitor::processSelect(const SelectExpr &sexpr) {
   return result;
 }
 
-ref<Expr> ComposeVisitor::reindexRead(const ReadExpr & read) {
-  int reindex = read.updates.root->index + diffLevel;
-  ref<Expr> indexExpr = read.index;
-  const MemoryObject *mo = read.updates.root->binding ? read.updates.root->binding->getObject() : nullptr;
+ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
+  int reindex = array->index + diffLevel;
+  const MemoryObject *mo = array->binding ? array->binding->getObject() : nullptr;
   assert(mo && mo->isLocal);
-  const Array *root = caller->executor->getArrayManager()->CreateArray(read.updates.root, reindex);
+  const Array *root = caller->executor->getArrayManager()->CreateArray(array, reindex);
   if (mo && !root->binding) {
     ref<Expr> liSource = mo->lazyInstantiatedSource;
     const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocate(

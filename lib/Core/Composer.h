@@ -71,11 +71,14 @@ private:
 
   bool tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result);
   ExprVisitor::Action visitRead(const ReadExpr &);
+  ExprVisitor::Action visitConcat(const ConcatExpr &concat);
   ExprVisitor::Action visitSelect(const SelectExpr &);
   ref<Expr> shareUpdates(ref<ObjectState>, const ReadExpr &);
+  ref<Expr> processObject(const MemoryObject *object, const Array *array);
   ref<Expr> processRead(const ReadExpr &);
+  ref<Expr> processOrderedRead(const ConcatExpr & ce, const ReadExpr &re);
   ref<Expr> processSelect(const SelectExpr &);
-  ref<Expr> reindexRead(const ReadExpr &read);
+  ref<Expr> reindexArray(const Array *array);
   Composer *caller;
   int diffLevel;
 };

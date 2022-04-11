@@ -88,7 +88,6 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
 
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
   ComposeVisitor visitor(this, -copy->stackBalance);
-  auto res_o = expr;
   res = visitor.visit(expr);
   res = visitor.faultyPtr.isNull() ? res : visitor.faultyPtr;
   return visitor.faultyPtr.isNull();
@@ -111,21 +110,24 @@ bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, Pro
     bool produceUnsat = !state->isIsolated();
     if (success) {
       success = executor->getSolver()->mayBeTrue(
-        rebuilt.condition,
+        composer.copy->constraints,
         rebuiltConstraint,
         mayBeTrue,
         queryMetaData,
         produceUnsat
       );
+      success = success && mayBeTrue;
     }
     if (success) {
-      rebuilt.addCondition(rebuiltConstraint, loc, &success);
-    }
-    if (!success)
+      composer.copy->addConstraint(rebuiltConstraint, loc, &success);
+    } else {
       break;
+    }
   }
+  rebuilt.condition = composer.copy->constraints;
   std::vector<Symbolic> foreign;
   composer.copy->exctractForeignSymbolics(foreign);
+  rebuilt.symbolics = old.symbolics;
   rebuilt.symbolics.insert(rebuilt.symbolics.end(), foreign.begin(), foreign.end());
   return success;
 }

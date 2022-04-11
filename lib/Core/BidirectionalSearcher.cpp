@@ -34,8 +34,6 @@ namespace klee {
 BidirectionalSearcher::StepKind
 BidirectionalSearcher::selectStep() {
   unsigned int tick = choice;
-  if (empty())
-    return StepKind::Terminate;
   do {
     unsigned int i = choice;
     choice = (choice + 1) % 4;
@@ -59,7 +57,14 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
-      action = new ForwardAction(&state);
+      KInstruction *prevKI = state.prevPC;
+      if (prevKI->inst->isTerminator() &&
+          state.targets.empty() &&
+          state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
+        ex->pauseState(state);
+        ex->updateStates(nullptr);
+      } else
+        action = new ForwardAction(&state);
       break;
     }
 

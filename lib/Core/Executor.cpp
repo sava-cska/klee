@@ -3998,7 +3998,7 @@ ObjectState *Executor::bindObjectInState(ExecutionState &state,
                                          const Array *array) {
   ObjectState *os = nullptr;
   if (array)
-    os = array->binding ? const_cast<ObjectState *>(array->binding) : new ObjectState(mo, array);
+    os = new ObjectState(mo, array);
   else
     os = new ObjectState(mo);
   state.addressSpace.bindObject(mo, os);
@@ -4491,14 +4491,19 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
     // Find a unique name for this array.  First try the original name,
     // or if that fails try adding a unique identifier.
     const Array *array = nullptr;
-    auto isKleeSymbolic = [=](Symbolic x){ return !x.first->isLazyInstantiated() && x.first->address == mo->address; };
-    auto kleeSymbolic = std::find_if(
-      state.symbolics.begin(),
-      state.symbolics.end(),
-      isKleeSymbolic);
-    if (kleeSymbolic != state.symbolics.end()) {
-      array = const_cast<Array *>(kleeSymbolic->second);
-    } else {
+
+    if (isHandleMakeSymbolic) {
+      auto isKleeSymbolic = [=](Symbolic x){ return !x.first->isLazyInstantiated() && x.first->allocSite == mo->allocSite; };
+      auto kleeSymbolic = std::find_if(
+        state.symbolics.begin(),
+        state.symbolics.end(),
+        isKleeSymbolic);
+      if (kleeSymbolic != state.symbolics.end()) {
+        array = const_cast<Array *>(kleeSymbolic->second);
+      }
+    }
+
+    if (!array) {
       array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
     }
 
@@ -4668,7 +4673,9 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
         symbolic.first->allocSite != allocSite) {
       auto os = symbolic.second->binding;
       ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
-      state.addConstraint(Expr::createIsZero(EqExpr::create(symbolicAlloca, result)), target);
+      state.addConstraint(
+        Expr::createIsZero(EqExpr::create(symbolicAlloca, result)),
+        state.path.getCurrentIndex());
     }
   }
 
@@ -5332,6 +5339,7 @@ void Executor::run(ExecutionState &state) {
       auto br = std::get<BackwardResult>(result);
       for(auto pob : br.newPobs) {
         if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
+          assert(br.newPobs.size() == 1);
           ExecutionState *replayState = initialState->copy();
           for (auto &constraint : pob->condition) {
             replayState->addConstraint(
@@ -5341,14 +5349,12 @@ void Executor::run(ExecutionState &state) {
             replayState->symbolics.push_back(symbolic);
           }
 
-          if (pob->root) {
-            replayState->targets.insert(Target(pob->root->location, false));
-          }
+          replayState->targets.insert(Target(pob->root->location, false));
           states.insert(replayState);
           processForest->addRoot(replayState);
           addedStates.push_back(replayState);
           updateResult(ForwardResult(nullptr, {}, {}));
-          searcher->closeProofObligation(pob); // ???
+          searcher->closeProofObligation(pob);
         }
       }
     }
@@ -5393,8 +5399,15 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
   KInstruction* loc = action.location;
   std::set<Target> &targets = action.targets;
   timers.invoke();
-  ExecutionState* state = emptyState->withKInstruction(loc);
-  prepareSymbolicArgs(*state, loc->parent->parent);
+
+  ExecutionState* state = nullptr;
+  if (loc == initialState->initPC) {
+    state = initialState->copy();
+    state->isolated = true;
+  } else {
+    state = emptyState->withKInstruction(loc);
+    prepareSymbolicArgs(*state, loc->parent->parent);
+  }
   if (statsTracker)
     statsTracker->framePushed(*state, 0);
   processForest->addRoot(state);
@@ -5436,7 +5449,6 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   timers.invoke();
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
-  newPob->condition = state->constraints;
   SolverQueryMetaData queryMetaData;
   bool success = Composer::tryRebuild(*pob, state, *newPob);
 

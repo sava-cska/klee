@@ -74,7 +74,7 @@ private:
   /// Rewrite set of constraints using the visitor
   /// \param visitor constraint rewriter
   /// \return true iff any constraint has been changed
-  bool rewriteConstraints(ExprVisitor &visitor, std::optional<size_t> location, bool *sat = 0);
+  bool rewriteConstraints(ExprVisitor &visitor, bool *sat = 0);
 
   /// Add constraint to the set of constraints
   void addConstraintInternal(const ref<Expr> &constraint, std::optional<size_t> location, bool *sat = 0);

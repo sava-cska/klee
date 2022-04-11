@@ -156,7 +156,7 @@ public:
   }
 };
 
-bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, std::optional<size_t> location, bool *sat) {
+bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, bool *sat) {
   ConstraintSet old;
   bool changed = false;
 
@@ -166,7 +166,7 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor, std::optional<s
     ref<Expr> e = visitor.visit(ce);
 
     if (e!=ce) {
-      addConstraintInternal(e, location, sat); // enable further reductions
+      addConstraintInternal(e, loc, sat); // enable further reductions
       changed = true;
     } else {
       constraints.push_back(ce, loc);
@@ -231,7 +231,7 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e, std::optional<
       BinaryExpr *be = cast<BinaryExpr>(e);
       if (isa<ConstantExpr>(be->left)) {
         ExprReplaceVisitor visitor(be->right, be->left);
-        rewriteConstraints(visitor, location, sat);
+        rewriteConstraints(visitor, sat);
       }
     }
     constraints.push_back(e, location);

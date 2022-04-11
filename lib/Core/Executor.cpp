@@ -4660,6 +4660,18 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
   ref<Expr> result = makeSymbolicValue(allocSite, state, size, width, "symbolic_value");
+
+  for (auto &symbolic : state.symbolics) {
+    if (!symbolic.first->isLazyInstantiated() &&
+        symbolic.first->size == size &&
+        isa<AllocaInst>(symbolic.first->allocSite) &&
+        symbolic.first->allocSite != allocSite) {
+      auto os = symbolic.second->binding;
+      ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
+      state.addConstraint(Expr::createIsZero(EqExpr::create(symbolicAlloca, result)), target);
+    }
+  }
+
   bindLocal(target, state, result);
   if (isa<AllocaInst>(allocSite)) {
     AllocaInst *ai = cast<AllocaInst>(allocSite);

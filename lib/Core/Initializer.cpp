@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <set>
+#include <stack>
 #include <utility>
 
 namespace klee {
@@ -28,7 +29,7 @@ void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
   
 void ValidityCoreInitializer::removePob(ProofObligation *pob) {}
 
-void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path,SolverQueryMetaData::core_ty> v, KBlock* b) {
+void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMetaData::core_ty> v, KBlock* b) {
   SolverQueryMetaData::core_ty core = v.second;
   assert(!core.empty());
   Path path = v.first;

@@ -5423,29 +5423,12 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
 
   timers.invoke();
 
-  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, false);
-  
-  if(!Composer::tryRebuild(*pob, state, *newPob)) {
-    return BackwardResult({}, pob);
-  }
-  
-  ConstraintSet constraints = newPob->condition;
+  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   newPob->condition = state->constraints;
-  bool sat = true;
-  for (auto& constraint : constraints) {
-    newPob->addCondition(constraint, std::nullopt, &sat);
-  }
-
-  ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
-  bool mayBeTrue;
   SolverQueryMetaData queryMetaData;
-  bool produceUnsat = !state->isIsolated();
-  if (sat) {
-    bool success = getSolver()->mayBeTrue(newPob->condition, check, mayBeTrue,
-                                        queryMetaData, produceUnsat);
-  }
+  bool success = Composer::tryRebuild(*pob, state, *newPob);
 
-  if (sat && mayBeTrue) {
+  if (success) {
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
     for (auto it = state->stack.rbegin();

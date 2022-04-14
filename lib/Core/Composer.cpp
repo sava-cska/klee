@@ -95,6 +95,18 @@ bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, Pro
     auto loc = old.condition.get_location(constraint);    
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
+    bool mayBeTrue = true;
+    SolverQueryMetaData queryMetaData;
+    bool produceUnsat = !state->isIsolated();
+    if (success) {
+      success = executor->getSolver()->mayBeTrue(
+        rebuilt.condition,
+        rebuiltConstraint,
+        mayBeTrue,
+        queryMetaData,
+        produceUnsat
+      );
+    }
     if (success) {
       rebuilt.addCondition(rebuiltConstraint, loc, &success);
     }

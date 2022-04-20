@@ -57,12 +57,23 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
-      action = new ForwardAction(&state);
+      if(isLooped(state)) {
+        KBlock *target = ex->calculateTargetByTransitionHistory(state);
+        if (target) {
+          state.targets.insert(target);
+          ex->updateStates(&state);
+          action = new ForwardAction(&state);
+        } else {
+          ex->pauseState(state);
+          ex->updateStates(nullptr);
+        }
+      } else
+        action = new ForwardAction(&state);
       break;
     }
 
-    case StepKind::Branch: {
-      auto &state = branch->selectState();
+    case StepKind::Branch : {
+      auto& state = branch->selectState();
       action = new ForwardAction(&state);
       break;
     }
@@ -174,6 +185,14 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
   if (parent) {
     closeProofObligation(parent);
   }
+}
+
+
+bool BidirectionalSearcher::isLooped(ExecutionState& state) {
+  KInstruction *prevKI = state.prevPC;
+  return prevKI->inst->isTerminator() &&
+         state.targets.empty() &&
+         state.multilevel.count(state.getPCBlock()) > 0;
 }
 
 bool BidirectionalSearcher::empty() {

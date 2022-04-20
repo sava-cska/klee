@@ -56,6 +56,7 @@ private:
 
   StepKind selectStep();
   void removePob(ProofObligation*);
+  bool isLooped(ExecutionState&);
 };
 
 } // namespace klee

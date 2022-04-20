@@ -312,6 +312,8 @@ public:
 
   Path path;
 
+  size_t symbolicCounter;
+
 public:
   #ifdef KLEE_UNITTEST
   // provide this function only in the context of unittests

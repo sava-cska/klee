@@ -4506,7 +4506,7 @@ ObjectPair Executor::executeMakeSymbolic(ExecutionState &state,
     }
 
     if (!array) {
-      array = makeArray(state, mo->size, name, isHandleMakeSymbolic);
+      array = makeArray(state, mo->size, name, isHandleMakeSymbolic, mo->lazyInstantiatedSource);
     }
 
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);

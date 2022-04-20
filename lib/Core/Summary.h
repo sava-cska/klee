@@ -7,26 +7,26 @@
 #include "klee/ADT/Ref.h"
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/ExprHashMap.h"
 #include "klee/Solver/Solver.h"
 #include <map>
 #include <vector>
 
-
 namespace klee {
-
   struct Lemma {
     std::vector<Path> paths;
     std::vector<ref<Expr>> constraints;
 
     ref<Expr> getAsExpr();
   };
-  
+
   class Summary {
   public:
     std::map<ProofObligation*, Lemma> lemmas;
-    
+
   public:
-    void summarize(const Path& path, ProofObligation *pob,
-                   const SolverQueryMetaData &metadata);
+    void summarize(const Path &path, ProofObligation *pob,
+                   const SolverQueryMetaData &metadata,
+                   ExprHashMap<ref<Expr>> &rebuildMap);
   };
 }; // namespace klee

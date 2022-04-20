@@ -15,6 +15,7 @@
 
 #include "AddressSpace.h"
 #include "MergeHandler.h"
+#include "Path.h"
 
 #include "klee/ADT/TreeStream.h"
 #include "klee/Expr/Constraints.h"

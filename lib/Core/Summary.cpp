@@ -14,8 +14,9 @@ ref<Expr> Lemma::getAsExpr() {
 }
 
 void Summary::summarize(const Path& path, ProofObligation *pob,
-                        const SolverQueryMetaData &metadata) {
-  if(!metadata.queryValidityCore) {
+                        const SolverQueryMetaData &metaData,
+                        ExprHashMap<ref<Expr>> &rebuildMap) {
+  if(metaData.queryValidityCore) {
     return;
   }
 
@@ -26,13 +27,13 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
                     ? pob->location->getFirstInstruction()->getSourceLocation()
                     : pob->location->getLastInstruction()->getSourceLocation())
             << std::endl;
-  
-  auto core = *metadata.queryValidityCore;
+
+  auto core = *metaData.queryValidityCore;
   auto& lemma = lemmas[pob];
   std::cout << "Constraints are:" << std::endl;
   for(auto constraint : core) {
-    if(metadata.rebuildMap.count(constraint.first)) {
-      lemma.constraints.push_back(Expr::createIsZero(metadata.rebuildMap.at(constraint.first)));
+    if(rebuildMap.count(constraint.first)) {
+      lemma.constraints.push_back(Expr::createIsZero(rebuildMap.at(constraint.first)));
       std::cout << lemma.constraints.back()->print() << std::endl;
     }
   }

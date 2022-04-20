@@ -121,7 +121,6 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     targets(),
     symbolicCounter(0),
     path({kb})
-
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
@@ -192,6 +191,7 @@ ExecutionState *ExecutionState::withKFunction(KFunction *kf) const {
   newState->initPC = kf->blockMap[&*kf->function->begin()]->instructions;
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
+  newState->path = Path({kf->entryKBlock});
   return newState;
 }
 
@@ -203,6 +203,7 @@ ExecutionState *ExecutionState::withKBlock(KBlock *kb) const {
   newState->initPC = kb->instructions;
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
+  newState->path = Path({kb});
   return newState;
 }
 

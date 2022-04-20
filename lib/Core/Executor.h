@@ -23,6 +23,7 @@
 #include "MemoryManager.h"
 #include "SeedInfo.h"
 #include "StatsTracker.h"
+#include "Summary.h"
 
 #include "klee/ADT/RNG.h"
 #include "klee/ADT/DiscretePDF.h"

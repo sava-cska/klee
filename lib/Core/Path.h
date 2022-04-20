@@ -9,7 +9,9 @@
 namespace klee {
 
 struct Path {
-  friend Path merge(const Path& lhs, const Path& rhs);
+  friend Path concat(const Path& lhs, const Path& rhs);
+
+public:
 
   KBlock* getInitialBlock() const;
   KBlock* getFinalBlock() const;
@@ -44,11 +46,11 @@ struct Path {
 
   Path() = default;
   explicit Path(std::vector<KBlock*> path) : path_(path) {}
-  
+
 private:
   std::vector<KBlock*> path_;
 };
 
-Path merge(const Path& lhs, const Path& rhs);
-  
+Path concat(const Path& lhs, const Path& rhs);
+
 };

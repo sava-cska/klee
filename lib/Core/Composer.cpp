@@ -95,11 +95,16 @@ bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
 
 bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *state, ref<Expr> &res) {
   Composer composer(state);
-  return composer.tryRebuild(expr, res);
+  bool success = composer.tryRebuild(expr, res);
+  delete composer.copy;
+  return success;
 }
 
-bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, ProofObligation &rebuilt,
-                          SolverQueryMetaData& metadata) {
+bool Composer::tryRebuild(const ProofObligation &old,
+                          ExecutionState *state,
+                          ProofObligation &rebuilt,
+                          SolverQueryMetaData &queryMetaData,
+                          ExprHashMap<ref<Expr>> &rebuildMap) {
   bool success = true;
   Composer composer(state);
   for(auto& constraint : old.condition) {
@@ -113,6 +118,7 @@ bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, Pro
     bool mayBeTrue = true;
     bool produceUnsat = !state->isIsolated();
     if (success) {
+      rebuildMap[rebuiltConstraint] = constraint;
       success = executor->getSolver()->mayBeTrue(
         composer.copy->constraints,
         rebuiltConstraint,
@@ -121,8 +127,8 @@ bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, Pro
         produceUnsat
       );
       success = success && mayBeTrue;
-      if(!success && metadata.queryValidityCore) {
-        metadata.queryValidityCore->push_back(std::make_pair(rebuiltConstraint, std::nullopt));
+      if(!success && queryMetaData.queryValidityCore) {
+        queryMetaData.queryValidityCore->push_back(std::make_pair(rebuiltConstraint, std::nullopt));
       }
     }
     if (success) {

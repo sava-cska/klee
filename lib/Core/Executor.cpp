@@ -1644,6 +1644,7 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
         KFunction *kf = kmodule->functionMap[personality_fn];
 
         state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
+        state.path.append(state.pc->parent);
         state.pushFrame(state.prevPC, kf);
         state.pc = kf->instructions;
         bindArgument(kf, 0, state, sui->exceptionObject);
@@ -2016,8 +2017,10 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
 
   KFunction *kf = state.stack.back().kf;
   state.pc = kf->blockMap[dst]->instructions;
-  if (state.prevPC->inst->isTerminator())
+  if (state.prevPC->inst->isTerminator()) {
     state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
+    state.path.append(state.pc->parent);
+  }
   if (state.pc->inst->getOpcode() == Instruction::PHI) {
     PHINode *first = static_cast<PHINode*>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
@@ -2061,6 +2064,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         state.pc = kcaller;
         ++state.pc;
         state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
+        state.path.append(state.pc->parent);
       }
 
       if (ri->getFunction()->getName() == "_klee_eh_cxx_personality") {
@@ -5448,10 +5452,12 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   ProofObligation *pob = action.pob;
 
   timers.invoke();
+  
+  SolverQueryMetaData queryMetaData;
+  ExprHashMap<ref<Expr>> rebuildMap;
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
-  SolverQueryMetaData queryMetaData;
-  bool success = Composer::tryRebuild(*pob, state, *newPob, queryMetaData);
+  bool success = Composer::tryRebuild(*pob, state, *newPob, queryMetaData, rebuildMap);
   if (success) {
     newPob->path = merge(state->path, pob->path);
     // goBackward assumes that the state and the proof obligation are stack-compatible

@@ -147,7 +147,12 @@ private:
     if (!head) {
       // FIXME: We need to do something (assert, mangle, etc.) so that printing
       // distinct arrays with the same name doesn't fail.
-      PC << updates.root->name;
+      if (!updates.root->liSource.isNull()) {
+        PC << "LI";
+        print(updates.root->liSource, PC);
+      } else {
+        PC << updates.root->name;
+      }
       if (updates.root->index)
         PC << "%" << updates.root->index;
       return;

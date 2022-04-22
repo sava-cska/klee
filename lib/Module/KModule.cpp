@@ -570,6 +570,16 @@ KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki) {
 
 /***/
 
+std::string KInstruction::toString() const {
+  std::string repr = parent->parent->function->getName();
+  std::string label;
+  llvm::raw_string_ostream label_stream(label);
+  label_stream << *inst;
+  size_t index = label_stream.str().find('=');
+  repr += label_stream.str().substr(2, index - 3);
+  return repr;
+}
+
 static int getOperandNum(Value *v,
                          std::map<Instruction*, unsigned> &registerMap,
                          KModule *km,

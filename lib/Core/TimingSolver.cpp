@@ -25,7 +25,7 @@ using namespace llvm;
 
 bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
                             Solver::Validity &result,
-                            SolverQueryMetaData &metaData, bool produceUnsat) {
+                            SolverQueryMetaData &metaData) {
   // Fast path, to avoid timer and OS overhead.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
     result = CE->isTrue() ? Solver::True : Solver::False;
@@ -37,7 +37,7 @@ bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
   if (simplifyExprs)
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
-  bool success = solver->evaluate(Query(constraints, expr, produceUnsat), result, metaData);
+  bool success = solver->evaluate(Query(constraints, expr), result, metaData);
 
   metaData.queryCost += timer.delta();
 
@@ -45,7 +45,7 @@ bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
 }
 
 bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
-                              bool &result, SolverQueryMetaData &metaData, bool produceUnsat) {
+                              bool &result, SolverQueryMetaData &metaData) {
   // Fast path, to avoid timer and OS overhead.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
     result = CE->isTrue() ? true : false;
@@ -65,14 +65,14 @@ bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
 }
 
 bool TimingSolver::mustBeFalse(const ConstraintSet &constraints, ref<Expr> expr,
-                               bool &result, SolverQueryMetaData &metaData, bool produceUnsat) {
-  return mustBeTrue(constraints, Expr::createIsZero(expr), result, metaData, produceUnsat);
+                               bool &result, SolverQueryMetaData &metaData) {
+  return mustBeTrue(constraints, Expr::createIsZero(expr), result, metaData);
 }
 
 bool TimingSolver::mayBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
-                             bool &result, SolverQueryMetaData &metaData, bool produceUnsat) {
+                             bool &result, SolverQueryMetaData &metaData) {
   bool res;
-  if (!mustBeFalse(constraints, expr, res, metaData, produceUnsat))
+  if (!mustBeFalse(constraints, expr, res, metaData))
     return false;
   result = !res;
   return true;

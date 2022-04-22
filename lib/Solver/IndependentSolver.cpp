@@ -417,7 +417,7 @@ bool IndependentSolver::computeValidity(const Query& query,
   IndependentElementSet eltsClosure =
     getIndependentConstraints(query, required);
   return solver->impl->computeValidity(
-    Query(required, query.expr, query.produceUnsat),
+    Query(required, query.expr),
     result,
     metaData);
 }
@@ -429,7 +429,7 @@ bool IndependentSolver::computeTruth(const Query& query,
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
   return solver->impl->computeTruth(
-    Query(required, query.expr, query.produceUnsat),
+    Query(required, query.expr),
     isValid,
     metaData);
 }
@@ -441,7 +441,7 @@ bool IndependentSolver::computeValue(const Query& query,
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
   return solver->impl->computeValue(
-    Query(required, query.expr, query.produceUnsat),
+    Query(required, query.expr),
     result,
     metaData);
 }

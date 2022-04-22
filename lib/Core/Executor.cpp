@@ -1036,9 +1036,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
-  bool produceUnsat = !current.isIsolated();
   bool success = solver->evaluate(current.constraints, condition, res,
-                                  current.queryMetaData, produceUnsat);
+                                  current.queryMetaData);
 
   solver->setTimeout(time::Span());
   if (!success) {

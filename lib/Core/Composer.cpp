@@ -114,17 +114,15 @@ bool Composer::tryRebuild(const ProofObligation &old,
     }
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
-    metadata.rebuildMap[rebuiltConstraint] = constraint;
+    queryMetaData.rebuildMap[rebuiltConstraint] = constraint;
     bool mayBeTrue = true;
-    bool produceUnsat = !state->isIsolated();
     if (success) {
       rebuildMap[rebuiltConstraint] = constraint;
       success = executor->getSolver()->mayBeTrue(
         composer.copy->constraints,
         rebuiltConstraint,
         mayBeTrue,
-        metadata,
-        produceUnsat
+        queryMetaData
       );
       success = success && mayBeTrue;
       if(!success && queryMetaData.queryValidityCore) {

@@ -41,10 +41,9 @@ namespace klee {
   public:
     const ConstraintSet &constraints;
     ref<Expr> expr;
-    bool produceUnsat;
 
-    Query(const ConstraintSet& _constraints, ref<Expr> _expr, bool produceUnsat = false)
-      : constraints(_constraints), expr(_expr), produceUnsat(produceUnsat) {
+    Query(const ConstraintSet& _constraints, ref<Expr> _expr)
+      : constraints(_constraints), expr(_expr) {
     }
 
     /// withExpr - Return a copy of the query with the given expression.

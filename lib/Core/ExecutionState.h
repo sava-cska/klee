@@ -307,11 +307,9 @@ public:
   /// @brief The target basic block that the state must achieve
   std::set<Target> targets;
 
-  /// @brief Index of current symbolic in case of pre-loaded symbolics.
-  size_t symbolicCounter;
-
   Path path;
 
+  /// @brief Index of current symbolic in case of pre-loaded symbolics.
   size_t symbolicCounter;
 
 public:

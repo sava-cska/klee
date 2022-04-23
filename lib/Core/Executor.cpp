@@ -4724,7 +4724,6 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
       state.initPC->parent->getFirstInstruction()->inst == value) {
     array = arrayManager.CreateArray(array, -1);
   }
-
   ObjectState *os = bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array);
   const_cast<Array*>(array)->binding = mo;

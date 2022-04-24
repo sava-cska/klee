@@ -366,17 +366,20 @@ ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
   assert(mo && mo->isLocal);
   const Array *root = caller->executor->getArrayManager()->CreateArray(array, reindex);
   const ObjectState *os = nullptr;
-  if (mo && !root->binding) {
+  ExecutionState &state = *caller->copy;
+  if (!root->binding) {
     ref<Expr> liSource = mo->lazyInstantiatedSource;
     const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocateTransparent(
       mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
     );
-    os = caller->executor->bindObjectInState(*(caller->copy), reindexMO, false, root);
+    os = caller->executor->bindObjectInState(state, reindexMO, false, root);
+    state.addSymbolic(reindexMO, array);
     const_cast<Array*>(root)->binding = reindexMO;
   } else {
     os = caller->copy->addressSpace.findObject(root->binding);
     if(!os) {
-      os = caller->executor->bindObjectInState(*(caller->copy), root->binding, false, root);
+      os = caller->executor->bindObjectInState(state, root->binding, false, root);
+      state.addSymbolic(root->binding, root);
     }
   }
   assert(os);

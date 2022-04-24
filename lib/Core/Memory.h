@@ -210,7 +210,9 @@ public:
     if (allocSite != b.allocSite)
       return (allocSite < b.allocSite ? -1 : 1);
 
-    assert(lazyInstantiatedSource == b.lazyInstantiatedSource);
+    if (lazyInstantiatedSource != b.lazyInstantiatedSource)
+      return (lazyInstantiatedSource->hash() < b.lazyInstantiatedSource->hash() ? -1 : 1);
+
     return 0;
   }
 };

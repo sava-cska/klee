@@ -771,6 +771,7 @@ KBlock *KFunction::getNearestJoinBlock(KBlock *kb) {
   return nullptr;
 }
 
+
 KBlock *KFunction::getNearestJoinOrCallBlock(KBlock *kb) {
   KFunction *kf = kb->parent;
   for (auto &kbd : kf->getSortedBackwardDistance(kb)) {
@@ -781,6 +782,16 @@ KBlock *KFunction::getNearestJoinOrCallBlock(KBlock *kb) {
       return kbd.first;
   }
   return nullptr;
+}
+
+std::string KFunction::argToString(llvm::Argument *arg) {
+  std::string repr = function->getName();
+  std::string label;
+  llvm::raw_string_ostream label_stream(label);
+  label_stream << *arg;
+  size_t index = label_stream.str().find('%');
+  repr += label_stream.str().substr(index);
+  return repr;
 }
 
 KBlock::KBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,

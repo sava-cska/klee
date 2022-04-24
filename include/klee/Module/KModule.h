@@ -138,6 +138,7 @@ namespace klee {
     std::vector<std::pair<KBlock *, unsigned int>>& getSortedBackwardDistance(KBlock *kb);
     KBlock *getNearestJoinBlock(KBlock *kb);
     KBlock* getNearestJoinOrCallBlock(KBlock* kb);
+    std::string argToString(llvm::Argument *arg);
   };
 
 

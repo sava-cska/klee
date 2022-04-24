@@ -4706,7 +4706,8 @@ void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
     Argument *arg = *&ai;
     uint64_t size = kmodule->targetData->getTypeStoreSize(arg->getType());
     uint64_t width = kmodule->targetData->getTypeSizeInBits(arg->getType());
-    ref<Expr> result = makeSymbolicValue(arg, state, size, width, "symbolic_arg");
+    std::string name = kf->argToString(arg);
+    ref<Expr> result = makeSymbolicValue(arg, state, size, width, name);
     bindArgument(state.stack.back().kf, arg->getArgNo(), state, result);
   }
 }

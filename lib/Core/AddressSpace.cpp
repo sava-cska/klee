@@ -85,18 +85,18 @@ bool AddressSpace::resolveOne(ExecutionState &state,
   } else {
     TimerStatIncrementer timer(stats::resolveTime);
 
-    auto isPointer = [=](Symbolic x){ return x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == address; };
+    auto isPointer = [=](Symbolic x) {
+      return !x.first->isTransparent && x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == address;
+    };
     auto symPointer = std::find_if(begin(state.symbolics), end(state.symbolics), isPointer);
     if (symPointer != end(state.symbolics)) {
       const MemoryObject *symMO = symPointer->first.get();
-      if (!symMO->isTransparent) {
-        auto os = findObject(symMO);
-        if(os) {
-          result.first = symMO;
-          result.second = os;
-          success = true;
-          return true;
-        }
+      auto os = findObject(symMO);
+      if (os) {
+        result.first = symMO;
+        result.second = os;
+        success = true;
+        return true;
       }
     }
 
@@ -231,16 +231,16 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
   } else {
     TimerStatIncrementer timer(stats::resolveTime);
 
-    auto isPointer = [=](Symbolic x){ return x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == p; };
+    auto isPointer = [=](Symbolic x) {
+      return !x.first->isTransparent && x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == p;
+    };
     auto symPointer = std::find_if(begin(state.symbolics), end(state.symbolics), isPointer);
     if (symPointer != end(state.symbolics)) {
       const MemoryObject *symMO = symPointer->first.get();
-      if (!symMO->isTransparent) {
-        auto os = findObject(symMO);
-        if(os) {
-          rl.push_back(ObjectPair(symMO, os));
-          return false;
-        }
+      auto os = findObject(symMO);
+      if(os) {
+        rl.push_back(ObjectPair(symMO, os));
+        return false;
       }
     }
 

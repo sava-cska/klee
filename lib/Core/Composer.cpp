@@ -371,7 +371,6 @@ ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
     const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocateTransparent(
       mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
     );
-
     os = caller->executor->bindObjectInState(*(caller->copy), reindexMO, false, root);
     const_cast<Array*>(root)->binding = reindexMO;
   } else {

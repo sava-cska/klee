@@ -4411,10 +4411,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 }
 
 ObjectPair Executor::lazyInstantiate(ExecutionState &state, bool isAlloca, const MemoryObject *mo) {
-  executeMakeSymbolic(state, mo, "lazy_instantiation", isAlloca);
-  ObjectPair op;
-  state.addressSpace.resolveOne(mo->getBaseConstantExpr().get(), op);
-  return op;
+  return executeMakeSymbolic(state, mo, "lazy_instantiation", isAlloca);
 }
 
 ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state,
@@ -4483,7 +4480,7 @@ const Array * Executor::makeArray(ExecutionState &state,
   return makeArray(state, size, name, false, liSource);
 }
 
-void Executor::executeMakeSymbolic(ExecutionState &state,
+ObjectPair Executor::executeMakeSymbolic(ExecutionState &state,
                                    const MemoryObject *mo,
                                    const std::string &name,
                                    bool isAlloca,
@@ -4555,6 +4552,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
         }
       }
     }
+    return ObjectPair(mo, os);
   } else {
     ObjectState *os = bindObjectInState(state, mo, false);
     if (replayPosition >= replayKTest->numObjects) {
@@ -4568,6 +4566,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
           os->write8(i, obj->bytes[i]);
       }
     }
+    return ObjectPair(mo, os);
   }
 }
 

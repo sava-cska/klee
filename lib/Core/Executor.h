@@ -412,7 +412,7 @@ private:
   ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,
                              const MemoryObject *mo);
 
-  void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
+  ObjectPair executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                            const std::string &name, bool isAlloca, bool isHandleMakeSymbolic = false);
 
   /// Create a new state where each input condition has been added as

@@ -4669,22 +4669,20 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
   std::string name = allocSite ? target->toString() : "symbolic_value";
   ref<Expr> result = makeSymbolicValue(allocSite, state, size, width, name);
-
-  for (auto &symbolic : state.symbolics) {
-    if (!symbolic.first->isLazyInstantiated() &&
-        symbolic.first->size == size &&
-        isa<AllocaInst>(symbolic.first->allocSite) &&
-        symbolic.first->allocSite != allocSite) {
-      auto os = state.addressSpace.findObject(symbolic.first.get());
-      ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
-      state.addConstraint(
-        Expr::createIsZero(EqExpr::create(symbolicAlloca, result)),
-        state.path.getCurrentIndex());
-    }
-  }
-
   bindLocal(target, state, result);
+
   if (isa<AllocaInst>(allocSite)) {
+    for (auto &symbolic : state.symbolics) {
+      if (!symbolic.first->isLazyInstantiated() &&
+          symbolic.first->size == size &&
+          isa<AllocaInst>(symbolic.first->allocSite) &&
+          symbolic.first->allocSite != allocSite) {
+        auto os = state.addressSpace.findObject(symbolic.first.get());
+        ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
+        state.addConstraint(Expr::createIsZero(EqExpr::create(symbolicAlloca, result)), target);
+      }
+    }
+
     AllocaInst *ai = cast<AllocaInst>(allocSite);
     unsigned elementSize =
       kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());

@@ -85,21 +85,18 @@ bool AddressSpace::resolveOne(ExecutionState &state,
   } else {
     TimerStatIncrementer timer(stats::resolveTime);
 
-    MemoryObject *symHack = nullptr;
-    for (auto &moa : state.symbolics) {
-      if (moa.first->isLazyInstantiated() && moa.first->getLazyInstantiatedSource() == address) {
-        symHack = const_cast<MemoryObject *>(moa.first.get());
-        break;
-      }
-    }
-
-    if (symHack) {
-      auto osi = objects.find(symHack);
-      if(osi != objects.end()) {
-        result.first = osi->first;
-        result.second = osi->second.get();
-        success = true;
-        return true;
+    auto isPointer = [=](Symbolic x){ return x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == address; };
+    auto symPointer = std::find_if(begin(state.symbolics), end(state.symbolics), isPointer);
+    if (symPointer != end(state.symbolics)) {
+      const MemoryObject *symMO = symPointer->first.get();
+      if (!symMO->isTransparent) {
+        auto os = findObject(symMO);
+        if(os) {
+          result.first = symMO;
+          result.second = os;
+          success = true;
+          return true;
+        }
       }
     }
 

@@ -16,7 +16,7 @@ ref<Expr> Lemma::getAsExpr() {
 void Summary::summarize(const Path& path, ProofObligation *pob,
                         const SolverQueryMetaData &metaData,
                         ExprHashMap<ref<Expr>> &rebuildMap) {
-  if(metaData.queryValidityCore) {
+  if(!metaData.queryValidityCore) {
     return;
   }
 

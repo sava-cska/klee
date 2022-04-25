@@ -34,7 +34,6 @@ namespace klee {
     /// @brief Costs for all queries issued for this state
     time::Span queryCost;
     std::optional<core_ty> queryValidityCore{std::nullopt};
-    ExprHashMap<ref<Expr>> rebuildMap;
   };
 
   struct Query {

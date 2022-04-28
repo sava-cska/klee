@@ -35,6 +35,7 @@ klee_add_component(kleeCore
   Composer.cpp
   ProofObligation.cpp
   Path.cpp
+  Summary.cpp
 )
 
 # TODO: Work out what the correct LLVM components are for

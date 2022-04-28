@@ -14,6 +14,7 @@
 
 #include "klee/Config/Version.h"
 #include "klee/Core/Interpreter.h"
+#include "klee/Module/KInstruction.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/IR/CFG.h"
@@ -48,6 +49,7 @@ namespace klee {
   struct KInstruction;
   class KModule;
   struct KFunction;
+  struct KCallBlock;
   template<class T> class ref;
 
   enum KBlockType {
@@ -88,24 +90,6 @@ namespace klee {
     KInstruction * getFirstInstruction() const noexcept { return instructions[0]; }
     KInstruction * getLastInstruction() const noexcept { return instructions[numInstructions - 1]; }
     std::string getIRLocation() const;
-  };
-
-  struct KCallBlock : KBlock {
-    KInstruction *kcallInstruction;
-    llvm::Function *calledFunction;
-
-  public:
-    explicit KCallBlock(KFunction *, llvm::BasicBlock *, KModule *,
-                    std::map<llvm::Instruction *, unsigned>&, std::map<unsigned, KInstruction *>&,
-                    llvm::Function *, KInstruction **);
-    static bool classof(const KCallBlock *) { return true; }
-    static bool classof(const KBlock *E) {
-      return E->getKBlockType() == KBlockType::Call;
-    }
-    KBlockType getKBlockType() const override { return KBlockType::Call; };
-    bool intrinsic() const {
-      return calledFunction->getIntrinsicID() != llvm::Intrinsic::not_intrinsic;
-    };
   };
 
   struct KFunction {
@@ -258,6 +242,27 @@ namespace klee {
     std::vector<std::pair<KFunction *, unsigned int>> &getSortedDistance(KFunction *kf);
     std::map<KFunction *, unsigned int> &getBackwardDistance(KFunction *kf);
     std::vector<std::pair<KFunction *, unsigned int>> &getSortedBackwardDistance(KFunction *kf);
+  };
+
+  struct KCallBlock : KBlock {
+    KInstruction *kcallInstruction;
+    llvm::Function *calledFunction;
+
+  public:
+    explicit KCallBlock(KFunction *, llvm::BasicBlock *, KModule *,
+                    std::map<llvm::Instruction *, unsigned>&, std::map<unsigned, KInstruction *>&,
+                    llvm::Function *, KInstruction **);
+    static bool classof(const KCallBlock *) { return true; }
+    static bool classof(const KBlock *E) {
+      return E->getKBlockType() == KBlockType::Call;
+    }
+    KBlockType getKBlockType() const override { return KBlockType::Call; };
+    bool intrinsic() const {
+      return calledFunction->getIntrinsicID() != llvm::Intrinsic::not_intrinsic;
+    };
+    bool internal() const {
+      return parent->parent->functionMap[calledFunction] != nullptr;
+    }
   };
 } // End klee namespace
 

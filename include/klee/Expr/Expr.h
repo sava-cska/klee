@@ -523,8 +523,6 @@ private:
   // FIXME: Make =delete when we switch to C++11
   Array& operator =(const Array& array);
 
-  ~Array();
-
   /// Array - Construct a new array object.
   ///
   /// \param _name - The name for this array. Names should generally be unique

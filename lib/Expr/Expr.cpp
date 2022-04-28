@@ -564,10 +564,6 @@ Array::Array(const std::string &_name, uint64_t _size,
 #endif // NDEBUG
 }
 
-Array::~Array() {
-  delete binding;
-}
-
 unsigned Array::computeHash() {
   unsigned res = 0;
   for (unsigned i = 0, e = name.size(); i != e; ++i)

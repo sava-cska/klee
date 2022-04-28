@@ -45,6 +45,12 @@ public:
     return constraints == b.constraints;
   }
 
+  void shift_location(size_t shift) {
+    for(auto& i : mapToLocations) {
+      i.second += shift;
+    }
+  }
+
 private:
   constraints_ty constraints;
   ExprHashMap<size_t> mapToLocations;

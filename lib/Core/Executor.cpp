@@ -195,7 +195,7 @@ cl::opt<bool>
                        cl::cat(SolvingCat));
 
 cl::opt<bool>
-    EqualitySubstitution("equality-substitution", cl::init(true),
+    EqualitySubstitution("equality-substitution", cl::init(false),
                          cl::desc("Simplify equality expressions before "
                                   "querying the solver (default=true)"),
                          cl::cat(SolvingCat));

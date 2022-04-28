@@ -60,7 +60,7 @@ Action &BidirectionalSearcher::selectAction() {
       if(isLooped(state)) {
         KBlock *target = ex->calculateTargetByTransitionHistory(state);
         if (target) {
-          state.targets.insert(target);
+          state.targets.insert(Target(target, false));
           ex->updateStates(&state);
           action = new ForwardAction(&state);
         } else {

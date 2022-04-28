@@ -114,7 +114,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
     }
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
-    queryMetaData.rebuildMap[rebuiltConstraint] = constraint;
+    rebuildMap[rebuiltConstraint] = constraint;
     bool mayBeTrue = true;
     if (success) {
       rebuildMap[rebuiltConstraint] = constraint;

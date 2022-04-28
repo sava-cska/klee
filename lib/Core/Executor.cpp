@@ -2024,7 +2024,7 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
     PHINode *first = static_cast<PHINode*>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
   }
-  state.path.append(kf->blockMap[dst]);
+  // state.path.append(kf->blockMap[dst]); // Why not just here?
 }
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
@@ -4674,7 +4674,7 @@ void Executor::addAllocaDisequality(ExecutionState &state, const Value *allocSit
       Instruction *inst = const_cast<Instruction *>(cast<Instruction>(allocSite));
       state.addConstraint(
         Expr::createIsZero(
-          EqExpr::create(symbolicAlloca, address)), getKInst(inst));
+            EqExpr::create(symbolicAlloca, address)), /*getKInst(inst)*/ std::nullopt);
     }
   }
 }
@@ -5458,14 +5458,14 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   ProofObligation *pob = action.pob;
 
   timers.invoke();
-  
+
   SolverQueryMetaData queryMetaData;
   ExprHashMap<ref<Expr>> rebuildMap;
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   bool success = Composer::tryRebuild(*pob, state, *newPob, queryMetaData, rebuildMap);
   if (success) {
-    newPob->path = merge(state->path, pob->path);
+    newPob->path = concat(state->path, pob->path);
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
     for (auto it = state->stack.rbegin();
@@ -5491,7 +5491,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
     return BackwardResult(newPobs, pob);
   } else {
     delete newPob;
-    summary.summarize(state->path, pob, queryMetaData);
+    summary.summarize(state->path, pob, queryMetaData, rebuildMap);
     return BackwardResult({}, pob);
   }
 }

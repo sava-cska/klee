@@ -571,7 +571,7 @@ KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki) {
 /***/
 
 std::string KInstruction::toString() const {
-  std::string repr = parent->parent->function->getName();
+  std::string repr = parent->parent->function->getName().str();
   std::string label;
   llvm::raw_string_ostream label_stream(label);
   label_stream << *inst;
@@ -785,7 +785,7 @@ KBlock *KFunction::getNearestJoinOrCallBlock(KBlock *kb) {
 }
 
 std::string KFunction::argToString(llvm::Argument *arg) {
-  std::string repr = function->getName();
+  std::string repr = function->getName().str();
   std::string label;
   llvm::raw_string_ostream label_stream(label);
   label_stream << *arg;

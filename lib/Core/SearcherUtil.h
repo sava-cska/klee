@@ -2,10 +2,14 @@
 #pragma once
 
 #include "ExecutionState.h"
+#include "Initializer.h"
+#include "Path.h"
 #include "ProofObligation.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
+#include <optional>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 
 namespace klee {

@@ -96,6 +96,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     forkDisabled(false),
     isolated(false),
     targets(),
+    symbolicCounter(0),
     path({kf->entryKBlock})
 {
   pushFrame(nullptr, kf);
@@ -118,6 +119,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     forkDisabled(false),
     isolated(false),
     targets(),
+    symbolicCounter(0),
     path({kb})
 
 {
@@ -165,8 +167,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
     targets(state.targets),
+    symbolicCounter(state.symbolicCounter),
     path(state.path)
-
 {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);

@@ -4493,13 +4493,12 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
     const Array *array = nullptr;
 
     if (isHandleMakeSymbolic) {
-      auto isKleeSymbolic = [=](Symbolic x){ return !x.first->isLazyInstantiated() && x.first->allocSite == mo->allocSite; };
-      auto kleeSymbolic = std::find_if(
-        state.symbolics.begin(),
-        state.symbolics.end(),
-        isKleeSymbolic);
-      if (kleeSymbolic != state.symbolics.end()) {
-        array = const_cast<Array *>(kleeSymbolic->second);
+      auto isKleeSymbolic = [=](Symbolic x) { return x.second->isForeign; };
+      std::vector<Symbolic> kleeSymbolic;
+      std::copy_if(begin(state.symbolics), end(state.symbolics),
+                   std::back_inserter(kleeSymbolic), isKleeSymbolic);
+      if (state.symbolicCounter < kleeSymbolic.size()) {
+        array = const_cast<Array *>(kleeSymbolic[state.symbolicCounter].second);
       }
     }
 

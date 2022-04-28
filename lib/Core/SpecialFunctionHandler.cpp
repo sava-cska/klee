@@ -871,6 +871,9 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
 
     if (res) {
       executor.executeMakeSymbolic(*s, mo, name, false, true);
+      // Increment symbolic counter to track the current klee_make_symbolic
+      // symbolic in case of pre-loaded symbolics.
+      s->symbolicCounter++;
     } else {
       executor.terminateStateOnError(*s, 
                                      "wrong size given to klee_make_symbolic[_name]", 

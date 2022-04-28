@@ -471,7 +471,7 @@ int ExecutionState::resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbo
     switch (lisource->getKind()) {
     case Expr::Read: {
       ref<ReadExpr> base = dyn_cast<ReadExpr>(lisource);
-      auto parent = base->updates.root->binding->getObject();
+      auto parent = base->updates.root->binding;
       if (!parent) {
         return -1;
       }
@@ -483,7 +483,7 @@ int ExecutionState::resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbo
     case Expr::Concat: {
       ref<ReadExpr> base =
           ArrayExprHelper::hasOrderedReads(*dyn_cast<ConcatExpr>(lisource));
-      auto parent = base->updates.root->binding->getObject();
+      auto parent = base->updates.root->binding;
       if (!parent) {
         return -1;
       }

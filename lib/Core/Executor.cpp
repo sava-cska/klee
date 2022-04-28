@@ -58,6 +58,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/Support/Casting.h"
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -4443,10 +4444,10 @@ ObjectPair Executor::cachedLazyInstantiateVariable(ExecutionState &state, ref<Ex
       memory->allocate(size, false, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
   const Array *array = makeArray(state, size, "lazy_instantiation", address);
+  const_cast<Array*>(array)->binding = mo;
   ObjectState *os = new ObjectState(mo, array);
-  const_cast<Array*>(array)->binding = os;
   state.addSymbolic(mo, array);
-  ObjectPair result = {mo, os}; 
+  ObjectPair result = {mo, os};
   liCache[address] = result;
   return result;
 }
@@ -4507,7 +4508,7 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
     }
 
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);
-    const_cast<Array*>(array)->binding = os;
+    const_cast<Array*>(array)->binding = mo;
     state.addSymbolic(mo, array);
 
     std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it =
@@ -4670,7 +4671,7 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
         symbolic.first->size == size &&
         isa<AllocaInst>(symbolic.first->allocSite) &&
         symbolic.first->allocSite != allocSite) {
-      auto os = symbolic.second->binding;
+      auto os = state.addressSpace.findObject(symbolic.first.get());
       ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
       state.addConstraint(
         Expr::createIsZero(EqExpr::create(symbolicAlloca, result)),
@@ -4720,9 +4721,9 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
     array = arrayManager.CreateArray(array, -1);
   }
   
+  ObjectState *os = bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array);
-  ObjectState *os = new ObjectState(mo, array);
-  const_cast<Array*>(array)->binding = os;
+  const_cast<Array*>(array)->binding = mo;
   ref<Expr> result = os->read(0, width);
   return result;
 }

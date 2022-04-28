@@ -512,7 +512,7 @@ public:
   const std::vector<ref<ConstantExpr> > constantValues;
 
   /// a binding to a symbolic object
-  const ObjectState *binding = nullptr;
+  const MemoryObject *binding = nullptr;
 
 private:
   unsigned hashValue;

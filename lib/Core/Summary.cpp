@@ -18,7 +18,15 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   if(!metadata.queryValidityCore) {
     return;
   }
-  std::cout << "Summary for pob at: " << pob->location->getIRLocation() << std::endl;
+
+  std::cout << "Summary for pob at: " << pob->location->getIRLocation() << (pob->at_return ? "(at return)" : "") << std::endl;
+
+  std::cout << "(Pob at "
+            << (pob->at_return
+                    ? pob->location->getFirstInstruction()->getSourceLocation()
+                    : pob->location->getLastInstruction()->getSourceLocation())
+            << std::endl;
+  
   auto core = *metadata.queryValidityCore;
   auto& lemma = lemmas[pob];
   std::cout << "Constraints are:" << std::endl;
@@ -28,7 +36,10 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
       std::cout << lemma.constraints.back()->print() << std::endl;
     }
   }
-  std::cout << "Path is:" << std::endl;
+  std::cout << "State Path is:" << std::endl;
   std::cout << path.print() << std::endl;
+  std::cout << "Pob Path is:" << std::endl;
+  std::cout << pob->path.print() << std::endl;
+  std::cout << std::endl;
   lemma.paths.push_back(path);
 }

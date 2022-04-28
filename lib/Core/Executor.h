@@ -41,6 +41,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -201,7 +202,7 @@ private:
 
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
-  std::pair<ExecutionState *, KBlock *> validityCoreInit;
+  std::optional<ForwardResult::ValidityCore> validityCore;
   
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order

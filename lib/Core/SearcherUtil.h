@@ -86,13 +86,26 @@ struct ForwardResult {
   std::vector<ExecutionState *> removedStates;
   // _-_ In the future probably do not use references
   // _-_ That's quite ugly, refactor later
-  std::pair<ExecutionState *, KBlock *> validityCoreInit;
+
+  struct ValidityCore {
+    std::pair<Path, SolverQueryMetaData::core_ty> core;
+    KBlock *target;
+
+    ValidityCore(std::pair<Path, SolverQueryMetaData::core_ty> core, KBlock* target) :
+      core(core), target(target) {}
+
+    ValidityCore(Path path, SolverQueryMetaData::core_ty core, KBlock* target) :
+      core(std::make_pair(path,core)), target(target) {}
+  };
+
+  std::optional<ValidityCore> validityCore;
+  
   ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
                 const std::vector<ExecutionState *> &r)
-      : current(_s), addedStates(a), removedStates(r){};
+    : current(_s), addedStates(a), removedStates(r), validityCore(std::nullopt) {};
 
   ForwardResult(ExecutionState *_s)
-      : current(_s), addedStates({}), removedStates({}){};
+    : current(_s), addedStates({}), removedStates({}), validityCore(std::nullopt) {};
 };
 
 struct BackwardResult {

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <optional>
 #include <stack>
 
 using namespace klee;

@@ -2151,17 +2151,21 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       Executor::StatePair branches = fork(state, cond, false);
 
       // _-_ Is it ok that it does not produce unsat cores sometimes?
-      if (!state.queryMetaData.queryValidityCores.empty()) {
+      if (state.queryMetaData.queryValidityCore) {
         if (state.isIntegrated() && !branches.first && branches.second) {
           KBlock* target = getKBlock(*bi->getSuccessor(0));
-          state.queryMetaData.queryValidityCores.back().second.push_back(
-            std::make_pair(cond, state.path.getCurrentIndex()));
-          validityCoreInit = std::make_pair(&state, target);
+          state.queryMetaData.queryValidityCore->push_back(
+              std::make_pair(cond, state.path.getCurrentIndex()));
+          validityCore = std::make_optional<ForwardResult::ValidityCore>(
+              state.path, *(state.queryMetaData.queryValidityCore), target);
+          state.queryMetaData.queryValidityCore = std::nullopt;
         } else if (state.isIntegrated() && !branches.second && branches.first) {
           KBlock* target = getKBlock(*bi->getSuccessor(1));
-          state.queryMetaData.queryValidityCores.back().second.push_back(
-            std::make_pair(Expr::createIsZero(cond), state.path.getCurrentIndex()));
-          validityCoreInit = std::make_pair(&state, target);
+          state.queryMetaData.queryValidityCore->push_back(std::make_pair(
+              Expr::createIsZero(cond), state.path.getCurrentIndex()));
+          validityCore = std::make_optional<ForwardResult::ValidityCore>(
+              state.path, *(state.queryMetaData.queryValidityCore), target);
+          state.queryMetaData.queryValidityCore = std::nullopt;
         }
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
@@ -5403,10 +5407,9 @@ ForwardResult Executor::goForward(ForwardAction &action) {
   if (::dumpPForest) dumpPForest();
 
   ForwardResult ret(state, addedStates, removedStates);
-  ret.validityCoreInit = std::make_pair(nullptr, nullptr);
-  if(validityCoreInit.first) {
-    ret.validityCoreInit = validityCoreInit;
-    validityCoreInit = std::make_pair(nullptr, nullptr);
+  if(validityCore) {
+    ret.validityCore = validityCore;
+    validityCore = std::nullopt;
   }
   states.insert(addedStates.begin(), addedStates.end());
 

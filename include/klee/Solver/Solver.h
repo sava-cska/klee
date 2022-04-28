@@ -31,7 +31,7 @@ namespace klee {
     using core_ty = std::vector<std::pair<ref<Expr>, std::optional<size_t>>>;
     /// @brief Costs for all queries issued for this state
     time::Span queryCost;
-    std::vector<std::pair<ref<Expr>, core_ty>> queryValidityCores;
+    std::optional<core_ty> queryValidityCore{std::nullopt};
   };
 
   struct Query {

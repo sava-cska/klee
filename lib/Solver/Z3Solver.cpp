@@ -363,7 +363,7 @@ bool Z3SolverImpl::internalRunSolver(
       }
     }
 
-    metaData.queryValidityCores.push_back({query.expr, validityCore});
+    metaData.queryValidityCore = validityCore;
 
     Z3_ast_vector assertions = Z3_solver_get_assertions(builder->ctx, theSolver);
     unsigned assertionsCount = Z3_ast_vector_size(builder->ctx, assertions);

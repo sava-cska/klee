@@ -128,17 +128,13 @@ void BidirectionalSearcher::update(ActionResult r) {
 
     forward->update(fwdCur, fwdAdded, fwdRemoved);
 
-    if(fr.current && fr.validityCoreInit.first) {
-      initializer->addValidityCoreInit(fr.validityCoreInit);
-      if (mainLocs.count(fr.validityCoreInit.second->basicBlock) == 0) {
-        mainLocs.insert(fr.validityCoreInit.second->basicBlock);
-        ProofObligation* pob = new ProofObligation(fr.validityCoreInit.second, 0, 0);
+    if(fr.validityCore) {
+      initializer->addValidityCoreInit(fr.validityCore->core, fr.validityCore->target);
+      if(!mainLocs.count(fr.validityCore->target->basicBlock)) {
+        mainLocs.insert(fr.validityCore->target->basicBlock);
+        ProofObligation* pob = new ProofObligation(fr.validityCore->target, nullptr, false);
         backward->update(pob);
       }
-    }
-
-    if(fr.validityCoreInit.first != nullptr) {
-      initializer->addValidityCoreInit(fr.validityCoreInit);
     }
 
   } else if (std::holds_alternative<BackwardResult>(r)) {

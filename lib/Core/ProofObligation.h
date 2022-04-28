@@ -2,6 +2,7 @@
 
 #include "Memory.h"
 
+#include "Path.h"
 #include "klee/Expr/Constraints.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
@@ -24,6 +25,7 @@ private:
 
 public:
   ProofObligation *parent;
+  ProofObligation *root;
   std::unordered_set<ProofObligation *> children;
   std::vector<KInstruction*> stack;
 
@@ -36,13 +38,18 @@ public:
 
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
 
-  ProofObligation(KBlock *_location, ProofObligation *_parent, bool at_return = false)
-    : id(counter++), parent(_parent), stack(parent->stack), location(_location), at_return(at_return) {
-    parent->children.insert(this);
+  ProofObligation(KBlock *_location, ProofObligation *_parent,
+                  bool at_return = false)
+      : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
+        stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
+        location(_location), at_return(at_return) {
+    if(parent) {
+      parent->children.insert(this);
+    }
   }
 
   explicit ProofObligation(ProofObligation *pob)
-      : id(counter++), parent(pob->parent), stack(pob->stack),
+      : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
         location(pob->location), condition(pob->condition),
         at_return(pob->at_return) {
     parent->children.insert(this);

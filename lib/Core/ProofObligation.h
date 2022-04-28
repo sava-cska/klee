@@ -44,7 +44,7 @@ public:
                   bool at_return = false)
       : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
-        location(_location), at_return(at_return), path() {
+        location(_location), at_return(at_return), path({_location}) {
     if(parent) {
       parent->children.insert(this);
     }

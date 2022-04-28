@@ -17,6 +17,8 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/Intrinsics.h"
 
 #include <map>
 #include <memory>
@@ -101,6 +103,9 @@ namespace klee {
       return E->getKBlockType() == KBlockType::Call;
     }
     KBlockType getKBlockType() const override { return KBlockType::Call; };
+    bool intrinsic() const {
+      return calledFunction->getIntrinsicID() != llvm::Intrinsic::not_intrinsic;
+    };
   };
 
   struct KFunction {

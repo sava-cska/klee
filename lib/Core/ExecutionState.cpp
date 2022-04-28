@@ -208,9 +208,13 @@ ExecutionState *ExecutionState::withKInstruction(KInstruction* ki) const {
   ExecutionState* newState = new ExecutionState(*this);
   newState->pushFrame(nullptr, ki->parent->parent);
   newState->stackBalance = 0;
-  newState->initPC = &ki;
+  newState->initPC = ki->parent->instructions;
+  while(newState->initPC != ki) {
+    ++newState->initPC;
+  }
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
+  newState->path = Path({ki->parent});
   return newState;
 }
 

@@ -4314,6 +4314,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     ref<Expr> inBounds;
     inBounds = mo->getBoundsCheckPointer(base, 1);
+    inBounds = AndExpr::create(inBounds, mo->getBoundsCheckPointer(address, bytes));
 
     StatePair branches = fork(*unbound, inBounds, true);
     ExecutionState *bound = branches.first;
@@ -4322,36 +4323,25 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
     // bound can be 0 on failure or overlapped 
     if (bound) {
-      ref<Expr> inBounds = mo->getBoundsCheckPointer(base, bytes);
-
-      StatePair branches_inner = fork(*bound, inBounds, true);
-      ExecutionState *bound_inner = branches_inner.first;
-      ExecutionState *unbound_inner = branches_inner.second;
-      if(bound_inner) {
-        switch (operation) {
-          case Write: {
-            if (os->readOnly) {
-              terminateStateOnError(*bound_inner, "memory error: object read only",
-                                    ReadOnly);
-            } else {
-              ObjectState *wos = bound_inner->addressSpace.getWriteable(mo, os);
-              wos->write(mo->getOffsetExpr(address), value);
-            }
-            break;
+      switch (operation) {
+        case Write: {
+          if (os->readOnly) {
+            terminateStateOnError(*bound, "memory error: object read only",
+                                  ReadOnly);
+          } else {
+            ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
+            wos->write(mo->getOffsetExpr(address), value);
           }
-          case Read: {
-            ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
-            bindLocal(target, *bound_inner, result);
-            break;
-          }
+          break;
         }
-        if (results)
-          results->push_back(bound_inner);
+        case Read: {
+          ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
+          bindLocal(target, *bound, result);
+          break;
+        }
       }
-      if(unbound_inner) {
-        terminateStateOnError(*unbound_inner, "memory error: out of bound pointer", Ptr,
-                                NULL, getAddressInfo(*unbound, address));
-      }
+      if (results)
+        results->push_back(bound);
     }
 
     if (!unbound)

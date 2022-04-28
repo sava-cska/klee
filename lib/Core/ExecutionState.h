@@ -368,7 +368,7 @@ struct ExecutionStateIDCompare {
 
 class ExecutionManager {
 public:
-  std::map<llvm::BasicBlock *, std::unordered_set<ExecutionState *>> states;
+  std::map<Target, std::unordered_set<ExecutionState *>> states;
 };
 
 }

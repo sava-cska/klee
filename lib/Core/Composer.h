@@ -50,7 +50,8 @@ private:
 public:
   static Executor *executor;
   static bool tryRebuild(const ref<Expr>, ExecutionState *, ref<Expr> &);
-  static bool tryRebuild(const ProofObligation &, ExecutionState *, ProofObligation &);
+  static bool tryRebuild(const ProofObligation &, ExecutionState *,
+                         ProofObligation &, SolverQueryMetaData &);
 };
 
 class ComposeVisitor : public ExprVisitor {

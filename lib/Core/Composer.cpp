@@ -98,25 +98,32 @@ bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *state, ref<Expr>
   return composer.tryRebuild(expr, res);
 }
 
-bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, ProofObligation &rebuilt) {
+bool Composer::tryRebuild(const ProofObligation &old, ExecutionState *state, ProofObligation &rebuilt,
+                          SolverQueryMetaData& metadata) {
   bool success = true;
   Composer composer(state);
   for(auto& constraint : old.condition) {
-    auto loc = old.condition.get_location(constraint);    
+    auto loc = old.condition.get_location(constraint);
+    if (loc){
+      loc = *loc + state->path.size();
+    }
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
+    metadata.rebuildMap[rebuiltConstraint] = constraint;
     bool mayBeTrue = true;
-    SolverQueryMetaData queryMetaData;
     bool produceUnsat = !state->isIsolated();
     if (success) {
       success = executor->getSolver()->mayBeTrue(
         composer.copy->constraints,
         rebuiltConstraint,
         mayBeTrue,
-        queryMetaData,
+        metadata,
         produceUnsat
       );
       success = success && mayBeTrue;
+      if(!success && metadata.queryValidityCore) {
+        metadata.queryValidityCore->push_back(std::make_pair(rebuiltConstraint, std::nullopt));
+      }
     }
     if (success) {
       composer.copy->addConstraint(rebuiltConstraint, loc, &success);
@@ -301,7 +308,7 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
   }
 
   const MemoryObject *object =
-    re.updates.root->binding ? re.updates.root->binding->getObject() : nullptr;
+    re.updates.root->binding ? re.updates.root->binding : nullptr;
   OS = new ObjectState(object);
   ref<Expr> res = processObject(object, re.updates.root);
   if (!res.isNull()) {
@@ -327,7 +334,7 @@ ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExp
   }
 
   const MemoryObject *object =
-    base.updates.root->binding ? base.updates.root->binding->getObject() : nullptr;
+    base.updates.root->binding ? base.updates.root->binding : nullptr;
   OS = new ObjectState(object);
   ref<Expr> res = processObject(object, base.updates.root);
 
@@ -351,19 +358,25 @@ ref<Expr> ComposeVisitor::processSelect(const SelectExpr &sexpr) {
 
 ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
   int reindex = array->index + diffLevel;
-  const MemoryObject *mo = array->binding ? array->binding->getObject() : nullptr;
+  const MemoryObject *mo = array->binding ? array->binding : nullptr;
   assert(mo && mo->isLocal);
   const Array *root = caller->executor->getArrayManager()->CreateArray(array, reindex);
+  const ObjectState *os = nullptr;
   if (mo && !root->binding) {
     ref<Expr> liSource = mo->lazyInstantiatedSource;
     const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocate(
       mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
     );
 
-    ObjectState *os = new ObjectState(reindexMO, root);
-
-    const_cast<Array*>(root)->binding = os;
+    os = caller->executor->bindObjectInState(*(caller->copy), reindexMO, false, root);
+    const_cast<Array*>(root)->binding = reindexMO;
+  } else {
+    os = caller->copy->addressSpace.findObject(root->binding);
+    if(!os) {
+      os = caller->executor->bindObjectInState(*(caller->copy), root->binding, false, root);
+    }
   }
-  ref<Expr> res = root->binding->read(0, 8 * root->binding->size);
+  assert(os);
+  ref<Expr> res = os->read(0, 8 * root->binding->size);
   return res;
 }

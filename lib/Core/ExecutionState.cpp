@@ -96,7 +96,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     forkDisabled(false),
     isolated(false),
     targets(),
-    path({kf->entryKBlock->basicBlock})
+    path({kf->entryKBlock})
 {
   pushFrame(nullptr, kf);
   stackBalance = 0;
@@ -118,7 +118,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     forkDisabled(false),
     isolated(false),
     targets(),
-    path({kb->basicBlock})
+    path({kb})
 
 {
   pushFrame(nullptr, kf);

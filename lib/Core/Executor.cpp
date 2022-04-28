@@ -1271,7 +1271,7 @@ const Cell &Executor::eval(const KInstruction *ki, unsigned index,
     StackFrame &sf = state.stack.back();
     ref<Expr> reg = sf.locals[index].value;
     if (isSymbolic && reg.isNull()) {
-      prepareSymbolicRegister(state, sf, index);
+      prepareSymbolicRegister(state, index);
     }
     return sf.locals[index];
   }
@@ -4017,6 +4017,16 @@ ObjectState *Executor::bindObjectInState(ExecutionState &state,
   return os;
 }
 
+ObjectState *Executor::bindSymbolicInState(ExecutionState &state, const MemoryObject *mo,
+                                 bool IsAlloca, const Array *array) {
+  ObjectState *os = bindObjectInState(state, mo, IsAlloca, array);
+  ref<Expr> value = os->read(0, 8 * os->size);
+  if (!mo->isLazyInstantiated() && isa<AllocaInst>(mo->allocSite))
+    addAllocaDisequality(state, mo->allocSite, value);
+  state.addSymbolic(mo, array);
+  return os;
+}
+
 void Executor::executeAlloc(ExecutionState &state,
                             ref<Expr> size,
                             bool isLocal,
@@ -4426,8 +4436,7 @@ ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, r
     const MemoryObject *mo = symbolic.first.get();
     const ObjectState *os = state.addressSpace.findObject(mo);
     if (!os) {
-      os = bindObjectInState(state, mo, false, symbolic.second);
-      state.addSymbolic(mo, symbolic.second);
+      os = bindSymbolicInState(state, mo, false, symbolic.second);
     }
     return ObjectPair(mo, os);
   }
@@ -4436,8 +4445,7 @@ ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, r
       memory->allocateTransparent(size, false, /*isGlobal=*/false,
                                   allocSite, /*allocationAlignment=*/8, address);
   const Array *array = makeArray(state, size, "lazy_instantiation", address);
-  ObjectState *os = bindObjectInState(state, mo, false, array);
-  state.addSymbolic(mo, array);
+  ObjectState *os = bindSymbolicInState(state, mo, false, array);
   const_cast<Array*>(array)->binding = mo;
   liCache[address] = Symbolic(ref<const MemoryObject>(mo), array);
   return ObjectPair(mo, os);
@@ -4653,6 +4661,24 @@ void Executor::clearGlobal() {
   globalAddresses.clear();
 }
 
+void Executor::addAllocaDisequality(ExecutionState &state, const Value *allocSite, ref<Expr> address) {
+  assert(isa<AllocaInst>(allocSite));
+  uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
+  for (auto &symbolic : state.symbolics) {
+    if (!symbolic.first->isLazyInstantiated() &&
+        symbolic.first->size == size &&
+        isa<AllocaInst>(symbolic.first->allocSite) &&
+        symbolic.first->allocSite != allocSite) {
+      auto os = state.addressSpace.findObject(symbolic.first.get());
+      ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
+      Instruction *inst = const_cast<Instruction *>(cast<Instruction>(allocSite));
+      state.addConstraint(
+        Expr::createIsZero(
+          EqExpr::create(symbolicAlloca, address)), getKInst(inst));
+    }
+  }
+}
+
 void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target) {
   Instruction *allocSite = target->inst;
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
@@ -4662,17 +4688,6 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
   bindLocal(target, state, result);
 
   if (isa<AllocaInst>(allocSite)) {
-    for (auto &symbolic : state.symbolics) {
-      if (!symbolic.first->isLazyInstantiated() &&
-          symbolic.first->size == size &&
-          isa<AllocaInst>(symbolic.first->allocSite) &&
-          symbolic.first->allocSite != allocSite) {
-        auto os = state.addressSpace.findObject(symbolic.first.get());
-        ref<Expr> symbolicAlloca = os->read(0, 8 * os->size);
-        state.addConstraint(Expr::createIsZero(EqExpr::create(symbolicAlloca, result)), target);
-      }
-    }
-
     AllocaInst *ai = cast<AllocaInst>(allocSite);
     unsigned elementSize =
       kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
@@ -4681,12 +4696,15 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
       ref<Expr> count = eval(target, 0, state).value;
       count = Expr::createZExtToPointerWidth(count);
       size = MulExpr::create(size, count);
+      if (isa<ConstantExpr>(size))
+        elementSize = cast<ConstantExpr>(size)->getZExtValue();
     }
-    lazyInstantiateVariable(state, result, true, target->inst, elementSize);
+   lazyInstantiateVariable(state, result, true, target->inst, elementSize);
   }
 }
 
-void Executor:: prepareSymbolicRegister(ExecutionState &state, StackFrame &sf, unsigned regNum) {
+void Executor:: prepareSymbolicRegister(ExecutionState &state, unsigned regNum) {
+  StackFrame &sf = state.stack.back();
   KInstruction *allocInst = sf.kf->reg2inst[regNum];
   prepareSymbolicValue(state, allocInst);
 }
@@ -4713,8 +4731,8 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
       state.initPC->parent->getFirstInstruction()->inst == value) {
     array = arrayManager.CreateArray(array, -1);
   }
-  ObjectState *os = bindObjectInState(state, mo, false, array);
-  state.addSymbolic(mo, array);
+
+  ObjectState *os = bindSymbolicInState(state, mo, false, array);
   const_cast<Array*>(array)->binding = mo;
   ref<Expr> result = os->read(0, width);
   return result;

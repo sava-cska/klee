@@ -265,7 +265,7 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
           caller->executor->getArgumentCell(*state, kf, argN).value : nullptr;
     } else if(isa<Instruction>(allocSite)) {
       const Instruction *inst = cast<Instruction>(allocSite);
-      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction*>(inst));
+      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction *>(inst));
       bool isFinalPCKb1 =
         std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
       if (isa<PHINode>(inst))
@@ -289,8 +289,11 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     }
 
     if(prevVal.isNull()) {
-      ObjectState os = ObjectState(object, array);
-      prevVal = os.read(0, 8 * os.size);
+      const ObjectState *os = state->addressSpace.findObject(object);
+      if(!os) {
+        os = caller->executor->bindSymbolicInState(*state, object, false, array);
+      }
+      prevVal = os->read(0, 8 * os->size);
     }
 
     readCache[object] = prevVal;
@@ -372,14 +375,12 @@ ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
     const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocateTransparent(
       mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
     );
-    os = caller->executor->bindObjectInState(state, reindexMO, false, root);
-    state.addSymbolic(reindexMO, array);
+    os = caller->executor->bindSymbolicInState(state, reindexMO, false, root);
     const_cast<Array*>(root)->binding = reindexMO;
   } else {
-    os = caller->copy->addressSpace.findObject(root->binding);
+    os = state.addressSpace.findObject(root->binding);
     if(!os) {
-      os = caller->executor->bindObjectInState(state, root->binding, false, root);
-      state.addSymbolic(root->binding, root);
+      os = caller->executor->bindSymbolicInState(state, root->binding, false, root);
     }
   }
   assert(os);

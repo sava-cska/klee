@@ -336,6 +336,9 @@ private:
   ObjectState *bindObjectInState(ExecutionState &state, const MemoryObject *mo,
                                  bool IsAlloca, const Array *array = 0);
 
+  ObjectState *bindSymbolicInState(ExecutionState &state, const MemoryObject *mo,
+                                 bool IsAlloca, const Array *array);
+
   /// Resolve a pointer to the memory objects it could point to the
   /// start of, forking execution when necessary and generating errors
   /// for pointers to invalid locations (either out of bounds or
@@ -596,10 +599,11 @@ public:
 
   void clearGlobal();
 
+  void addAllocaDisequality(ExecutionState &state, const llvm::Value *allocSite, ref<Expr> address);
+
   void prepareSymbolicValue(ExecutionState &state, KInstruction *targetW);
 
-  void prepareSymbolicRegister(ExecutionState &state, StackFrame &sf,
-                               unsigned index);
+  void prepareSymbolicRegister(ExecutionState &state, unsigned index);
 
   void prepareSymbolicArgs(ExecutionState &state, KFunction *kf);
 

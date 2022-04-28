@@ -3358,14 +3358,14 @@ void Executor::updateResult(ActionResult r) {
   addedStates.clear();
 
   for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
-                                                ie = removedStates.end();
-        it != ie; ++it) {
+                                               ie = removedStates.end();
+       it != ie; ++it) {
     ExecutionState *es = *it;
     std::set<ExecutionState *>::iterator it2 = states.find(es);
     assert(it2 != states.end());
     states.erase(it2);
     std::map<ExecutionState *, std::vector<SeedInfo>>::iterator it3 =
-        seedMap.find(es);
+      seedMap.find(es);
     if (it3 != seedMap.end())
       seedMap.erase(it3);
     if (es->isIntegrated()) {
@@ -4467,25 +4467,25 @@ const Array * Executor::makeArray(ExecutionState &state,
   return array;
 }
 
-const Array * Executor::makeArray(ExecutionState &state,
-                                      const uint64_t size,
-                                      const std::string &name,
-                                      bool isForeign) {
+const Array *Executor::makeArray(ExecutionState &state,
+                                 const uint64_t size,
+                                 const std::string &name,
+                                 bool isForeign) {
   return makeArray(state, size, name, isForeign, ref<Expr>());
 }
 
-const Array * Executor::makeArray(ExecutionState &state,
-                                      const uint64_t size,
-                                      const std::string &name,
-                                      ref<Expr> liSource) {
+const Array *Executor::makeArray(ExecutionState &state,
+                                 const uint64_t size,
+                                 const std::string &name,
+                                 ref<Expr> liSource) {
   return makeArray(state, size, name, false, liSource);
 }
 
 ObjectPair Executor::executeMakeSymbolic(ExecutionState &state,
-                                   const MemoryObject *mo,
-                                   const std::string &name,
-                                   bool isAlloca,
-                                   bool isHandleMakeSymbolic) {
+                                         const MemoryObject *mo,
+                                         const std::string &name,
+                                         bool isAlloca,
+                                         bool isHandleMakeSymbolic) {
   // Create a new object state for the memory object (instead of a copy).
   if (!replayKTest) {
     // Find a unique name for this array.  First try the original name,

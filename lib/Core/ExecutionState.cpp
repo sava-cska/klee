@@ -134,6 +134,7 @@ ExecutionState::~ExecutionState() {
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
+    Indexer<ExecutionState>(),
     initPC(state.initPC),
     pc(state.pc),
     prevPC(state.prevPC),

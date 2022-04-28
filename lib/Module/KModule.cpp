@@ -790,6 +790,17 @@ KBlock::KBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,
   }
 }
 
+std::string KBlock::getIRLocation() const {
+  std::string repr = "KBlock ";
+  std::string label;
+  llvm::raw_string_ostream label_stream(label);
+  basicBlock->printAsOperand(label_stream);
+  repr += label_stream.str().substr(6);
+  repr += " in function ";
+  repr += parent->function->getName();
+  return repr;
+}
+
 KCallBlock::KCallBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,
                     std::map<Instruction*, unsigned> &registerMap, std::map<unsigned, KInstruction*> &reg2inst,
                     llvm::Function *_calledFunction, KInstruction **instructionsKF)

@@ -49,6 +49,7 @@ namespace klee {
     explicit KInstruction(const KInstruction& ki);
     virtual ~KInstruction();
     std::string getSourceLocation() const;
+    std::string getIRLocation() const;
     bool isCallOrInvokeInst();
 
   };

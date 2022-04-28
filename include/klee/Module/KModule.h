@@ -85,6 +85,7 @@ namespace klee {
     virtual KBlockType getKBlockType() const { return KBlockType::Base; }
     KInstruction * getFirstInstruction() const noexcept { return instructions[0]; }
     KInstruction * getLastInstruction() const noexcept { return instructions[numInstructions - 1]; }
+    std::string getIRLocation() const;
   };
 
   struct KCallBlock : KBlock {

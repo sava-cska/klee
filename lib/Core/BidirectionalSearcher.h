@@ -24,13 +24,10 @@ namespace klee {
 
 class IBidirectionalSearcher {
 public:
-
   virtual Action& selectAction() = 0;
   virtual void update(ActionResult) = 0;
   virtual void closeProofObligation(ProofObligation*) = 0;
   virtual bool empty() = 0;
-
-
 };
 
 
@@ -38,11 +35,8 @@ class BidirectionalSearcher : public IBidirectionalSearcher {
 public:
   Action& selectAction() override;
   void update(ActionResult) override;
-
   void closeProofObligation(ProofObligation*) override;
   bool empty() override;
-
-
   explicit BidirectionalSearcher(SearcherConfig);
 
 private:

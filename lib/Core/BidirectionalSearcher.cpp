@@ -20,6 +20,7 @@
 #include "klee/Core/Interpreter.h"
 #include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
+#include <iostream>
 #include <llvm/ADT/StringExtras.h>
 #include <memory>
 #include <unordered_set>
@@ -62,31 +63,29 @@ Action &BidirectionalSearcher::selectAction() {
       break;
     }
 
-    case StepKind::Branch : {
-      auto& state = branch->selectState();
+    case StepKind::Branch: {
+      auto &state = branch->selectState();
       action = new ForwardAction(&state);
       break;
     }
 
-    case StepKind::Backward : {
+    case StepKind::Backward: {
       auto pobState = backward->selectAction();
       action = new BackwardAction(pobState.second, pobState.first);
       break;
     }
 
-    case StepKind::Initialize : {
+    case StepKind::Initialize: {
       auto initAndTargets = initializer->selectAction();
-      action = new InitializeAction(
-        initAndTargets.first,
-        initAndTargets.second);
+      action =
+          new InitializeAction(initAndTargets.first, initAndTargets.second);
       break;
     }
 
-    case StepKind::Terminate : {
+    case StepKind::Terminate: {
       action = new TerminateAction();
       break;
     }
-
     }
   }
   return *action;
@@ -121,8 +120,11 @@ void BidirectionalSearcher::update(ActionResult r) {
     branch->update(brnchCur, brnchAdded, brnchRemoved);
     auto reached = branch->collectAndClearReached();
     for(auto i : reached) {
-      if (ex->initialState->getInitPCBlock() == i->getInitPCBlock() || i->maxLevel == 1) {
-        ex->emanager->states[i->pc->parent->basicBlock].insert(i->copy());
+      for(auto state : i.second) {
+        if (ex->initialState->getInitPCBlock() == state->getInitPCBlock() ||
+            state->maxLevel == 1) {
+          ex->emanager->states[i.first].insert(state->copy());
+        }
       }
     }
 
@@ -155,7 +157,8 @@ BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new BFSBackwardSearcher;
-  initializer = new ValidityCoreInitializer;
+  backward->emanager = ex->emanager;
+  initializer = new ValidityCoreInitializer(ex->initialState->pc);
 }
 
 void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
@@ -176,7 +179,7 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
 }
 
 bool BidirectionalSearcher::empty() {
-  return forward->empty() && backward->empty() && initializer->empty(); // && branch->empty()
+  return forward->empty() && backward->empty() && initializer->empty() && branch->empty();
 }
 
 } // namespace klee

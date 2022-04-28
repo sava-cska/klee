@@ -17,7 +17,6 @@ public:
 
   virtual std::pair<ProofObligation*, ExecutionState*> selectAction() = 0;
 
-  virtual void addBranch(ExecutionState* state) = 0;
   virtual void update(ProofObligation* pob) = 0;
   virtual void removePob(ProofObligation* pob) = 0;
   virtual bool empty() = 0;
@@ -32,8 +31,6 @@ public:
 
   std::pair<ProofObligation*, ExecutionState*> selectAction() override;
 
-  void addBranch(ExecutionState* state) override;
-
   bool empty() override;
 
   void removePob(ProofObligation* pob) override;
@@ -43,7 +40,7 @@ public:
 
 private:
   std::unordered_set<ProofObligation *> pobs;
-  std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
+  // std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
   std::set<std::pair<ProofObligation*,ExecutionState*>> used;
 };
 

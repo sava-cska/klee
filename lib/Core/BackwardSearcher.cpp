@@ -4,6 +4,7 @@
 #include "klee/Module/KInstruction.h"
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 namespace klee {
 
@@ -23,17 +24,17 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
   return true;
 }
 
-void BFSBackwardSearcher::addBranch(ExecutionState* state) {
-  for(auto i : pobs) {
-    if(i->location->basicBlock == state->getPCBlock()) {
-      auto state_copy = state->copy();
-      backpropQueue.push(std::make_pair(i, state_copy));
-    }
-  }
-}
 
 bool BFSBackwardSearcher::empty() {
-  if(!backpropQueue.empty()) return false;
+  for(auto pob : pobs) {
+    Target t(pob->location, pob->at_return);
+    auto states = emanager->states[t];
+    for(auto state : states) {
+      if(!used.count(std::make_pair(pob,state)) && checkStack(state, pob)) {
+        return false;
+      }
+    }
+  }
   return true;
 }
 
@@ -43,9 +44,17 @@ void BFSBackwardSearcher::update(ProofObligation* pob) {
 
 std::pair<ProofObligation *, ExecutionState *>
 BFSBackwardSearcher::selectAction() {
-  auto ret = backpropQueue.front();
-  backpropQueue.pop();
-  return ret;
+  for (auto pob : pobs) {
+    Target t(pob->location, pob->at_return);
+    auto states = emanager->states[t];
+    for (auto state : states) {
+      if (!used.count(std::make_pair(pob,state)) && checkStack(state, pob)) {
+        used.insert(std::make_pair(pob,state));
+        return std::make_pair(pob, state);
+      }
+    }
+  }
+  return std::make_pair(nullptr, nullptr);
 }
 
 void BFSBackwardSearcher::removePob(ProofObligation* pob) {

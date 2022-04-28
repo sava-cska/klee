@@ -5466,11 +5466,9 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
        state->initPC->inst->getOpcode() == Instruction::Br) {
       KCallBlock* b = dyn_cast<KCallBlock>(state->initPC->parent);
       KFunction* kf = kmodule->functionMap[b->calledFunction];
-      for(auto i : kf->finalKBlocks) {
-        ProofObligation* callPob = new ProofObligation(newPob);
-        callPob->at_return = true;
-        callPob->location = i;
-        callPob->stack.push_back(state->initPC->parent->instructions[0]);
+      for(auto i : kf->returnKBlocks) {
+        ProofObligation *callPob = propagateToReturn(
+            newPob, state->initPC->parent->instructions[0], i);
         newPobs.push_back(callPob);
       }
       delete newPob;

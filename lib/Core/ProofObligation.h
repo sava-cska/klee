@@ -69,4 +69,7 @@ public:
   std::string print();
 };
 
+ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,
+                                   KBlock* returnBlock);
+
 } // namespace klee

@@ -30,4 +30,15 @@ std::string ProofObligation::print() {
   return ret;
 }
 
+ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,
+                                     KBlock* returnBlock) {
+    ProofObligation* ret = new ProofObligation(pob);
+    ret->at_return = true;
+    ret->location = returnBlock;
+    ret->path.prepend(returnBlock);
+    ret->condition.shift_location(1);
+    ret->stack.push_back(callSite);
+    return ret;
+}
+
 } // namespace klee

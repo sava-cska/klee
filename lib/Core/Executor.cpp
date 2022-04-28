@@ -5184,14 +5184,15 @@ void Executor::addHistoryResult(ExecutionState &state) {
 }
 
 ActionResult Executor::executeAction(Action &action) {
-  switch(action.getKind()) {
+  switch (action.getKind()) {
   case Action::Kind::Forward:
     return goForward(cast<ForwardAction>(action));
   case Action::Kind::Backward:
     return goBackward(cast<BackwardAction>(action));
   case Action::Kind::Initialize:
     return initBranch(cast<InitializeAction>(action));
-  case Action::Kind::Terminate: {
+  case Action::Kind::Terminate:
+  default: {
     haltExecution = true;
     return nullptr;
   }

@@ -16,6 +16,7 @@
 
 #include "SearcherUtil.h"
 #include "ExecutionState.h"
+#include "Summary.h"
 #include "UserSearcher.h"
 #include "ExternalDispatcher.h"
 #include "SpecialFunctionHandler.h"
@@ -32,6 +33,7 @@
 #include "klee/Module/Cell.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
+#include "klee/Solver/Solver.h"
 #include "klee/System/Time.h"
 
 #include "llvm/IR/Argument.h"
@@ -285,6 +287,8 @@ private:
 
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
+
+  Summary summary;
 
 public:
 

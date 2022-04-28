@@ -5472,8 +5472,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
     return BackwardResult(newPobs, pob);
   } else {
     delete newPob;
-    auto b = BackwardResult({}, pob);
-    // TODO Summaries
-    return b;
+    summary.summarize(state->path, pob, queryMetaData);
+    return BackwardResult({}, pob);
   }
 }

@@ -36,13 +36,15 @@ public:
   // it is actually at the return statement of the current basic block.
   bool at_return;
 
+  Path path;
+
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
 
   ProofObligation(KBlock *_location, ProofObligation *_parent,
                   bool at_return = false)
       : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
-        location(_location), at_return(at_return) {
+        location(_location), at_return(at_return), path() {
     if(parent) {
       parent->children.insert(this);
     }
@@ -51,7 +53,7 @@ public:
   explicit ProofObligation(ProofObligation *pob)
       : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
         location(pob->location), condition(pob->condition),
-        at_return(pob->at_return) {
+        at_return(pob->at_return), path(pob->path) {
     parent->children.insert(this);
   }
 

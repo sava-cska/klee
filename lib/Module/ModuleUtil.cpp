@@ -10,10 +10,15 @@
 #include "klee/Support/ModuleUtil.h"
 
 #include "klee/Config/Version.h"
+#include "klee/Module/KModule.h"
 #include "klee/Support/Debug.h"
 #include "klee/Support/ErrorHandling.h"
 
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/CFG.h"
+#include <queue>
+#include <unordered_set>
 #if LLVM_VERSION_CODE >= LLVM_VERSION(5, 0)
 #include "llvm/BinaryFormat/Magic.h"
 #endif
@@ -537,4 +542,42 @@ bool klee::loadFile(const std::string &fileName, LLVMContext &context,
   }
   modules.push_back(std::move(module));
   return true;
+}
+
+std::vector<std::pair<KBlock *, KBlock *>>
+  klee::dismantle(KBlock *from, std::vector<KBlock*> to) {
+  for(auto block : to) {
+  assert(from->parent == block->parent &&
+         "to and from KBlocks are from different functions.");
+  }
+  auto kf = from->parent;
+
+  auto distance = kf->getDistance(from);
+  std::unordered_set<llvm::BasicBlock *> queued;
+  std::vector<std::pair<KBlock *, KBlock*>> dismantled;
+  std::queue<KBlock *> queue;
+  for(auto block : to) {
+    queued.insert(block->basicBlock);
+    queue.push(block);
+  }
+  while(!queue.empty()) {
+    auto block = queue.front();
+    queue.pop();
+    bool linked = false;
+    for(auto const &pred : predecessors(block->basicBlock)) {
+      auto nearest = kf->getNearestJoinOrCallBlock(kf->blockMap[pred]);
+      if (distance.count(nearest)) {
+        if(!queued.count(nearest->basicBlock)) {
+          queued.insert(nearest->basicBlock);
+          queue.push(nearest);
+        }
+        linked = true;
+        dismantled.push_back(std::make_pair(nearest, block));
+      }
+    }
+    if(!linked && from != block) {
+      dismantled.push_back(std::make_pair(from, block));
+    }
+  }
+  return dismantled;
 }

@@ -11,6 +11,9 @@
 #define KLEE_MODULEUTIL_H
 
 #include "klee/Config/Version.h"
+#include "klee/Module/KModule.h"
+#include <unordered_set>
+#include <utility>
 
 #if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
 #include "llvm/IR/InstrTypes.h"
@@ -76,6 +79,10 @@ bool functionEscapes(const llvm::Function *f);
 bool loadFile(const std::string &libraryName, llvm::LLVMContext &context,
               std::vector<std::unique_ptr<llvm::Module>> &modules,
               std::string &errorMsg);
+
+std::vector<std::pair<KBlock *, KBlock *>>
+dismantle(KBlock *from, std::vector<KBlock *> to);
+
 }
 
 #endif /* KLEE_MODULEUTIL_H */

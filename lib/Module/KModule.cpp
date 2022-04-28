@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Support/Casting.h"
 #define DEBUG_TYPE "KModule"
 
 #include "Passes.h"
@@ -751,6 +752,18 @@ KBlock *KFunction::getNearestJoinBlock(KBlock *kb) {
   for (auto &kbd : kf->getSortedBackwardDistance(kb)) {
     if (kbd.first->basicBlock->hasNPredecessorsOrMore(2) ||
         kbd.first->basicBlock->hasNPredecessors(0))
+      return kbd.first;
+  }
+  return nullptr;
+}
+
+KBlock *KFunction::getNearestJoinOrCallBlock(KBlock *kb) {
+  KFunction *kf = kb->parent;
+  for (auto &kbd : kf->getSortedBackwardDistance(kb)) {
+    if (kbd.first->basicBlock->hasNPredecessorsOrMore(2) ||
+        kbd.first->basicBlock->hasNPredecessors(0) ||
+        (kbd.first->getKBlockType() == KBlockType::Call &&
+         !dyn_cast<KCallBlock>(kbd.first)->intrinsic()))
       return kbd.first;
   }
   return nullptr;

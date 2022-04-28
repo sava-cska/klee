@@ -152,6 +152,7 @@ namespace klee {
     std::map<KBlock *, unsigned int>& getBackwardDistance(KBlock *kb);
     std::vector<std::pair<KBlock *, unsigned int>>& getSortedBackwardDistance(KBlock *kb);
     KBlock *getNearestJoinBlock(KBlock *kb);
+    KBlock* getNearestJoinOrCallBlock(KBlock* kb);
   };
 
 

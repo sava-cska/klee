@@ -57,14 +57,7 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
-      KInstruction *prevKI = state.prevPC;
-      if (prevKI->inst->isTerminator() &&
-          state.targets.empty() &&
-          state.multilevel.count(state.getPCBlock()) > 0 /* maxcycles - 1 */) {
-        ex->pauseState(state);
-        ex->updateStates(nullptr);
-      } else
-        action = new ForwardAction(&state);
+      action = new ForwardAction(&state);
       break;
     }
 
@@ -184,7 +177,7 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
 }
 
 bool BidirectionalSearcher::empty() {
-  return forward->empty() && backward->empty() && initializer->empty() && branch->empty();
+  return forward->empty() && backward->empty() && initializer->empty();
 }
 
 } // namespace klee

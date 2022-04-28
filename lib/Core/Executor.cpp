@@ -5450,9 +5450,9 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   SolverQueryMetaData queryMetaData;
-  bool success = Composer::tryRebuild(*pob, state, *newPob);
-
+  bool success = Composer::tryRebuild(*pob, state, *newPob, queryMetaData);
   if (success) {
+    newPob->path = merge(state->path, pob->path);
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
     for (auto it = state->stack.rbegin();

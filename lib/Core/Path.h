@@ -1,23 +1,35 @@
 // -*- C++ -*-
 #pragma once
+#include "klee/Module/KModule.h"
 #include "llvm/IR/Instructions.h"
+#include <functional>
 #include <string>
 #include <vector>
 
+namespace klee {
+
 struct Path {
-  std::vector<llvm::BasicBlock*> path_;
+  std::vector<KBlock*> path_;
 
-  llvm::BasicBlock* getInitialBlock() const;
-  llvm::BasicBlock* getFinalBlock() const;
+  KBlock* getInitialBlock() const;
+  KBlock* getFinalBlock() const;
 
-  llvm::BasicBlock* getBlock(size_t index) const;
+  KBlock* getBlock(size_t index) const;
 
-  void append(llvm::BasicBlock* bb) {
+  void append(KBlock* bb) {
     path_.push_back(bb);
   }
 
   size_t getCurrentIndex() const {
     return path_.size() - 1;
+  }
+
+  size_t size() const {
+    return path_.size();
+  }
+
+  bool empty() const {
+    return path_.empty();
   }
 
   std::string print() const;
@@ -29,5 +41,6 @@ struct Path {
   friend Path merge(const Path& lhs, const Path& rhs);
 
   Path() = default;
-  explicit Path(std::vector<llvm::BasicBlock*> path) : path_(path) {}
+  explicit Path(std::vector<KBlock*> path) : path_(path) {}
+};
 };

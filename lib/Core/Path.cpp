@@ -1,19 +1,23 @@
 #include "Path.h"
+#include "klee/Module/KModule.h"
 
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
 #include <vector>
 
-llvm::BasicBlock* Path::getInitialBlock() const {
+using namespace klee;
+
+KBlock* Path::getInitialBlock() const {
   return path_.front();
 }
 
-llvm::BasicBlock* Path::getFinalBlock() const {
+KBlock* Path::getFinalBlock() const {
   return path_.back();
 }
 
-llvm::BasicBlock* Path::getBlock(size_t index) const {
+KBlock* Path::getBlock(size_t index) const {
   return path_[index];
 }
 
@@ -22,7 +26,7 @@ std::string Path::print() const {
   for(auto i : path_) {
     std::string label;
     llvm::raw_string_ostream label_stream(label);
-    i->printAsOperand(label_stream);
+    i->basicBlock->printAsOperand(label_stream);
     repr += label_stream.str() + " ";
   }
   repr.pop_back();
@@ -30,8 +34,14 @@ std::string Path::print() const {
 }
 
 Path merge(const Path& lhs, const Path& rhs) {
+  if(lhs.empty()) {
+    return rhs;
+  }
+  if(rhs.empty()) {
+    return lhs;
+  }
   assert(lhs.getFinalBlock() == rhs.getInitialBlock() && "Paths are not compatible.");
-  std::vector<llvm::BasicBlock*> path;
+  std::vector<KBlock*> path;
   path.reserve(lhs.path_.size() + rhs.path_.size() - 1);
   path.insert(path.end(), lhs.path_.begin(), lhs.path_.end());
   path.insert(path.end(), rhs.path_.begin() + 1, rhs.path_.end());

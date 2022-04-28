@@ -2153,7 +2153,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       Executor::StatePair branches = fork(state, cond, false);
 
       // _-_ Is it ok that it does not produce unsat cores sometimes?
-      if (state.queryMetaData.queryValidityCore) {
+      if (state.queryMetaData.queryValidityCore && state.targets.empty()) {
         if (state.isIntegrated() && !branches.first && branches.second) {
           KBlock* target = getKBlock(*bi->getSuccessor(0));
           state.queryMetaData.queryValidityCore->push_back(

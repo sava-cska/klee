@@ -189,7 +189,7 @@ private:
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
   ExprHashMap<std::pair<ref<Expr>, unsigned>> gepExprBases;
-  ExprHashMap<ObjectPair> liCache;
+  ExprHashMap<Symbolic> liCache;
 
   /// Used to track states that have been added during the current
   /// instructions step.
@@ -403,18 +403,14 @@ private:
                               KInstruction *target /* def if read*/,
                               std::vector<ExecutionState *> *results = nullptr);
 
-  ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
+  ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, bool isLocal,
                                      const llvm::Value *allocSite, uint64_t size);
 
-  ObjectPair cachedLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
+  ObjectPair transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
                                      const llvm::Value *allocSite, uint64_t size);
   
   ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,
                              const MemoryObject *mo);
-
-  ObjectPair lazyInstantiateAlloca(ExecutionState &state,
-                                   const MemoryObject *mo, KInstruction *target,
-                                   bool isLocal);
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                            const std::string &name, bool isAlloca, bool isHandleMakeSymbolic = false);

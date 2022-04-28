@@ -176,6 +176,18 @@ MemoryObject *MemoryManager::allocateFixed(uint64_t address, uint64_t size,
   return res;
 }
 
+MemoryObject *
+MemoryManager::allocateTransparent(uint64_t size,
+                                   bool isLocal,
+                                   bool isGlobal, 
+                                   const llvm::Value *allocSite, 
+                                   size_t alignment,
+                                   ref<Expr> lazyInstantiatedSource) {
+  MemoryObject *mo = allocate(size, isLocal, isGlobal, allocSite, alignment, lazyInstantiatedSource);
+  mo->isTransparent = true;
+  return mo;
+}
+
 void MemoryManager::deallocate(MemoryObject *mo) { objects.erase(mo); }
 
 void MemoryManager::markFreed(MemoryObject *mo) {

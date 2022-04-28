@@ -185,7 +185,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
   }
 
   if (!isa<ConstantExpr>(ptr) && res != Solver::True) {
-    ObjectPair p = caller->executor->cachedLazyInstantiateVariable(
+    ObjectPair p = caller->executor->transparentLazyInstantiateVariable(
       *state, ptr, nullptr, size);
     ref<Expr> trueCase = p.second->read(0, 8 * p.second->size);
     results.push_back({ConstantExpr::create(true, Expr::Bool),
@@ -364,10 +364,9 @@ ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
   const ObjectState *os = nullptr;
   if (mo && !root->binding) {
     ref<Expr> liSource = mo->lazyInstantiatedSource;
-    const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocate(
+    const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocateTransparent(
       mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
     );
-
     os = caller->executor->bindObjectInState(*(caller->copy), reindexMO, false, root);
     const_cast<Array*>(root)->binding = reindexMO;
   } else {

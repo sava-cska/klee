@@ -234,22 +234,19 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
   } else {
     TimerStatIncrementer timer(stats::resolveTime);
 
-    MemoryObject *symHack = nullptr;
-    for (auto &moa : state.symbolics) {
-      if (moa.first->isLazyInstantiated() && moa.first->getLazyInstantiatedSource() == p) {
-        symHack = const_cast<MemoryObject *>(moa.first.get());
-        break;
+    auto isPointer = [=](Symbolic x){ return x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == p; };
+    auto symPointer = std::find_if(begin(state.symbolics), end(state.symbolics), isPointer);
+    if (symPointer != end(state.symbolics)) {
+      const MemoryObject *symMO = symPointer->first.get();
+      if (!symMO->isTransparent) {
+        auto os = findObject(symMO);
+        if(os) {
+          rl.push_back(ObjectPair(symMO, os));
+          return false;
+        }
       }
     }
 
-    if (symHack) {
-      auto osi = objects.find(symHack);
-      if(osi != objects.end()) {
-        auto res = std::make_pair<>(osi->first, osi->second.get());
-        rl.push_back(res);
-        return false;
-      }
-    }
     // XXX in general this isn't exactly what we want... for
     // a multiple resolution case (or for example, a \in {b,c,0})
     // we want to find the first object, find a cex assuming
@@ -282,7 +279,7 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     while (oi != begin) {
       --oi;
       const MemoryObject *mo = oi->first;
-      if (skipGlobal && mo->isGlobal)
+      if (mo->isTransparent || (skipGlobal && mo->isGlobal))
         continue;
       if (timeout && timeout < timer.delta())
         return true;
@@ -306,7 +303,7 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     // search forwards
     for (oi = start; oi != end; ++oi) {
       const MemoryObject *mo = oi->first;
-      if (skipGlobal && mo->isGlobal)
+      if (mo->isTransparent || (skipGlobal && mo->isGlobal))
         continue;
       if (timeout && timeout < timer.delta())
         return true;
@@ -393,9 +390,16 @@ void AddressSpace::clear() {
 /***/
 
 bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const {
-  bool res = true;
-  if (!a->lazyInstantiatedSource.isNull() && !b->lazyInstantiatedSource.isNull())
-    res = a->lazyInstantiatedSource != b->lazyInstantiatedSource;
-  return res ? a->address < b->address : false;
+  if (a->lazyInstantiatedSource.isNull() && b->lazyInstantiatedSource.isNull())
+    return a->address < b->address;
+  else if (a->lazyInstantiatedSource.isNull())
+    return true;
+  else if (b->lazyInstantiatedSource.isNull())
+    return false;
+  else {
+    if (a->lazyInstantiatedSource != b->lazyInstantiatedSource)
+      assert(a->lazyInstantiatedSource->hash() != b->lazyInstantiatedSource->hash());
+    return a->lazyInstantiatedSource->hash() < b->lazyInstantiatedSource->hash();
+  }
 }
 

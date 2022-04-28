@@ -58,6 +58,7 @@ public:
   bool isFixed;
 
   bool isUserSpecified;
+  bool isTransparent;
 
   MemoryManager *parent;
 
@@ -113,6 +114,7 @@ public:
       isGlobal(_isGlobal),
       isFixed(_isFixed),
       isUserSpecified(false),
+      isTransparent(false),
       parent(_parent), 
       allocSite(_allocSite) {
   }

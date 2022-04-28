@@ -4366,7 +4366,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         return;
       }
 
-      ObjectPair p = lazyInstantiateVariable(*unbound, base, target ? target->inst : nullptr, size);
+      ObjectPair p = lazyInstantiateVariable(*unbound, base, false, target ? target->inst : nullptr, size);
       assert(p.first && p.second);
 
       const MemoryObject *mo = p.first;
@@ -4380,7 +4380,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
       if (res == Solver::False) {
         if (unbound->isIsolated()) {
-          p = lazyInstantiateVariable(*unbound, address, target ? target->inst : nullptr, bytes);
+          p = lazyInstantiateVariable(*unbound, address, false, target ? target->inst : nullptr, bytes);
           mo = p.first;
         } else {
           terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
@@ -4417,39 +4417,40 @@ ObjectPair Executor::lazyInstantiate(ExecutionState &state, bool isAlloca, const
   return op;
 }
 
-ObjectPair Executor::lazyInstantiateAlloca(ExecutionState &state,
-                                     const MemoryObject *mo,
-                                     KInstruction *target,
-                                     bool isLocal) {
-  ObjectPair op = lazyInstantiate(state, isLocal, mo);
-  bindLocal(target, state, op.first->getBaseExpr());
-  return op;
-}
-
-ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
+ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state,
+                                             ref<Expr> address,
+                                             bool isLocal,
+                                             const llvm::Value *allocSite,
+                                             uint64_t size) {
   assert(!isa<ConstantExpr>(address));
   MemoryObject *mo =
-      memory->allocate(size, false, /*isGlobal=*/false,
+      memory->allocate(size, isLocal, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
-  return lazyInstantiate(state, /*isLocal=*/false, mo);
+  return lazyInstantiate(state, isLocal, mo);
 }
 
-ObjectPair Executor::cachedLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
+ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
-  auto op = liCache.find(address);
-  if (op != liCache.end()) {
-    return liCache[address];
+  if (liCache.count(address)) {
+    auto symbolic = liCache[address];
+    const MemoryObject *mo = symbolic.first.get();
+    const ObjectState *os = state.addressSpace.findObject(mo);
+    if (!os) {
+      os = bindObjectInState(state, mo, false, symbolic.second);
+      state.addSymbolic(mo, symbolic.second);
+    }
+    return ObjectPair(mo, os);
   }
+
   MemoryObject *mo =
-      memory->allocate(size, false, /*isGlobal=*/false,
-                       allocSite, /*allocationAlignment=*/8, address);
+      memory->allocateTransparent(size, false, /*isGlobal=*/false,
+                                  allocSite, /*allocationAlignment=*/8, address);
   const Array *array = makeArray(state, size, "lazy_instantiation", address);
-  const_cast<Array*>(array)->binding = mo;
-  ObjectState *os = new ObjectState(mo, array);
+  ObjectState *os = bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array);
-  ObjectPair result = {mo, os};
-  liCache[address] = result;
-  return result;
+  const_cast<Array*>(array)->binding = mo;
+  liCache[address] = Symbolic(ref<const MemoryObject>(mo), array);
+  return ObjectPair(mo, os);
 }
 
 const Array * Executor::makeArray(ExecutionState &state,
@@ -4690,7 +4691,7 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
       count = Expr::createZExtToPointerWidth(count);
       size = MulExpr::create(size, count);
     }
-    lazyInstantiateVariable(state, result, target->inst, elementSize);
+    lazyInstantiateVariable(state, result, true, target->inst, elementSize);
   }
 }
 
@@ -4711,8 +4712,8 @@ void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
 
 ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
   MemoryObject *mo =
-    memory->allocate(size, true, /*isGlobal=*/false, 
-                     value, /*allocationAlignment=*/8);
+    memory->allocateTransparent(size, true, /*isGlobal=*/false,
+                                value, /*allocationAlignment=*/8);
   const Array *array = makeArray(state, size, name);
 
   if (state.initPC->parent->getKBlockType() == KBlockType::Call &&
@@ -4720,7 +4721,7 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
       state.initPC->parent->getFirstInstruction()->inst == value) {
     array = arrayManager.CreateArray(array, -1);
   }
-  
+
   ObjectState *os = bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array);
   const_cast<Array*>(array)->binding = mo;

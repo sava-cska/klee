@@ -18,6 +18,7 @@
 #include "Memory.h"
 #include "PForest.h"
 #include "ForwardSearcher.h"
+#include "Path.h"
 #include "ProofObligation.h"
 #include "SearcherUtil.h"
 #include "TimingSolver.h"
@@ -2020,7 +2021,7 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
     PHINode *first = static_cast<PHINode*>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
   }
-  state.path.append(dst);
+  state.path.append(kf->blockMap[dst]);
 }
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
@@ -4654,7 +4655,7 @@ void Executor::clearGlobal() {
   globalAddresses.clear();
 }
 
-void Executor:: prepareSymbolicValue(ExecutionState &state, KInstruction *target) {
+void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target) {
   Instruction *allocSite = target->inst;
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
@@ -4694,14 +4695,13 @@ ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint6
     memory->allocate(size, true, /*isGlobal=*/false, 
                      value, /*allocationAlignment=*/8);
   const Array *array = makeArray(state, size, name);
-  BasicBlock *predInitBlock = state.getInitPCBlock()->getSinglePredecessor();
-  if (predInitBlock) {
-    KFunction *kf = kmodule->functionMap[predInitBlock->getParent()];
-    KBlock *kb = kf->blockMap[predInitBlock];
-    if (kb->getKBlockType() == KBlockType::Call && kb->getFirstInstruction()->inst == value) {
-      array = arrayManager.CreateArray(array, -1);
-    }
+
+  if (state.initPC->parent->getKBlockType() == KBlockType::Call &&
+      state.initPC == state.initPC->parent->getLastInstruction() &&
+      state.initPC->parent->getFirstInstruction()->inst == value) {
+    array = arrayManager.CreateArray(array, -1);
   }
+  
   state.addSymbolic(mo, array);
   ObjectState *os = new ObjectState(mo, array);
   const_cast<Array*>(array)->binding = os;
@@ -5329,11 +5329,14 @@ void Executor::run(ExecutionState &state) {
             replayState->symbolics.push_back(symbolic);
           }
 
-          // replayState->targets.insert(pob->root);
+          if (pob->root) {
+            replayState->targets.insert(Target(pob->root->location, false));
+          }
           states.insert(replayState);
           processForest->addRoot(replayState);
-          updateResult(ForwardResult(nullptr, {replayState}, {}));
-          // searcher->removeProofObligation(pob);
+          addedStates.push_back(replayState);
+          updateResult(ForwardResult(nullptr, {}, {}));
+          searcher->closeProofObligation(pob); // ???
         }
       }
     }
@@ -5377,9 +5380,8 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 InitializeResult Executor::initBranch(InitializeAction &action) {
   KInstruction* loc = action.location;
   std::set<Target> &targets = action.targets;
-
   timers.invoke();
-  ExecutionState* state = initialState->withKInstruction(loc);
+  ExecutionState* state = emptyState->withKInstruction(loc);
   prepareSymbolicArgs(*state, loc->parent->parent);
   if (statsTracker)
     statsTracker->framePushed(*state, 0);
@@ -5394,7 +5396,6 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
 ForwardResult Executor::goForward(ForwardAction &action) {
   ExecutionState* state = action.state;
   KInstruction *prevKI = state->prevPC;
-
   if (prevKI->inst->isTerminator())
     addHistoryResult(*state);
 
@@ -5423,15 +5424,16 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   timers.invoke();
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, false);
-  if(!Composer::tryRebuild(*pob, state, *newPob))
+  
+  if(!Composer::tryRebuild(*pob, state, *newPob)) {
     return BackwardResult({}, pob);
-
+  }
+  
   ConstraintSet constraints = newPob->condition;
   newPob->condition = state->constraints;
   bool sat = true;
   for (auto& constraint : constraints) {
-    auto location = constraints.get_location(constraint);
-    newPob->addCondition(constraint, location, &sat);
+    newPob->addCondition(constraint, std::nullopt, &sat);
   }
 
   ref<Expr> check = ConstantExpr::create(true, Expr::Bool);
@@ -5450,7 +5452,6 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
          it != std::prev(state->stack.rend()) && !newPob->stack.empty(); it++) {
       newPob->stack.pop_back();
     }
-
     std::vector<ProofObligation*> newPobs;
     // If the state initial location is a "right after call" location,
     // the proof obligation is transferred to every return point of the call.

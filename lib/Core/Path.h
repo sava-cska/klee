@@ -9,7 +9,7 @@
 namespace klee {
 
 struct Path {
-  std::vector<KBlock*> path_;
+  friend Path merge(const Path& lhs, const Path& rhs);
 
   KBlock* getInitialBlock() const;
   KBlock* getFinalBlock() const;
@@ -18,6 +18,10 @@ struct Path {
 
   void append(KBlock* bb) {
     path_.push_back(bb);
+  }
+
+  void prepend(KBlock* bb) {
+    path_.insert(path_.begin(), bb);
   }
 
   size_t getCurrentIndex() const {
@@ -38,9 +42,13 @@ struct Path {
     return lhs.path_ == rhs.path_;
   }
 
-  friend Path merge(const Path& lhs, const Path& rhs);
-
   Path() = default;
   explicit Path(std::vector<KBlock*> path) : path_(path) {}
+  
+private:
+  std::vector<KBlock*> path_;
 };
+
+Path merge(const Path& lhs, const Path& rhs);
+  
 };

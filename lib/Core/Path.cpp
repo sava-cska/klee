@@ -33,7 +33,7 @@ std::string Path::print() const {
   return repr;
 }
 
-Path merge(const Path& lhs, const Path& rhs) {
+Path klee::merge(const Path& lhs, const Path& rhs) {
   if(lhs.empty()) {
     return rhs;
   }

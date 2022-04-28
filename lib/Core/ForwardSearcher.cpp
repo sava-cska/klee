@@ -33,6 +33,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <map>
 #include <unordered_set>
 
 using namespace klee;
@@ -433,8 +434,8 @@ void GuidedSearcher::update(ExecutionState *current,
   baseSearcher->update(current, addedStates, removedStates);
 }
 
-std::unordered_set<ExecutionState*> GuidedSearcher::collectAndClearReached() {
-  std::unordered_set<ExecutionState*> ret;
+std::map<Target,std::unordered_set<ExecutionState*>> GuidedSearcher::collectAndClearReached() {
+  std::map<Target,std::unordered_set<ExecutionState*>> ret;
   std::vector<Target> targets;
   for(auto const& targetSearcher: targetedSearchers)
     targets.push_back(targetSearcher.first);
@@ -442,7 +443,7 @@ std::unordered_set<ExecutionState*> GuidedSearcher::collectAndClearReached() {
     auto reached = targetedSearchers[target]->reached();
     if (!reached.empty()) {
       for (auto state: reached)
-        ret.insert(state);
+        ret[target].insert(state);
       targetedSearchers[target]->removeReached();
       if (reachingEnough || targetedSearchers[target]->empty())
         targetedSearchers.erase(target);

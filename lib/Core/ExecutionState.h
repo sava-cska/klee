@@ -178,6 +178,20 @@ struct Target {
       return targetBlock < other.targetBlock;
     }
   }
+
+  bool operator==(const Target& other) const {
+    return targetBlock == other.targetBlock && at_end == other.at_end;
+  }
+
+  std::string print() const {
+    std::string repr = "Target: ";
+    repr += targetBlock->getIRLocation();
+    if(at_end) {
+      repr += " (at the end)";
+    }
+    return repr;
+  }
+  
 };
 
 /// @brief ExecutionState representing a path under exploration

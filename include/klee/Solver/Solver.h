@@ -10,12 +10,14 @@
 #ifndef KLEE_SOLVER_H
 #define KLEE_SOLVER_H
 
+#include "klee/ADT/Ref.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprHashMap.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/System/Time.h"
 #include "klee/Solver/SolverCmdLine.h"
 
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -32,6 +34,7 @@ namespace klee {
     /// @brief Costs for all queries issued for this state
     time::Span queryCost;
     std::optional<core_ty> queryValidityCore{std::nullopt};
+    ExprHashMap<ref<Expr>> rebuildMap;
   };
 
   struct Query {

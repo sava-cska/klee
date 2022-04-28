@@ -5,6 +5,7 @@
 #include "ProofObligation.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
+#include "klee/Solver/Solver.h"
 #include <set>
 #include <queue>
 
@@ -16,7 +17,7 @@ public:
   virtual bool empty() = 0;
   virtual void addPob(ProofObligation* pob) = 0;
   virtual void removePob(ProofObligation* pob) = 0;
-  virtual void addValidityCoreInit(std::pair<ExecutionState*,KBlock*>) = 0;
+  virtual void addValidityCoreInit(std::pair<Path,SolverQueryMetaData::core_ty>, KBlock*) = 0;
 
 };
 
@@ -26,13 +27,14 @@ public:
   bool empty() override;
   void addPob(ProofObligation *pob) override;
   void removePob(ProofObligation* pob) override;
-  void addValidityCoreInit(std::pair<ExecutionState *,KBlock *>) override;
+  void addValidityCoreInit(std::pair<Path,SolverQueryMetaData::core_ty>, KBlock*) override;
 
-  ValidityCoreInitializer() {};
+  ValidityCoreInitializer(KInstruction* initInst) : initInst(initInst) {};
 
 private:
-  std::queue<std::pair<KInstruction *, Target>> validityCoreInits;
-  std::unordered_map<llvm::BasicBlock *, std::unordered_set<llvm::BasicBlock *>> initializedLocs;
+  KInstruction* initInst;
+  std::queue<std::pair<KInstruction *, std::set<Target>>> validityCoreInits;
+  std::map<KInstruction*, std::set<Target>> initialized;
 };
 
 };

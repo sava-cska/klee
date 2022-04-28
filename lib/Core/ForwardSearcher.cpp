@@ -233,17 +233,18 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(Executio
 }
 
 TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(ExecutionState *es, double &weight) {
-  std::vector<KBlock*> localTargets = {target};
-  WeightResult res = tryGetLocalWeight(es, weight, localTargets);
-
-  if(at_end && res == Done) {
-    if(es->prevPC == es->prevPC->parent->getLastInstruction()) {
+  if(at_end) {
+    if(es->prevPC->parent == target &&
+       es->prevPC == es->prevPC->parent->getLastInstruction()) {
       return Done;
-    } else {
+    } else if(es->pc->parent == target) {
       weight = 0;
       return Continue;
     }
   }
+  
+  std::vector<KBlock*> localTargets = {target};
+  WeightResult res = tryGetLocalWeight(es, weight, localTargets);
 
   weight = weight * (1.0 / 2.0); // number on [0,0.5)-real-interval
   return res;

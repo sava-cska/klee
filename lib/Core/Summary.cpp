@@ -20,8 +20,8 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   auto core = *metadata.queryValidityCore;
   auto& lemma = lemmas[pob];
   for(auto constraint : core) {
-    if(!constraint.second) {
-      lemma.constraints.push_back(Expr::createIsZero(constraint.first));
+    if(metadata.rebuildMap.count(constraint.first)) {
+      lemma.constraints.push_back(Expr::createIsZero(metadata.rebuildMap.at(constraint.first)));
     }
   }
   lemma.paths.push_back(path);

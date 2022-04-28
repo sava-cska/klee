@@ -670,8 +670,12 @@ KFunction::KFunction(llvm::Function *_function,
     blockMap[&*bbit] = kb;
     blocks.push_back(std::move(std::unique_ptr<KBlock>(kb)));
     if (isa<ReturnInst>(kb->instructions[kb->numInstructions - 1]->inst) ||
-        isa<UnreachableInst>(kb->instructions[kb->numInstructions - 1]->inst))
+        isa<UnreachableInst>(kb->instructions[kb->numInstructions - 1]->inst)) {
       finalKBlocks.push_back(kb);
+      if (isa<ReturnInst>(kb->instructions[kb->numInstructions - 1]->inst)) {
+        returnKBlocks.push_back(kb);
+      }
+    }
   }
 
   entryKBlock = blockMap[&*function->begin()];

@@ -124,6 +124,7 @@ namespace klee {
     std::map<llvm::BasicBlock *, KBlock *> blockMap;
     KBlock *entryKBlock;
     std::vector<KBlock *> finalKBlocks;
+    std::vector<KBlock *> returnKBlocks;
     std::vector<KCallBlock *> kCallBlocks;
 
     /// Whether instructions in this function should count as

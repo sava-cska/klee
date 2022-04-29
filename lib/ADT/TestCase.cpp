@@ -5,22 +5,21 @@
 #include <klee/Misc/json.hpp>
 using json = nlohmann::json;
 
-
-TestCase* TC_fromFile(const char* path) {
+TestCase *TC_fromFile(const char *path) {
   FILE *f = fopen(path, "rb");
   json js = json::parse(f);
   TestCase *ret = new TestCase;
   ret->n_objects = js.at("n_objects");
   ret->numArgs = js.at("numArgs");
   ret->args = new char*[ret->numArgs];
-  for(size_t i = 0; i<ret->numArgs; i++) {
+  for (size_t i = 0; i<ret->numArgs; i++) {
     ret->args[i] = new char[js.at("args").at(i).get<std::string>().size()+1];
     strcpy(ret->args[i], js.at("args").at(i).get<std::string>().c_str());
   }
   ret->symArgvs = js.at("symArgvs");
   ret->symArgvLen = js.at("symArgvLen");
   ret->objects = new ConcretizedObject[ret->n_objects];
-  for(size_t i = 0; i<ret->n_objects; i++) {
+  for (size_t i = 0; i<ret->n_objects; i++) {
     ret->objects[i].name = new char[js.at("objects").at(i).at("name").get<std::string>().size()+1];
     strcpy(ret->objects[i].name, js.at("objects").at(i).at("name").get<std::string>().c_str());
 
@@ -35,7 +34,7 @@ TestCase* TC_fromFile(const char* path) {
 
     ret->objects[i].offsets = new Offset[ret->objects[i].n_offsets];
 
-    for(size_t j = 0; j<ret->objects[i].n_offsets; j++) {
+    for (size_t j = 0; j<ret->objects[i].n_offsets; j++) {
       ret->objects[i].offsets[j].index = js.at("objects").at(i).at("offsets").at(j).at("index");
       ret->objects[i].offsets[j].offset =
         js.at("objects").at(i).at("offsets").at(j).at("offset");

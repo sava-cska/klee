@@ -31,10 +31,10 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   auto core = *metaData.queryValidityCore;
   auto& lemma = lemmas[pob];
   std::cout << "Constraints are:" << std::endl;
-  for(auto constraint : core) {
+  for(auto &constraint : core) {
     if(rebuildMap.count(constraint.first)) {
       lemma.constraints.push_back(Expr::createIsZero(rebuildMap.at(constraint.first)));
-      std::cout << lemma.constraints.back()->print() << std::endl;
+      std::cout << lemma.constraints.back()->toString() << std::endl;
     }
   }
   std::cout << "State Path is:" << std::endl;

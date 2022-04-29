@@ -137,7 +137,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
   }
   rebuilt.condition = composer.copy->constraints;
   std::vector<Symbolic> foreign;
-  composer.copy->exctractForeignSymbolics(foreign);
+  composer.copy->extractForeignSymbolics(foreign);
   rebuilt.symbolics = old.symbolics;
   rebuilt.symbolics.insert(rebuilt.symbolics.end(), foreign.begin(), foreign.end());
   return success;

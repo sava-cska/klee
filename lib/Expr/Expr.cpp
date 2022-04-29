@@ -44,14 +44,6 @@ cl::opt<bool> ConstArrayOpt(
 
 unsigned Expr::count = 0;
 
-
-std::string Expr::print() const {
-  std::string ret;
-  llvm::raw_string_ostream s(ret);
-  this->print(s);
-  return s.str();
-}
-
 ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w) {
   UpdateList ul(array, 0);
 

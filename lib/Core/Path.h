@@ -19,36 +19,36 @@ public:
   KBlock* getBlock(size_t index) const;
 
   void append(KBlock* bb) {
-    path_.push_back(bb);
+    path.push_back(bb);
   }
 
   void prepend(KBlock* bb) {
-    path_.insert(path_.begin(), bb);
+    path.insert(path.begin(), bb);
   }
 
   size_t getCurrentIndex() const {
-    return path_.size() - 1;
+    return path.size() - 1;
   }
 
   size_t size() const {
-    return path_.size();
+    return path.size();
   }
 
   bool empty() const {
-    return path_.empty();
+    return path.empty();
   }
 
   std::string print() const;
 
   friend bool operator==(const Path& lhs, const Path& rhs) {
-    return lhs.path_ == rhs.path_;
+    return lhs.path == rhs.path;
   }
 
   Path() = default;
-  explicit Path(std::vector<KBlock*> path) : path_(path) {}
+  explicit Path(std::vector<KBlock*> path) : path(path) {}
 
 private:
-  std::vector<KBlock*> path_;
+  std::vector<KBlock*> path;
 };
 
 Path concat(const Path& lhs, const Path& rhs);

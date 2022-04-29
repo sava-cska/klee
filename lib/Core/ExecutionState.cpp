@@ -502,7 +502,7 @@ int ExecutionState::resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbo
   return status;
 }
 
-void ExecutionState::exctractForeignSymbolics(std::vector<Symbolic> &foreign) {
+void ExecutionState::extractForeignSymbolics(std::vector<Symbolic> &foreign) {
   std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> resolved;
   resolveLazyInstantiation(resolved);
   for (auto &moArray : symbolics) {
@@ -553,15 +553,11 @@ bool ExecutionState::isEmpty() const {
 bool ExecutionState::isCriticalPC() const {
   KInstruction *ki = pc;
   KInstruction *prevKI = prevPC;
-  return ((this->getPCBlock()->hasNPredecessors(0) && (this->isIntegrated() || stack.size() > 1)) ||
+  return ((this->getPCBlock()->hasNPredecessors(0) && (!this->isIsolated() || stack.size() > 1)) ||
           (prevKI->inst->isTerminator() && prevKI != ki &&
             (this->getPCBlock()->hasNPredecessorsOrMore(2) ||
              prevKI->parent->getKBlockType() == KBlockType::Call ||
              ki->parent->getKBlockType() == KBlockType::Call)));
-}
-
-bool ExecutionState::isIntegrated() const {
-  return !isolated;
 }
 
 bool ExecutionState::isIsolated() const {

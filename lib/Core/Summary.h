@@ -1,14 +1,8 @@
 // -*- C++ -*-
 #pragma once
 
-#include "ExecutionState.h"
 #include "Path.h"
 #include "ProofObligation.h"
-#include "klee/ADT/Ref.h"
-#include "klee/Expr/Constraints.h"
-#include "klee/Expr/Expr.h"
-#include "klee/Expr/ExprHashMap.h"
-#include "klee/Solver/Solver.h"
 #include <map>
 #include <vector>
 

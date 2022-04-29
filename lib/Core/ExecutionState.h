@@ -343,7 +343,7 @@ public:
 
   void addConstraint(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
   int resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &);
-  void exctractForeignSymbolics(std::vector<Symbolic> &);
+  void extractForeignSymbolics(std::vector<Symbolic> &);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
@@ -355,7 +355,6 @@ public:
   void addLevel(llvm::BasicBlock *srcbb, llvm::BasicBlock *dstbb);
   bool isEmpty() const;
   bool isCriticalPC() const;
-  bool isIntegrated() const;
   bool isIsolated() const;
   // for debugging
   static void printCompareList(const ExecutionState &, const ExecutionState &, llvm::raw_ostream &);

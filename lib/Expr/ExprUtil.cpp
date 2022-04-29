@@ -145,13 +145,13 @@ template void klee::findSymbolicObjects<B>(B, B, std::vector<const Array*> &);
 bool klee::isReadFromSymbolicArray(ref<Expr> e) {
   if(isa<ReadExpr>(e)) {
     ref<ReadExpr> base = llvm::dyn_cast<ReadExpr>(e);
-    if(base->updates.root->isConstantArray()) return false;
-    else return true;
+    return !base->updates.root->isConstantArray();
   }
-  
-  bool ret = true;
+
   for(size_t i = 0; i<e->getNumKids(); i++) {
-    ret = ret && isReadFromSymbolicArray(e->getKid(i));
+    if(!isReadFromSymbolicArray(e->getKid(i))) {
+      return false;
+    }
   }
-  return ret;
+  return true;
 }

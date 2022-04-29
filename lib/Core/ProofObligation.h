@@ -19,9 +19,10 @@ class ExecutionState;
 class MemoryObject;
 
 class ProofObligation {
+
 private:
-  static size_t counter;
-  size_t id;
+  static unsigned counter;
+  unsigned id;
 
 public:
   ProofObligation *parent;
@@ -66,7 +67,7 @@ public:
   bool isOriginPob() const noexcept { return !parent; }
 
   void addCondition(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
-  std::string print();
+  std::string print() const;
 };
 
 ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,

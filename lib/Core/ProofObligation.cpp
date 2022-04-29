@@ -3,14 +3,14 @@
 
 namespace klee {
 
-size_t ProofObligation::counter = 0;
+unsigned ProofObligation::counter = 0;
 
 void ProofObligation::addCondition(ref<Expr> e, std::optional<size_t> loc, bool *sat) {
   ConstraintManager c(condition);
   c.addConstraint(e, loc, sat);
 }
 
-std::string ProofObligation::print() {
+std::string ProofObligation::print() const {
   std::string ret;
   std::string s;
   llvm::raw_string_ostream ss(s);

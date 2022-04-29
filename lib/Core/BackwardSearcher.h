@@ -23,25 +23,21 @@ public:
 };
 
 class BFSBackwardSearcher : public BackwardSearcher {
+private:
+  std::unordered_set<ProofObligation *> pobs;
+  std::set<std::pair<ProofObligation *, ExecutionState *>> used;
+
 public:
 
   ExecutionManager* emanager;
 
+public:
   void update(ProofObligation* pob) override;
-
   std::pair<ProofObligation*, ExecutionState*> selectAction() override;
-
   bool empty() override;
-
   void removePob(ProofObligation* pob) override;
-
   BFSBackwardSearcher() {
   }
-
-private:
-  std::unordered_set<ProofObligation *> pobs;
-  // std::queue<std::pair<ProofObligation *, ExecutionState *>> backpropQueue;
-  std::set<std::pair<ProofObligation*,ExecutionState*>> used;
 };
 
 };

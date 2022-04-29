@@ -38,7 +38,7 @@ public:
   explicit ConstraintSet(constraints_ty cs) : constraints(std::move(cs)) {}
   ConstraintSet() = default;
 
-  void push_back(const ref<Expr> &e, std::optional<size_t> loc);
+  void push_back(const ref<Expr> &e, std::optional<size_t> loc = std::nullopt);
   std::optional<size_t> get_location(const ref<Expr> &e) const;
 
   bool operator==(const ConstraintSet &b) const {

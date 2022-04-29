@@ -17,11 +17,11 @@ struct Offset {
 
 typedef struct ConcretizedObject ConcretizedObject;
 struct ConcretizedObject {
-  char* name;
-  unsigned char* values;
+  char *name;
+  unsigned char *values;
   unsigned size;
   /* offset - child id */
-  Offset* offsets;
+  Offset *offsets;
   size_t n_offsets;
   uint64_t address;
 };
@@ -40,7 +40,7 @@ struct TestCase {
 TestCase* TC_fromFile(const char *path);
 void ConcretizedObject_free(ConcretizedObject*);
 void TestCase_free(TestCase*);
-  
+
 #ifdef __cplusplus
 }
 #endif

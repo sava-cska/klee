@@ -551,8 +551,6 @@ void KleeHandler::writeTestCaseKTest(const TestCase &tc, unsigned id) {
   if (!kTest_toFile(&b,
                     getOutputFilename(getTestFilename("ktest", id)).c_str())) {
     klee_warning("unable to write output test case, losing it");
-  } else {
-    // ++m_numGeneratedTests;
   }
   for (unsigned i = 0; i < b.numObjects; i++)
     delete[] b.objects[i].bytes;
@@ -617,8 +615,6 @@ void KleeHandler::writeTestCaseXML(
     *file << "</input>\n";
   }
   *file << "</testcase>\n";
-
-  // ++m_numGeneratedTests;
 }
 
 void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id, bool back) {
@@ -650,7 +646,6 @@ void KleeHandler::writeTestCasePlain(const TestCase &tc, unsigned id, bool back)
   }
   auto file = openTestFile("ktestjson", id, back);
   *file << out.dump(4);
-  // ++m_numGeneratedTests;
 }
 
 void KleeHandler::processTestCase(ExecutionState &state,

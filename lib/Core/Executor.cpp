@@ -2155,23 +2155,19 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
-      // _-_ Is it ok that it does not produce unsat cores sometimes?
-      if (state.queryMetaData.queryValidityCore && state.targets.empty()) {
-        if (state.isIntegrated() && !branches.first && branches.second) {
-          KBlock* target = getKBlock(*bi->getSuccessor(0));
-          state.queryMetaData.queryValidityCore->push_back(
-              std::make_pair(cond, state.path.getCurrentIndex()));
-          validityCore = std::make_optional<ForwardResult::ValidityCore>(
-              state.path, *(state.queryMetaData.queryValidityCore), target);
-          state.queryMetaData.queryValidityCore = std::nullopt;
-        } else if (state.isIntegrated() && !branches.second && branches.first) {
-          KBlock* target = getKBlock(*bi->getSuccessor(1));
-          state.queryMetaData.queryValidityCore->push_back(std::make_pair(
-              Expr::createIsZero(cond), state.path.getCurrentIndex()));
-          validityCore = std::make_optional<ForwardResult::ValidityCore>(
-              state.path, *(state.queryMetaData.queryValidityCore), target);
-          state.queryMetaData.queryValidityCore = std::nullopt;
-        }
+      if (state.queryMetaData.queryValidityCore && state.targets.empty() &&
+          !state.isIsolated()) {
+        assert((branches.first && !branches.second) ||
+               (!branches.first && branches.second));
+
+        KBlock* target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
+        ref<Expr> last_cond = (branches.first ? Expr::createIsZero(cond) : cond);
+
+        state.queryMetaData.queryValidityCore->push_back(
+            std::make_pair(last_cond, state.path.getCurrentIndex()));
+        validityCore = std::make_optional<ForwardResult::ValidityCore>(
+            state.path, *(state.queryMetaData.queryValidityCore), target);
+        state.queryMetaData.queryValidityCore = std::nullopt;
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -3368,7 +3364,7 @@ void Executor::updateResult(ActionResult r) {
       seedMap.find(es);
     if (it3 != seedMap.end())
       seedMap.erase(it3);
-    if (es->isIntegrated()) {
+    if (!es->isIsolated()) {
       processForest->remove(es->ptreeNode);
       delete es;
     } else {
@@ -3671,7 +3667,7 @@ void Executor::terminateState(ExecutionState &state) {
       return;
   }
 
-  if (state.isIntegrated())
+  if (!state.isIsolated())
     interpreterHandler->incPathsExplored();
 
   std::vector<ExecutionState *>::iterator ita =
@@ -3692,16 +3688,18 @@ void Executor::terminateState(ExecutionState &state) {
 
 void Executor::terminateStateEarly(ExecutionState &state, 
                                    const Twine &message) {
-  if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state))))
+  if (!state.isIsolated() &&
+      (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, (message + "\n").str().c_str(),
                                         "early");
   terminateState(state);
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
-  if (state.isIntegrated() && (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state))))
+  if (!state.isIsolated() &&
+      (!OnlyOutputStatesCoveringNew || state.coveredNew ||
+       (AlwaysOutputSeeds && seedMap.count(&state))))
     interpreterHandler->processTestCase(state, 0, 0);
   actionBeforeStateTerminating(state, TerminateReason::Model);
   terminateState(state);
@@ -3812,7 +3810,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
       suffix = suffix_buf.c_str();
     }
 
-    if (state.isIntegrated())
+    if (!state.isIsolated())
       interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
   }
 
@@ -4842,7 +4840,6 @@ int Executor::resolveLazyInstantiation(ExecutionState &state) {
 }
 
 void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
-  // Ugly hotfix
   std::map<size_t, std::vector<Offset>> ofst;
   for(size_t i = 0; i < state.symbolics.size(); i++) {
     if(!state.symbolics[i].first->isLazyInstantiated()) continue;
@@ -4862,10 +4859,8 @@ void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
       }
     }
     // Put data in TestCase tc, indices coincide
-    Offset o;
-    o.offset = offset->getZExtValue();
-    o.index = i;
-    ofst[index_parent].push_back(o);
+    ofst[index_parent].push_back(
+        {(unsigned int)offset->getZExtValue(sizeof(unsigned int) * 8), i});
   }
   for(auto i : ofst) {
     tc.objects[i.first].n_offsets = i.second.size();
@@ -4874,7 +4869,6 @@ void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
       tc.objects[i.first].offsets[j] = i.second[j];
     }
   }
-  return;
 }
 
 bool Executor::getSymbolicSolution(const ExecutionState &state,
@@ -5371,7 +5365,6 @@ void Executor::run(ExecutionState &state) {
     }
   }
 
-  // Все или только из начальной точки?
   doDumpStates();
   results.clear();
   haltExecution = false;

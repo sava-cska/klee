@@ -160,7 +160,7 @@ void BidirectionalSearcher::update(ActionResult r) {
   }
 }
 
-BidirectionalSearcher::BidirectionalSearcher(SearcherConfig cfg) {
+BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg) {
   ex = cfg.executor;
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   forward->update(nullptr,{cfg.initial_state},{});

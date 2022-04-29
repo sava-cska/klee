@@ -217,8 +217,6 @@ public:
 
   virtual void print(llvm::raw_ostream &os) const;
 
-  std::string print() const;
-
   /// dump - Print the expression to stderr.
   void dump() const;
 

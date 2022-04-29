@@ -37,7 +37,7 @@ public:
   void update(ActionResult) override;
   void closeProofObligation(ProofObligation*) override;
   bool empty() override;
-  explicit BidirectionalSearcher(SearcherConfig);
+  explicit BidirectionalSearcher(const SearcherConfig &);
 
 private:
   enum class StepKind { Initialize, Forward, Branch, Backward, Terminate };

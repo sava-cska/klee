@@ -27,7 +27,7 @@ struct Action {
   static bool classof(const Action *) { return true; }
 };
 
-struct TerminateAction : Action {
+struct TerminateAction : public Action {
   ExecutionState *state;
 
   TerminateAction() {}
@@ -39,7 +39,7 @@ struct TerminateAction : Action {
   static bool classof(const TerminateAction *) { return true; }
 };
 
-struct ForwardAction : Action {
+struct ForwardAction : public Action {
   ExecutionState *state;
 
   ForwardAction(ExecutionState *_state) : state(_state) {}
@@ -51,7 +51,7 @@ struct ForwardAction : Action {
   static bool classof(const ForwardAction *) { return true; }
 };
 
-struct BackwardAction : Action {
+struct BackwardAction : public Action {
   ExecutionState *state;
   ProofObligation *pob;
 
@@ -65,7 +65,7 @@ struct BackwardAction : Action {
   static bool classof(const BackwardAction *) { return true; }
 };
 
-struct InitializeAction : Action {
+struct InitializeAction : public Action {
   KInstruction *location;
   std::set<Target> targets;
 
@@ -88,8 +88,6 @@ struct ForwardResult {
   ExecutionState *current;
   std::vector<ExecutionState *> addedStates;
   std::vector<ExecutionState *> removedStates;
-  // _-_ In the future probably do not use references
-  // _-_ That's quite ugly, refactor later
 
   struct ValidityCore {
     std::pair<Path, SolverQueryMetaData::core_ty> core;
@@ -103,7 +101,7 @@ struct ForwardResult {
   };
 
   std::optional<ValidityCore> validityCore;
-  
+
   ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
                 const std::vector<ExecutionState *> &r)
     : current(_s), addedStates(a), removedStates(r), validityCore(std::nullopt) {};

@@ -938,7 +938,7 @@ void Executor::branch(ExecutionState &state,
     result.push_back(&state);
     for (unsigned i=1; i<N; ++i) {
       ExecutionState *es = result[theRNG.getInt32() % i];
-      ExecutionState *ns = es->branch();
+      ExecutionState *ns = &es->branch();
       addedStates.push_back(ns);
       result.push_back(ns);
       processForest->attach(es->ptreeNode, ns, es);
@@ -1145,7 +1145,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
     ++stats::forks;
 
-    falseState = trueState->branch();
+    falseState = &trueState->branch();
     addedStates.push_back(falseState);
 
 
@@ -2373,7 +2373,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       std::vector<ExecutionState*> branches;
       branch(state, conditions, branches);
 
-      std::vector<ExecutionState*>::iterator bit = branches.begin();
+      std::vector<ExecutionState *>::iterator bit = branches.begin();
       for (std::vector<BasicBlock *>::iterator it = bbOrder.begin(),
                                                ie = bbOrder.end();
            it != ie; ++it) {
@@ -3531,7 +3531,7 @@ void Executor::seed(ExecutionState &initialState) {
       return;
     }
 
-    std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it =
+    std::map<ExecutionState *, std::vector<SeedInfo> >::iterator it =
       seedMap.upper_bound(lastState);
     if (it == seedMap.end())
       it = seedMap.begin();
@@ -3548,7 +3548,7 @@ void Executor::seed(ExecutionState &initialState) {
 
     if ((stats::instructions % 1000) == 0) {
       int numSeeds = 0, numStates = 0;
-      for (std::map<ExecutionState*, std::vector<SeedInfo> >::iterator
+      for (std::map<ExecutionState *, std::vector<SeedInfo> >::iterator
              it = seedMap.begin(), ie = seedMap.end();
            it != ie; ++it) {
         numSeeds += it->second.size();
@@ -5320,8 +5320,8 @@ void Executor::addState(ExecutionState &state) {
 }
 
 void Executor::run(ExecutionState &state) {
-  initialState = state.copy();
-  emptyState = state.copy();
+  initialState = &state.copy();
+  emptyState = &state.copy();
   emptyState->stack.clear();
   emptyState->isolated = true;
 
@@ -5345,7 +5345,7 @@ void Executor::run(ExecutionState &state) {
       for(auto pob : br.newPobs) {
         if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
           assert(br.newPobs.size() == 1);
-          ExecutionState *replayState = initialState->copy();
+          ExecutionState *replayState = &initialState->copy();
           for (auto &constraint : pob->condition) {
             replayState->addConstraint(
                 constraint, pob->condition.get_location(constraint));
@@ -5406,10 +5406,10 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
 
   ExecutionState* state = nullptr;
   if (loc == initialState->initPC) {
-    state = initialState->copy();
+    state = &initialState->copy();
     state->isolated = true;
   } else {
-    state = emptyState->withKInstruction(loc);
+    state = &emptyState->withKInstruction(loc);
     prepareSymbolicArgs(*state, loc->parent->parent);
   }
   if (statsTracker)
@@ -5419,7 +5419,7 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
   for (auto target: targets) {
     state->targets.insert(target);
   }
-  return InitializeResult(loc, state);
+  return InitializeResult(loc, *state);
 }
 
 ForwardResult Executor::goForward(ForwardAction &action) {
@@ -5456,7 +5456,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   ExprHashMap<ref<Expr>> rebuildMap;
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
-  bool success = Composer::tryRebuild(*pob, state, *newPob, queryMetaData, rebuildMap);
+  bool success = Composer::tryRebuild(*pob, *state, *newPob, queryMetaData, rebuildMap);
   if (success) {
     newPob->path = concat(state->path, pob->path);
     // goBackward assumes that the state and the proof obligation are stack-compatible

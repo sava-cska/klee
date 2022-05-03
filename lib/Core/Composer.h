@@ -26,11 +26,7 @@ class ComposeVisitor;
 class Composer {
   friend class klee::ComposeVisitor;
 
-  Composer(ExecutionState *_state) : state(_state) {
-    assert(state);
-    copy = state->copy();
-  }
-
+  Composer(ExecutionState &_state) : state(_state), copy(state.copy()) {}
   ~Composer() = default;
 
 private:
@@ -42,16 +38,16 @@ private:
                   ExecutionStateIDCompare>
       globalDerefCache;
 
-  ExecutionState *state;
-  ExecutionState *copy;
+  ExecutionState &state;
+  ExecutionState &copy;
 
   bool tryRebuild(const ref<Expr>, ref<Expr> &);
 
 public:
   static Executor *executor;
-  static bool tryRebuild(const ref<Expr>, ExecutionState *, ref<Expr> &);
+  static bool tryRebuild(const ref<Expr>, ExecutionState &, ref<Expr> &);
   static bool tryRebuild(const ProofObligation &,
-                         ExecutionState *,
+                         ExecutionState &,
                          ProofObligation &,
                          SolverQueryMetaData &,
                          ExprHashMap<ref<Expr>> &);
@@ -62,10 +58,9 @@ class ComposeVisitor : public ExprVisitor {
 
 public:
   ComposeVisitor() = delete;
-  explicit ComposeVisitor(Composer *_caller, int diff)
+  explicit ComposeVisitor(Composer &_caller, int diff)
       : ExprVisitor(false), caller(_caller), diffLevel(diff) {
-    assert(caller && caller->state);
-    visited = &globalVisited[caller->state];
+    visited = &globalVisited[&caller.state];
   }
 
 private:
@@ -83,7 +78,7 @@ private:
   ref<Expr> processOrderedRead(const ConcatExpr & ce, const ReadExpr &re);
   ref<Expr> processSelect(const SelectExpr &);
   ref<Expr> reindexArray(const Array *array);
-  Composer *caller;
+  Composer &caller;
   int diffLevel;
 };
 } // namespace klee

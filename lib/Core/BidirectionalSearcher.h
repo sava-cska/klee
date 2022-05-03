@@ -26,37 +26,37 @@ class IBidirectionalSearcher {
 public:
   virtual Action& selectAction() = 0;
   virtual void update(ActionResult) = 0;
-  virtual void closeProofObligation(ProofObligation*) = 0;
+  virtual void closeProofObligation(ProofObligation *) = 0;
   virtual bool empty() = 0;
 };
 
 
 class BidirectionalSearcher : public IBidirectionalSearcher {
 public:
-  Action& selectAction() override;
+  Action &selectAction() override;
   void update(ActionResult) override;
-  void closeProofObligation(ProofObligation*) override;
+  void closeProofObligation(ProofObligation *) override;
   bool empty() override;
   explicit BidirectionalSearcher(const SearcherConfig &);
 
 private:
   enum class StepKind { Initialize, Forward, Branch, Backward, Terminate };
 
-  Executor* ex; // hack
+  Executor *ex; // hack
 
-  GuidedSearcher* forward;
-  GuidedSearcher* branch;
-  BFSBackwardSearcher* backward;
-  ValidityCoreInitializer* initializer;
+  GuidedSearcher *forward;
+  GuidedSearcher *branch;
+  BFSBackwardSearcher *backward;
+  ValidityCoreInitializer *initializer;
 
   uint choice = 0;
 
   // Temporary _-_
-  std::unordered_set<llvm::BasicBlock*> mainLocs;
+  std::unordered_set<llvm::BasicBlock *> mainLocs;
 
   StepKind selectStep();
-  void removePob(ProofObligation*);
-  bool isLooped(ExecutionState&);
+  void removePob(ProofObligation *);
+  bool isLooped(ExecutionState &);
 };
 
 } // namespace klee

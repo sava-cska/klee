@@ -132,15 +132,15 @@ namespace klee {
     std::vector<ExecutionState *> reachedOnLastUpdate;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
-    WeightResult tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets);
-    WeightResult tryGetPreTargetWeight(ExecutionState *es, double &weight);
-    WeightResult tryGetTargetWeight(ExecutionState *es, double &weight);
-    WeightResult tryGetPostTargetWeight(ExecutionState *es, double &weight);
-    WeightResult tryGetWeight(ExecutionState* es, double &weight);
+    WeightResult tryGetLocalWeight(const ExecutionState &es, double &weight, const std::vector<KBlock*> &localTargets);
+    WeightResult tryGetPreTargetWeight(const ExecutionState &es, double &weight);
+    WeightResult tryGetTargetWeight(const ExecutionState &es, double &weight);
+    WeightResult tryGetPostTargetWeight(const ExecutionState &es, double &weight);
+    WeightResult tryGetWeight(const ExecutionState &es, double &weight);
 
   public:
-    std::unordered_set<ExecutionState*> states_set;
-    TargetedSearcher(KBlock* target, bool at_return = false);
+    std::unordered_set<ExecutionState *> states_set;
+    TargetedSearcher(KBlock *target, bool at_return = false);
     ~TargetedSearcher() override;
 
     ExecutionState &selectState() override;
@@ -191,7 +191,7 @@ namespace klee {
     };
 
   private:
-    std::unique_ptr<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>> states;
+    std::unique_ptr<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>> states;
     RNG &theRNG;
     WeightType type;
     bool updateWeights;

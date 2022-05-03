@@ -132,7 +132,7 @@ void BidirectionalSearcher::update(ActionResult r) {
       for(auto state : i.second) {
         if (ex->initialState->getInitPCBlock() == state->getInitPCBlock() ||
             state->maxLevel == 1) {
-          ex->emanager->states[i.first].insert(state->copy());
+          ex->emanager->states[i.first].insert(&state->copy());
         }
       }
     }
@@ -156,7 +156,7 @@ void BidirectionalSearcher::update(ActionResult r) {
     }
   } else {
     auto ir = std::get<InitializeResult>(r);
-    branch->update(nullptr, {ir.state}, {});
+    branch->update(nullptr, {&ir.state}, {});
   }
 }
 

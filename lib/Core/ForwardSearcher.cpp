@@ -145,8 +145,8 @@ void RandomSearcher::printName(llvm::raw_ostream &os) {
   os << "RandomSearcher\n";
 }
 
-TargetedSearcher::TargetedSearcher(KBlock* target, bool at_end)
-  : states(std::make_unique<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>>()),
+TargetedSearcher::TargetedSearcher(KBlock *target, bool at_end)
+  : states(std::make_unique<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>>()),
     target(target), at_end(at_end),
     distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {}
 
@@ -183,11 +183,13 @@ bool TargetedSearcher::distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned i
   return distance != UINT_MAX;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetLocalWeight(ExecutionState *es, double &weight, const std::vector<KBlock*> &localTargets) {
-  unsigned int intWeight = es->steppedMemoryInstructions;
-  KFunction *currentKF = es->stack.back().kf;
-  KBlock *currentKB = currentKF->blockMap[es->getPCBlock()];
-  KBlock *prevKB = currentKF->blockMap[es->getPrevPCBlock()];
+TargetedSearcher::WeightResult TargetedSearcher::tryGetLocalWeight(const ExecutionState &es,
+                                                                   double &weight,
+                                                                   const std::vector<KBlock*> &localTargets) {
+  unsigned int intWeight = es.steppedMemoryInstructions;
+  KFunction *currentKF = es.stack.back().kf;
+  KBlock *currentKB = currentKF->blockMap[es.getPCBlock()];
+  KBlock *prevKB = currentKF->blockMap[es.getPrevPCBlock()];
   std::map<KBlock*, unsigned> &dist = currentKF->getDistance(currentKB);
   unsigned int localWeight = UINT_MAX;
   for (auto &end : localTargets) {
@@ -205,8 +207,8 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetLocalWeight(ExecutionStat
   return Continue;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetPreTargetWeight(ExecutionState *es, double &weight) {
-  KFunction *currentKF = es->stack.back().kf;
+TargetedSearcher::WeightResult TargetedSearcher::tryGetPreTargetWeight(const ExecutionState &es, double &weight) {
+  KFunction *currentKF = es.stack.back().kf;
   std::vector<KBlock*> localTargets;
   for (auto &kCallBlock : currentKF->kCallBlocks) {
     KFunction *calledKFunction = currentKF->parent->functionMap[kCallBlock->calledFunction];
@@ -222,8 +224,8 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPreTargetWeight(Execution
   return res == Done ? Continue : res;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(ExecutionState *es, double &weight) {
-  KFunction *currentKF = es->stack.back().kf;
+TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(const ExecutionState &es, double &weight) {
+  KFunction *currentKF = es.stack.back().kf;
   std::vector<KBlock*> &localTargets = currentKF->finalKBlocks;
 
   if (localTargets.empty()) return Miss;
@@ -233,12 +235,12 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(Executio
   return res == Done ? Continue : res;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(ExecutionState *es, double &weight) {
+TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(const ExecutionState &es, double &weight) {
   if(at_end) {
-    if(es->prevPC->parent == target &&
-       es->prevPC == es->prevPC->parent->getLastInstruction()) {
+    if(es.prevPC->parent == target &&
+       es.prevPC == es.prevPC->parent->getLastInstruction()) {
       return Done;
-    } else if(es->pc->parent == target) {
+    } else if(es.pc->parent == target) {
       weight = 0;
       return Continue;
     }
@@ -251,11 +253,11 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(ExecutionSta
   return res;
 }
 
-TargetedSearcher::WeightResult TargetedSearcher::tryGetWeight(ExecutionState *es, double &weight) {
-  BasicBlock *bb = es->getPCBlock();
-  KBlock *kb = es->stack.back().kf->blockMap[bb];
+TargetedSearcher::WeightResult TargetedSearcher::tryGetWeight(const ExecutionState &es, double &weight) {
+  BasicBlock *bb = es.getPCBlock();
+  KBlock *kb = es.stack.back().kf->blockMap[bb];
   unsigned int minCallWeight = UINT_MAX, minSfNum = UINT_MAX, sfNum = 0;
-  for (auto sfi = es->stack.rbegin(), sfe = es->stack.rend(); sfi != sfe; sfi++) {
+  for (auto sfi = es.stack.rbegin(), sfe = es.stack.rend(); sfi != sfe; sfi++) {
      unsigned callWeight;
      if (distanceInCallGraph(sfi->kf, kb, callWeight)) {
        callWeight *= 2;
@@ -291,7 +293,7 @@ void TargetedSearcher::update(ExecutionState *current,
   double weight = 0;
   // update current
   if (current && std::find(removedStates.begin(), removedStates.end(), current) == removedStates.end()) {
-    switch (tryGetWeight(current, weight)) {
+    switch (tryGetWeight(*current, weight)) {
     case Continue:
       if (states->inTree(current))
         states->update(current, weight);
@@ -314,7 +316,7 @@ void TargetedSearcher::update(ExecutionState *current,
 
   // insert states
   for (const auto state : addedStates) {
-    switch (tryGetWeight(state, weight)) {
+    switch (tryGetWeight(*state, weight)) {
     case Continue:
       states->insert(state, weight);
       states_set.insert(state);
@@ -434,8 +436,8 @@ void GuidedSearcher::update(ExecutionState *current,
   baseSearcher->update(current, addedStates, removedStates);
 }
 
-std::map<Target,std::unordered_set<ExecutionState*>> GuidedSearcher::collectAndClearReached() {
-  std::map<Target,std::unordered_set<ExecutionState*>> ret;
+std::map<Target, std::unordered_set<ExecutionState *>> GuidedSearcher::collectAndClearReached() {
+  std::map<Target, std::unordered_set<ExecutionState *>> ret;
   std::vector<Target> targets;
   for(auto const& targetSearcher: targetedSearchers)
     targets.push_back(targetSearcher.first);
@@ -465,7 +467,7 @@ void GuidedSearcher::addTarget(Target target) {
 }
 
 WeightedRandomSearcher::WeightedRandomSearcher(WeightType type, RNG &rng)
-  : states(std::make_unique<DiscretePDF<ExecutionState*, ExecutionStateIDCompare>>()),
+  : states(std::make_unique<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>>()),
     theRNG{rng},
     type(type) {
 

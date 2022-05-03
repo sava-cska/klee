@@ -87,21 +87,21 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
     Composer::globalDerefCache;
 
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
-  ComposeVisitor visitor(this, -copy->stackBalance);
+  ComposeVisitor visitor(*this, -copy.stackBalance);
   res = visitor.visit(expr);
   res = visitor.faultyPtr.isNull() ? res : visitor.faultyPtr;
   return visitor.faultyPtr.isNull();
 }
 
-bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState *state, ref<Expr> &res) {
+bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState &state, ref<Expr> &res) {
   Composer composer(state);
   bool success = composer.tryRebuild(expr, res);
-  delete composer.copy;
+  delete &composer.copy;
   return success;
 }
 
 bool Composer::tryRebuild(const ProofObligation &old,
-                          ExecutionState *state,
+                          ExecutionState &state,
                           ProofObligation &rebuilt,
                           SolverQueryMetaData &queryMetaData,
                           ExprHashMap<ref<Expr>> &rebuildMap) {
@@ -110,7 +110,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
   for(auto& constraint : old.condition) {
     auto loc = old.condition.get_location(constraint);
     if (loc){
-      loc = *loc + state->path.size();
+      loc = *loc + state.path.size();
     }
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
@@ -119,7 +119,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
     if (success) {
       rebuildMap[rebuiltConstraint] = constraint;
       success = executor->getSolver()->mayBeTrue(
-        composer.copy->constraints,
+        composer.copy.constraints,
         rebuiltConstraint,
         mayBeTrue,
         queryMetaData
@@ -130,22 +130,22 @@ bool Composer::tryRebuild(const ProofObligation &old,
       }
     }
     if (success) {
-      composer.copy->addConstraint(rebuiltConstraint, loc, &success);
+      composer.copy.addConstraint(rebuiltConstraint, loc, &success);
     } else {
       break;
     }
   }
-  rebuilt.condition = composer.copy->constraints;
+  rebuilt.condition = composer.copy.constraints;
   std::vector<Symbolic> foreign;
-  composer.copy->extractForeignSymbolics(foreign);
+  composer.copy.extractForeignSymbolics(foreign);
   rebuilt.symbolics = old.symbolics;
   rebuilt.symbolics.insert(rebuilt.symbolics.end(), foreign.begin(), foreign.end());
   return success;
 }
 
 bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
-  ExecutionState *state = caller->copy;
-  ExprHashMap<ref<Expr>> &derefCache = Composer::globalDerefCache[state];
+  ExecutionState &state = caller.copy;
+  ExprHashMap<ref<Expr>> &derefCache = Composer::globalDerefCache[&state];
   auto cachedDeref = derefCache.find(ptr);
   if (cachedDeref != derefCache.end()) {
     result = derefCache[ptr];
@@ -154,7 +154,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
 
   ResolutionList rl;
   Solver::Validity res = Solver::False;
-  state->addressSpace.resolve(*state, caller->executor->getSolver(), ptr, rl, true);
+  state.addressSpace.resolve(state, caller.executor->getSolver(), ptr, rl, true);
 
   if (rl.empty() && isa<ConstantExpr>(ptr)) {
     faultyPtr = ptr;
@@ -168,10 +168,10 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
 
     ref<Expr> inBounds = mo->getBoundsCheckPointer(ptr, size);
 
-    time::Span timeout = caller->executor->getSolverTimeout();
-    TimingSolver *solver = caller->executor->getSolver();
+    time::Span timeout = caller.executor->getSolverTimeout();
+    TimingSolver *solver = caller.executor->getSolver();
     solver->setTimeout(timeout);
-    solver->evaluate(state->constraints, AndExpr::create(check, inBounds), res, state->queryMetaData);
+    solver->evaluate(state.constraints, AndExpr::create(check, inBounds), res, state.queryMetaData);
     solver->setTimeout(time::Span());
 
     if (res == Solver::True) {
@@ -189,8 +189,8 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
   }
 
   if (!isa<ConstantExpr>(ptr) && res != Solver::True) {
-    ObjectPair p = caller->executor->transparentLazyInstantiateVariable(
-      *state, ptr, nullptr, size);
+    ObjectPair p = caller.executor->transparentLazyInstantiateVariable(
+      state, ptr, nullptr, size);
     ref<Expr> trueCase = p.second->read(0, 8 * p.second->size);
     results.push_back({ConstantExpr::create(true, Expr::Bool),
                         SExtExpr::create(trueCase, 8 * size)});
@@ -213,10 +213,8 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
 
 
 ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array *array) {
-  ExecutionState *state = caller->copy;
-  assert(state && "no context passed");
-
-  std::map<const MemoryObject *, ref<Expr>> &readCache = Composer::globalReadCache[state];
+  ExecutionState &state = caller.copy;
+  std::map<const MemoryObject *, ref<Expr>> &readCache = Composer::globalReadCache[&state];
 
   if(!object) {
     return nullptr;
@@ -252,24 +250,24 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     if(!allocSite)
       return nullptr;
 
-    KFunction *kf1 = state->stack.back().kf;
-    KBlock *pckb1 = kf1->blockMap[state->getPCBlock()];
+    KFunction *kf1 = state.stack.back().kf;
+    KBlock *pckb1 = kf1->blockMap[state.getPCBlock()];
 
     if(isa<Argument>(allocSite)) {
       const Argument *arg = cast<Argument>(allocSite);
       const Function *f   = arg->getParent();
-      const KFunction *kf = caller->executor->getKFunction(f);
+      const KFunction *kf = caller.executor->getKFunction(f);
       const unsigned argN = arg->getArgNo();
       prevVal =
         kf->function == kf1->function ?
-          caller->executor->getArgumentCell(*state, kf, argN).value : nullptr;
+          caller.executor->getArgumentCell(state, kf, argN).value : nullptr;
     } else if(isa<Instruction>(allocSite)) {
       const Instruction *inst = cast<Instruction>(allocSite);
-      const KInstruction *ki  = caller->executor->getKInst(const_cast<Instruction *>(inst));
+      const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
       bool isFinalPCKb1 =
         std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
       if (isa<PHINode>(inst))
-        prevVal = caller->executor->eval(ki, state->incomingBBIndex, *state, false).value;
+        prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, false).value;
       else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
         Function *f =
           isa<CallInst>(inst) ?
@@ -277,21 +275,21 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
             dyn_cast<InvokeInst>(inst)->getCalledFunction();
         prevVal =
           isFinalPCKb1 && f == kf1->function ?
-            caller->executor->getDestCell(*state, state->prevPC).value : nullptr;
+            caller.executor->getDestCell(state, state.prevPC).value : nullptr;
       } else {
         const Instruction *inst = cast<Instruction>(allocSite);
         const Function *f = inst->getParent()->getParent();
-        const KFunction *kf = caller->executor->getKFunction(f);
+        const KFunction *kf = caller.executor->getKFunction(f);
         prevVal =
           kf->function == kf1->function ?
-            caller->executor->getDestCell(*state, ki).value : nullptr;
+            caller.executor->getDestCell(state, ki).value : nullptr;
       }
     }
 
     if(prevVal.isNull()) {
-      const ObjectState *os = state->addressSpace.findObject(object);
+      const ObjectState *os = state.addressSpace.findObject(object);
       if(!os) {
-        os = caller->executor->bindSymbolicInState(*state, object, false, array);
+        os = caller.executor->bindSymbolicInState(state, object, false, array);
       }
       prevVal = os->read(0, 8 * os->size);
     }
@@ -303,13 +301,12 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
 
 ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
   ref<Expr> refRe = new ReadExpr(re);
-  ExecutionState *state = caller->copy;
-  assert(state && "no context passed");
+  ExecutionState &state = caller.copy;
 
   ref<ObjectState> OS;
   if(re.updates.root->isForeign ||
      re.updates.root->isConstantArray()) {
-    OS = new ObjectState(re.updates.root, caller->executor->getMemoryManager());
+    OS = new ObjectState(re.updates.root, caller.executor->getMemoryManager());
     ref<Expr> res = shareUpdates(OS, re);
     return res;
   }
@@ -328,14 +325,13 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
 
 ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExpr &base) {
   ref<ConcatExpr> refCe = new ConcatExpr(ce);
-  ExecutionState *state = caller->copy;
-  assert(state && "no context passed");
+  ExecutionState &state = caller.copy;
 
   ref<Expr> index = visit(base.index);
   ref<ObjectState> OS;
   if(base.updates.root->isForeign ||
     base.updates.root->isConstantArray()) {
-    OS = new ObjectState(base.updates.root, caller->executor->getMemoryManager());
+    OS = new ObjectState(base.updates.root, caller.executor->getMemoryManager());
     ref<Expr> res = OS->read(index, ce.getWidth());
     return res;
   }
@@ -367,20 +363,20 @@ ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
   int reindex = array->index + diffLevel;
   const MemoryObject *mo = array->binding ? array->binding : nullptr;
   assert(mo && mo->isLocal);
-  const Array *root = caller->executor->getArrayManager()->CreateArray(array, reindex);
+  const Array *root = caller.executor->getArrayManager()->CreateArray(array, reindex);
   const ObjectState *os = nullptr;
-  ExecutionState &state = *caller->copy;
+  ExecutionState &state = caller.copy;
   if (!root->binding) {
     ref<Expr> liSource = mo->lazyInstantiatedSource;
-    const MemoryObject *reindexMO = caller->executor->getMemoryManager()->allocateTransparent(
+    const MemoryObject *reindexMO = caller.executor->getMemoryManager()->allocateTransparent(
       mo->size, mo->isLocal, mo->isGlobal, mo->allocSite, /*allocationAlignment=*/8, liSource
     );
-    os = caller->executor->bindSymbolicInState(state, reindexMO, false, root);
+    os = caller.executor->bindSymbolicInState(state, reindexMO, false, root);
     const_cast<Array*>(root)->binding = reindexMO;
   } else {
     os = state.addressSpace.findObject(root->binding);
     if(!os) {
-      os = caller->executor->bindSymbolicInState(state, root->binding, false, root);
+      os = caller.executor->bindSymbolicInState(state, root->binding, false, root);
     }
   }
   assert(os);

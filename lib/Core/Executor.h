@@ -151,9 +151,9 @@ public:
     VisitedTransition transitionHistory;
   };
 
-  typedef std::map<llvm::BasicBlock*, ExecutionBlockResult> ExecutionResult;
+  typedef std::map<llvm::BasicBlock *, ExecutionBlockResult> ExecutionResult;
   
-  typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
+  typedef std::pair<ExecutionState *,ExecutionState *> StatePair;
   
 private:
   /// The random number generator.
@@ -294,7 +294,7 @@ private:
 public:
 
   ExecutionManager *emanager;
-  ExecutionState* initialState;
+  ExecutionState *initialState;
 
 private:
 

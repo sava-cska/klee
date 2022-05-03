@@ -175,17 +175,17 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     cur_mergehandler->addOpenState(this);
 }
 
-ExecutionState *ExecutionState::branch() {
+ExecutionState &ExecutionState::branch() {
   depth++;
 
   auto *falseState = new ExecutionState(*this);
   falseState->coveredNew = false;
   falseState->coveredLines.clear();
 
-  return falseState;
+  return *falseState;
 }
 
-ExecutionState *ExecutionState::withKFunction(KFunction *kf) const {
+ExecutionState &ExecutionState::withKFunction(KFunction *kf) const {
   assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
   newState->pushFrame(nullptr, kf);
@@ -194,10 +194,10 @@ ExecutionState *ExecutionState::withKFunction(KFunction *kf) const {
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
   newState->path = Path({kf->entryKBlock});
-  return newState;
+  return *newState;
 }
 
-ExecutionState *ExecutionState::withKBlock(KBlock *kb) const {
+ExecutionState &ExecutionState::withKBlock(KBlock *kb) const {
   assert(stack.size() == 0);
   ExecutionState *newState = new ExecutionState(*this);
   newState->pushFrame(nullptr, kb->parent);
@@ -206,10 +206,10 @@ ExecutionState *ExecutionState::withKBlock(KBlock *kb) const {
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
   newState->path = Path({kb});
-  return newState;
+  return *newState;
 }
 
-ExecutionState *ExecutionState::withKInstruction(KInstruction* ki) const {
+ExecutionState &ExecutionState::withKInstruction(KInstruction* ki) const {
   assert(stack.size() == 0);
   ExecutionState* newState = new ExecutionState(*this);
   newState->pushFrame(nullptr, ki->parent->parent);
@@ -221,11 +221,11 @@ ExecutionState *ExecutionState::withKInstruction(KInstruction* ki) const {
   newState->pc = newState->initPC;
   newState->prevPC = newState->pc;
   newState->path = Path({ki->parent});
-  return newState;
+  return *newState;
 }
 
-ExecutionState *ExecutionState::copy() const {
-  return new ExecutionState(*this);
+ExecutionState &ExecutionState::copy() const {
+  return *(new ExecutionState(*this));
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {

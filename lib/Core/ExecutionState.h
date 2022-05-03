@@ -329,12 +329,11 @@ public:
   // dtor
   ~ExecutionState();
 
-  ExecutionState *branch();
-  ExecutionState *withKFunction(KFunction *kf) const;
-  ExecutionState *withKBlock(KBlock *kb) const;
-  ExecutionState *withKInstruction(KInstruction* ki) const;
-  ExecutionState *empty();
-  ExecutionState *copy() const;
+  ExecutionState &branch();
+  ExecutionState &withKFunction(KFunction *kf) const;
+  ExecutionState &withKBlock(KBlock *kb) const;
+  ExecutionState &withKInstruction(KInstruction* ki) const;
+  ExecutionState &copy() const;
 
   void pushFrame(KInstIterator caller, KFunction *kf);
   void popFrame();

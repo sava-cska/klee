@@ -119,10 +119,10 @@ struct BackwardResult {
 };
 
 struct InitializeResult {
-  KInstruction* location;
-  ExecutionState* state;
+  KInstruction *location;
+  ExecutionState &state;
 
-  InitializeResult(KInstruction *_loc, ExecutionState *es) :
+  InitializeResult(KInstruction *_loc, ExecutionState &es) :
     location(_loc), state(es) {}
 };
 

@@ -148,8 +148,9 @@ private:
       // FIXME: We need to do something (assert, mangle, etc.) so that printing
       // distinct arrays with the same name doesn't fail.
       if (!updates.root->liSource.isNull()) {
-        PC << "LI";
+        PC << "(LI ";
         print(updates.root->liSource, PC);
+        PC << ")";
       } else {
         PC << updates.root->name;
       }
@@ -203,7 +204,13 @@ private:
 
     if (openedList)
       PC << ']';
-    PC << " @ " << updates.root->name;
+    if (!updates.root->liSource.isNull()) {
+      PC << " @ (LI ";
+      print(updates.root->liSource, PC);
+      PC << ")";
+    } else {
+      PC << " @ " << updates.root->name;
+    }
     if (updates.root->index)
       PC << "%" << updates.root->index;
   }

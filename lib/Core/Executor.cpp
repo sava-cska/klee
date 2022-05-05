@@ -2155,8 +2155,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       Executor::StatePair branches = fork(state, cond, false);
 
-      if (state.queryMetaData.queryValidityCore && state.targets.empty() &&
-          !state.isIsolated()) {
+      if (state.queryMetaData.queryValidityCore &&
+          state.depth && !state.isIsolated()) {
         assert((branches.first && !branches.second) ||
                (!branches.first && branches.second));
 

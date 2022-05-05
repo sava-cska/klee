@@ -21,7 +21,6 @@ bool SolverImpl::computeValidity(const Query &query,
   if (!computeTruth(query, isTrue, metaData))
     return false;
   if (isTrue) {
-    computeTruth(query.negateExpr(), isTrue, metaData);
     result = Solver::True;
   } else {
     if (!computeTruth(query.negateExpr(), isFalse, metaData))

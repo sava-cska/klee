@@ -4479,7 +4479,7 @@ const Array * Executor::makeArray(ExecutionState &state,
                                   bool isForeign,
                                   ref<Expr> liSource) {
   static uint64_t id = 0;
-  std::string uniqueName = name + "#" + std::to_string(id++);
+  std::string uniqueName = isForeign ? name + "#" + std::to_string(id++) : name;
   // std::string uniqueName = name;
   // while (!state.arrayNames.insert(uniqueName).second) {
   //   uniqueName = name + "#" + llvm::utostr(++id);

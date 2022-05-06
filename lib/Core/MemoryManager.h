@@ -44,12 +44,12 @@ public:
    */
   MemoryObject *allocate(uint64_t size, bool isLocal, bool isGlobal,
                          const llvm::Value *allocSite, size_t alignment,
-                         ref<Expr> lazyInstantiatedSource = ref<Expr>());
+                         ref<Expr> lazyInitializedSource = ref<Expr>());
   MemoryObject *allocateFixed(uint64_t address, uint64_t size,
                               const llvm::Value *allocSite);
   MemoryObject *allocateTransparent(uint64_t size, bool isLocal, bool isGlobal,
                          const llvm::Value *allocSite, size_t alignment,
-                         ref<Expr> lazyInstantiatedSource = ref<Expr>());
+                         ref<Expr> lazyInitializedSource = ref<Expr>());
   void deallocate(MemoryObject *mo);
   void markFreed(MemoryObject *mo);
   ArrayManager *getArrayManager() const { return arrayManager; }

@@ -86,7 +86,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
     TimerStatIncrementer timer(stats::resolveTime);
 
     auto isPointer = [=](Symbolic x) {
-      return !x.first->isTransparent && x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == address;
+      return !x.first->isTransparent && x.first->isLazyInitialized() && x.first->getLazyInitializedSource() == address;
     };
     auto symPointer = std::find_if(begin(state.symbolics), end(state.symbolics), isPointer);
     if (symPointer != end(state.symbolics)) {
@@ -232,7 +232,7 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     TimerStatIncrementer timer(stats::resolveTime);
 
     auto isPointer = [=](Symbolic x) {
-      return !x.first->isTransparent && x.first->isLazyInstantiated() && x.first->getLazyInstantiatedSource() == p;
+      return !x.first->isTransparent && x.first->isLazyInitialized() && x.first->getLazyInitializedSource() == p;
     };
     auto symPointer = std::find_if(begin(state.symbolics), end(state.symbolics), isPointer);
     if (symPointer != end(state.symbolics)) {
@@ -387,16 +387,16 @@ void AddressSpace::clear() {
 /***/
 
 bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const {
-  if (a->lazyInstantiatedSource.isNull() && b->lazyInstantiatedSource.isNull())
+  if (a->lazyInitializedSource.isNull() && b->lazyInitializedSource.isNull())
     return a->address < b->address;
-  else if (a->lazyInstantiatedSource.isNull())
+  else if (a->lazyInitializedSource.isNull())
     return true;
-  else if (b->lazyInstantiatedSource.isNull())
+  else if (b->lazyInitializedSource.isNull())
     return false;
   else {
-    if (a->lazyInstantiatedSource != b->lazyInstantiatedSource)
-      assert(a->lazyInstantiatedSource->hash() != b->lazyInstantiatedSource->hash());
-    return a->lazyInstantiatedSource->hash() < b->lazyInstantiatedSource->hash();
+    if (a->lazyInitializedSource != b->lazyInitializedSource)
+      assert(a->lazyInitializedSource->hash() != b->lazyInitializedSource->hash());
+    return a->lazyInitializedSource->hash() < b->lazyInitializedSource->hash();
   }
 }
 

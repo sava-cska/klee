@@ -47,7 +47,7 @@ private:
 public:
   unsigned id;
   uint64_t address;
-  ref<Expr> lazyInstantiatedSource;
+  ref<Expr> lazyInitializedSource;
 
   /// size in bytes
   unsigned size;
@@ -83,17 +83,17 @@ public:
   MemoryObject(uint64_t _address) 
     : id(counter++),
       address(_address),
-      lazyInstantiatedSource(nullptr),
+      lazyInitializedSource(nullptr),
       size(0),
       isFixed(true),
       parent(NULL),
       allocSite(0) {
   }
 
-  MemoryObject(ref<Expr> _lazyInstantiatedSource)
+  MemoryObject(ref<Expr> _lazyInitializedSource)
     : id(counter++),
       address((uint64_t)0xffffffffffffffff),
-      lazyInstantiatedSource(_lazyInstantiatedSource),
+      lazyInitializedSource(_lazyInitializedSource),
       size(0),
       isFixed(true),
       parent(NULL),
@@ -104,10 +104,10 @@ public:
                bool _isLocal, bool _isGlobal, bool _isFixed,
                const llvm::Value *_allocSite,
                MemoryManager *_parent,
-               ref<Expr> _lazyInstantiatedSource = nullptr)
+               ref<Expr> _lazyInitializedSource = nullptr)
     : id(counter++),
       address(_address),
-      lazyInstantiatedSource(_lazyInstantiatedSource),
+      lazyInitializedSource(_lazyInitializedSource),
       size(_size),
       name("unnamed"),
       isLocal(_isLocal),
@@ -128,16 +128,16 @@ public:
     this->name = name;
   }
 
-  bool isLazyInstantiated() const {
-    return !lazyInstantiatedSource.isNull();
+  bool isLazyInitialized() const {
+    return !lazyInitializedSource.isNull();
   }
 
-  ref<Expr> getLazyInstantiatedSource() const {
-    return this->lazyInstantiatedSource;
+  ref<Expr> getLazyInitializedSource() const {
+    return this->lazyInitializedSource;
   }
 
-  void setLazyInstantiatedSource(ref<Expr> source) {
-    this->lazyInstantiatedSource = source;
+  void setLazyInitializedSource(ref<Expr> source) {
+    this->lazyInitializedSource = source;
   }
 
   ref<ConstantExpr> getBaseConstantExpr() const {
@@ -145,10 +145,10 @@ public:
   }
 
   ref<Expr> getBaseExpr() const {
-    if(lazyInstantiatedSource.isNull())
+    if(lazyInitializedSource.isNull())
         return getBaseConstantExpr();
     else
-        return lazyInstantiatedSource;
+        return lazyInitializedSource;
   }
 
   ref<ConstantExpr> getSizeExpr() const { 
@@ -210,8 +210,8 @@ public:
     if (allocSite != b.allocSite)
       return (allocSite < b.allocSite ? -1 : 1);
 
-    if (lazyInstantiatedSource != b.lazyInstantiatedSource)
-      return (lazyInstantiatedSource->hash() < b.lazyInstantiatedSource->hash() ? -1 : 1);
+    if (lazyInitializedSource != b.lazyInitializedSource)
+      return (lazyInitializedSource->hash() < b.lazyInitializedSource->hash() ? -1 : 1);
 
     return 0;
   }

@@ -4019,7 +4019,7 @@ ObjectState *Executor::bindSymbolicInState(ExecutionState &state, const MemoryOb
                                  bool IsAlloca, const Array *array) {
   ObjectState *os = bindObjectInState(state, mo, IsAlloca, array);
   Value *allocSite = const_cast<Value *>(mo->allocSite);
-  if (!mo->isLazyInstantiated() && isa<AllocaInst>(allocSite)) {
+  if (!mo->isLazyInitialized() && isa<AllocaInst>(allocSite)) {
     Instruction *inst = cast<Instruction>(allocSite);
     ref<Expr> address = os->read(0, 8 * os->size);
     addAllocaDisequality(state, inst, address);
@@ -4035,7 +4035,7 @@ ObjectState *Executor::bindSymbolicInState(ExecutionState &state, const MemoryOb
       if (isa<ConstantExpr>(size))
         elementSize = cast<ConstantExpr>(size)->getZExtValue();
     }
-    lazyInstantiateVariable(state, address, true, inst, elementSize);
+    lazyInitializeVariable(state, address, true, inst, elementSize);
   }
   state.addSymbolic(mo, array);
   return os;
@@ -4389,7 +4389,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       if (wasBaseResolved)
         needAddressLazyInitialization = true;
       else {
-        p = lazyInstantiateVariable(*unbound, base, false, target ? target->inst : nullptr, size);
+        p = lazyInitializeVariable(*unbound, base, false, target ? target->inst : nullptr, size);
         assert(p.first && p.second);
 
         const MemoryObject *mo = p.first;
@@ -4407,7 +4407,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
       if (needAddressLazyInitialization) {
         if (unbound->isIsolated()) {
-          p = lazyInstantiateVariable(*unbound, address, false, target ? target->inst : nullptr, bytes);
+          p = lazyInitializeVariable(*unbound, address, false, target ? target->inst : nullptr, bytes);
         } else {
           terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
                                 NULL, getAddressInfo(*unbound, address));
@@ -4435,11 +4435,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 }
 
-ObjectPair Executor::lazyInstantiate(ExecutionState &state, bool isAlloca, const MemoryObject *mo) {
-  return executeMakeSymbolic(state, mo, "lazy_instantiation", isAlloca);
+ObjectPair Executor::lazyInitialize(ExecutionState &state, bool isAlloca, const MemoryObject *mo) {
+  return executeMakeSymbolic(state, mo, "lazy_initialization", isAlloca);
 }
 
-ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state,
+ObjectPair Executor::lazyInitializeVariable(ExecutionState &state,
                                              ref<Expr> address,
                                              bool isLocal,
                                              const llvm::Value *allocSite,
@@ -4448,10 +4448,10 @@ ObjectPair Executor::lazyInstantiateVariable(ExecutionState &state,
   MemoryObject *mo =
       memory->allocate(size, isLocal, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
-  return lazyInstantiate(state, isLocal, mo);
+  return lazyInitialize(state, isLocal, mo);
 }
 
-ObjectPair Executor::transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
+ObjectPair Executor::transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
   if (liCache.count(address)) {
     auto symbolic = liCache[address];
@@ -4525,7 +4525,7 @@ ObjectPair Executor::executeMakeSymbolic(ExecutionState &state,
     }
 
     if (!array) {
-      array = makeArray(state, mo->size, name, isHandleMakeSymbolic, mo->lazyInstantiatedSource);
+      array = makeArray(state, mo->size, name, isHandleMakeSymbolic, mo->lazyInitializedSource);
     }
 
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);
@@ -4687,7 +4687,7 @@ void Executor::addAllocaDisequality(ExecutionState &state, const Value *allocSit
   assert(isa<AllocaInst>(allocSite));
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   for (auto &symbolic : state.symbolics) {
-    if (!symbolic.first->isLazyInstantiated() &&
+    if (!symbolic.first->isLazyInitialized() &&
         symbolic.first->size == size &&
         isa<AllocaInst>(symbolic.first->allocSite) &&
         symbolic.first->allocSite != allocSite) {
@@ -4827,11 +4827,11 @@ void Executor::logState(ExecutionState& state, int id,
     *f << "Symbolic number " << sc++ << "\n";
     *f << "Associated memory object: " << i.first.get()->id << "\n";
     *f << "Memory object size: " << i.first.get()->size << "\n";
-    if(!i.first->isLazyInstantiated()) {
+    if(!i.first->isLazyInitialized()) {
       *f << "<Not instantiated lazily>" << "\n";
       continue;
     }
-    auto lisource = i.first->lazyInstantiatedSource;
+    auto lisource = i.first->lazyInitializedSource;
     *f << "Lazy Instantiation Source: ";
     lisource->print(*f);
     *f << "\n";
@@ -4851,9 +4851,9 @@ int Executor::resolveLazyInstantiation(ExecutionState &state) {
 void Executor::setInstantiationGraph(ExecutionState &state, TestCase &tc) {
   std::map<size_t, std::vector<Offset>> ofst;
   for(size_t i = 0; i < state.symbolics.size(); i++) {
-    if(!state.symbolics[i].first->isLazyInstantiated()) continue;
+    if(!state.symbolics[i].first->isLazyInitialized()) continue;
     auto parent =
-        state.pointers[state.symbolics[i].first->lazyInstantiatedSource];
+        state.pointers[state.symbolics[i].first->lazyInitializedSource];
     // Resolve offset (parent.second)
     ref<ConstantExpr> offset;
     bool success = solver->getValue(state.constraints, parent.second, offset,

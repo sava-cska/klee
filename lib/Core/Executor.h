@@ -407,13 +407,13 @@ private:
                               KInstruction *target /* def if read*/,
                               std::vector<ExecutionState *> *results = nullptr);
 
-  ObjectPair lazyInstantiateVariable(ExecutionState &state, ref<Expr> address, bool isLocal,
+  ObjectPair lazyInitializeVariable(ExecutionState &state, ref<Expr> address, bool isLocal,
                                      const llvm::Value *allocSite, uint64_t size);
 
-  ObjectPair transparentLazyInstantiateVariable(ExecutionState &state, ref<Expr> address,
+  ObjectPair transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address,
                                      const llvm::Value *allocSite, uint64_t size);
   
-  ObjectPair lazyInstantiate(ExecutionState &state, bool isLocal,
+  ObjectPair lazyInitialize(ExecutionState &state, bool isLocal,
                              const MemoryObject *mo);
 
   ObjectPair executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,

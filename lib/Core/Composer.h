@@ -72,7 +72,7 @@ private:
   ExprVisitor::Action visitRead(const ReadExpr &);
   ExprVisitor::Action visitConcat(const ConcatExpr &concat);
   ExprVisitor::Action visitSelect(const SelectExpr &);
-  ref<Expr> shareUpdates(ref<ObjectState>, const ReadExpr &);
+  void shareUpdates(ref<ObjectState>, const ReadExpr &);
   ref<Expr> processObject(const MemoryObject *object, const Array *array);
   ref<Expr> processRead(const ReadExpr &);
   ref<Expr> processOrderedRead(const ConcatExpr & ce, const ReadExpr &re);

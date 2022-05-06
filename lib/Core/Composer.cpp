@@ -57,8 +57,7 @@ ExprVisitor::Action ComposeVisitor::visitSelect(const SelectExpr &select) {
   return faultyPtr.isNull() ? Action::changeTo(result) : Action::abort();
 }
 
-ref<Expr> ComposeVisitor::shareUpdates(ref<ObjectState> OS,
-                                       const ReadExpr &re) {
+void ComposeVisitor::shareUpdates(ref<ObjectState> os, const ReadExpr &re) {
   std::stack<ref<UpdateNode>> forward;
 
   for (auto it = re.updates.head; !it.isNull(); it = it->next) {
@@ -70,13 +69,9 @@ ref<Expr> ComposeVisitor::shareUpdates(ref<ObjectState> OS,
     forward.pop();
     ref<Expr> newIndex = visit(UNode->index);
     ref<Expr> newValue = visit(UNode->value);
-    OS->write(newIndex, newValue);
+    os->write(newIndex, newValue);
   }
-
-  ref<Expr> index = visit(re.index);
-  return OS->read(index, re.getWidth());
 }
-
 
 std::map<const ExecutionState *, std::map<const MemoryObject *, ref<Expr>>,
          ExecutionStateIDCompare>
@@ -300,50 +295,50 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
 }
 
 ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
-  ref<Expr> refRe = new ReadExpr(re);
   ExecutionState &state = caller.copy;
 
-  ref<ObjectState> OS;
+  ref<Expr> index = visit(re.index);
+  ref<ObjectState> os;
   if(re.updates.root->isForeign ||
      re.updates.root->isConstantArray()) {
-    OS = new ObjectState(re.updates.root, caller.executor->getMemoryManager());
-    ref<Expr> res = shareUpdates(OS, re);
-    return res;
+    os = new ObjectState(re.updates.root, caller.executor->getMemoryManager());
+    shareUpdates(os, re);
+    return os->read(index, re.getWidth());
   }
 
-  const MemoryObject *object =
-    re.updates.root->binding ? re.updates.root->binding : nullptr;
-  OS = new ObjectState(object);
+  const MemoryObject *object = re.updates.root->binding;
   ref<Expr> res = processObject(object, re.updates.root);
   if (!res.isNull()) {
-    OS->write(0, res);
-    res = shareUpdates(OS, re);
+    os = new ObjectState(object);
+    os->write(0, res);
+    shareUpdates(os, re);
+    res = os->read(index, re.getWidth());
   }
   return res;
 }
 
 
 ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExpr &base) {
-  ref<ConcatExpr> refCe = new ConcatExpr(ce);
   ExecutionState &state = caller.copy;
 
   ref<Expr> index = visit(base.index);
-  ref<ObjectState> OS;
+  ref<ObjectState> os;
   if(base.updates.root->isForeign ||
     base.updates.root->isConstantArray()) {
-    OS = new ObjectState(base.updates.root, caller.executor->getMemoryManager());
-    ref<Expr> res = OS->read(index, ce.getWidth());
+    os = new ObjectState(base.updates.root, caller.executor->getMemoryManager());
+    shareUpdates(os, base);
+    ref<Expr> res = os->read(index, ce.getWidth());
     return res;
   }
 
-  const MemoryObject *object =
-    base.updates.root->binding ? base.updates.root->binding : nullptr;
-  OS = new ObjectState(object);
+  const MemoryObject *object = base.updates.root->binding;
   ref<Expr> res = processObject(object, base.updates.root);
 
   if (!res.isNull()) {
-    OS->write(0, res);
-    res = OS->read(index, ce.getWidth());
+    os = new ObjectState(object);
+    os->write(0, res);
+    shareUpdates(os, base);
+    res = os->read(index, ce.getWidth());
   }
   return res;
 }
@@ -363,6 +358,7 @@ ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
   int reindex = array->index + diffLevel;
   const MemoryObject *mo = array->binding ? array->binding : nullptr;
   assert(mo && mo->isLocal);
+  assert(array->liSource.isNull());
   const Array *root = caller.executor->getArrayManager()->CreateArray(array, reindex);
   const ObjectState *os = nullptr;
   ExecutionState &state = caller.copy;

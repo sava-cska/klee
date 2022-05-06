@@ -4383,29 +4383,37 @@ void Executor::executeMemoryOperation(ExecutionState &state,
         return;
       }
 
-      ObjectPair p = lazyInstantiateVariable(*unbound, base, false, target ? target->inst : nullptr, size);
-      assert(p.first && p.second);
+      bool needAddressLazyInitialization;
+      ObjectPair p;
+      bool wasBaseResolved = rl.size() == 1 && rl.begin()->first->getBaseExpr() == base;
+      if (wasBaseResolved)
+        needAddressLazyInitialization = true;
+      else {
+        p = lazyInstantiateVariable(*unbound, base, false, target ? target->inst : nullptr, size);
+        assert(p.first && p.second);
 
-      const MemoryObject *mo = p.first;
-      ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
+        const MemoryObject *mo = p.first;
+        ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
 
-      Solver::Validity res;
-      time::Span timeout = coreSolverTimeout;
-      solver->setTimeout(timeout);
-      solver->evaluate(unbound->constraints, inBounds, res, unbound->queryMetaData);
-      solver->setTimeout(time::Span());
+        Solver::Validity res;
+        time::Span timeout = coreSolverTimeout;
+        solver->setTimeout(timeout);
+        solver->evaluate(unbound->constraints, inBounds, res, unbound->queryMetaData);
+        solver->setTimeout(time::Span());
+        needAddressLazyInitialization = res == Solver::False;
+        if (!needAddressLazyInitialization)
+          addConstraint(*unbound, inBounds);
+      }
 
-      if (res == Solver::False) {
+      if (needAddressLazyInitialization) {
         if (unbound->isIsolated()) {
           p = lazyInstantiateVariable(*unbound, address, false, target ? target->inst : nullptr, bytes);
-          mo = p.first;
         } else {
           terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
                                 NULL, getAddressInfo(*unbound, address));
           return;
         }
-      } else
-        addConstraint(*unbound, inBounds);
+      }
       switch (operation) {
         case Write: {
           ObjectState *wos = unbound->addressSpace.getWriteable(p.first, p.second);

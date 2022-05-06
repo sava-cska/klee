@@ -57,7 +57,7 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
-      if(isLooped(state)) {
+      if(isStuck(state)) {
         KBlock *target = ex->calculateTargetByTransitionHistory(state);
         if (target) {
           state.targets.insert(Target(target, false));
@@ -188,7 +188,7 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
 }
 
 
-bool BidirectionalSearcher::isLooped(ExecutionState& state) {
+bool BidirectionalSearcher::isStuck(ExecutionState& state) {
   KInstruction *prevKI = state.prevPC;
   return prevKI->inst->isTerminator() &&
          state.targets.empty() &&

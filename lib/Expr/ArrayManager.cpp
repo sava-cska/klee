@@ -12,13 +12,11 @@ ArrayManager::CreateArray(const std::string &_name, uint64_t _size,
                         const ref<ConstantExpr> *constantValuesBegin,
                         const ref<ConstantExpr> *constantValuesEnd,
                         Expr::Width _domain, Expr::Width _range) {
-
   return arrayCache->CreateArray(_name, _size, constantValuesBegin, constantValuesEnd, _domain, _range);
 }
 
 const Array *
 ArrayManager::CreateArray(const std::string &name, uint64_t size, bool isForeign, ref<Expr> liSource) {
-
   return arrayCache->CreateArray(name, size, 0, isForeign, liSource);
 }
 

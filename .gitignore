@@ -8,6 +8,8 @@ Output/
 build/
 release-build/
 
+benchmarks_compiled/
+
 cscope.*
 *~
 

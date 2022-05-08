@@ -1,6 +1,7 @@
 #include "Summary.h"
 #include "klee/ADT/Ref.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Support/ErrorHandling.h"
 #include <iostream>
 
 using namespace klee;
@@ -20,27 +21,29 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
     return;
   }
 
-  std::cout << "Summary for pob at: " << pob->location->getIRLocation() << (pob->at_return ? "(at return)" : "") << std::endl;
+  (*summaryFile) << "Summary for pob at: " << pob->location->getIRLocation() << (pob->at_return ? "(at return)" : "") << "\n";
 
-  std::cout << "(Pob at "
-            << (pob->at_return
-                    ? pob->location->getFirstInstruction()->getSourceLocation()
-                    : pob->location->getLastInstruction()->getSourceLocation())
-            << std::endl;
+  (*summaryFile) << "Pob at "
+                 << (pob->at_return
+                         ? pob->location->getFirstInstruction()->getSourceLocation()
+                         : pob->location->getLastInstruction()->getSourceLocation())
+                 << "\n";
 
   auto core = *metaData.queryValidityCore;
   auto& lemma = lemmas[pob];
-  std::cout << "Constraints are:" << std::endl;
+  (*summaryFile) << "Constraints are:\n";
   for(auto &constraint : core) {
     if(rebuildMap.count(constraint.first)) {
       lemma.constraints.push_back(Expr::createIsZero(rebuildMap.at(constraint.first)));
-      std::cout << lemma.constraints.back()->toString() << std::endl;
+      (*summaryFile) << lemma.constraints.back()->toString() << "\n";
     }
   }
-  std::cout << "State Path is:" << std::endl;
-  std::cout << path.print() << std::endl;
-  std::cout << "Pob Path is:" << std::endl;
-  std::cout << pob->path.print() << std::endl;
-  std::cout << std::endl;
+
+  (*summaryFile) << "State Path is:\n";
+  (*summaryFile) << path.print() << "\n";
+  (*summaryFile) << "Pob Path is:\n";
+  (*summaryFile) << pob->path.print() << "\n";
+  (*summaryFile) << "\n";
+
   lemma.paths.push_back(path);
 }

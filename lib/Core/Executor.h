@@ -289,7 +289,10 @@ private:
   /// Typeids used during exception handling
   std::vector<ref<Expr>> eh_typeids;
 
-  Summary summary;
+  /// File to print summary
+  std::unique_ptr<llvm::raw_fd_ostream> summaryFile;
+
+  std::unique_ptr<Summary> summary;
 
 public:
 

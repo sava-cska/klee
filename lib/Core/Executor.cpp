@@ -553,6 +553,17 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
                  error.c_str());
     }
   }
+
+  std::string error;
+  std::string summary_file_name =
+      interpreterHandler->getOutputFilename("summary.txt");
+  summaryFile = klee_open_output_file(summary_file_name, error);
+  if (!summaryFile) {
+      klee_error("Could not open file %s : %s", summary_file_name.c_str(),
+                 error.c_str());
+  }
+  summary =  std::make_unique<Summary>(summaryFile);
+
   Composer::executor = this;
 }
 
@@ -5493,7 +5504,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
     return BackwardResult(newPobs, pob);
   } else {
     delete newPob;
-    summary.summarize(state->path, pob, queryMetaData, rebuildMap);
+    summary->summarize(state->path, pob, queryMetaData, rebuildMap);
     return BackwardResult({}, pob);
   }
 }

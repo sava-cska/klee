@@ -61,11 +61,10 @@ Action &BidirectionalSearcher::selectAction() {
         KBlock *target = ex->calculateTargetByTransitionHistory(state);
         if (target) {
           state.targets.insert(Target(target, false));
-          ex->updateStates(&state);
+          forward->update(&state, {}, {});
           action = new ForwardAction(&state);
         } else {
           ex->pauseState(state);
-          ex->updateStates(nullptr);
         }
       } else
         action = new ForwardAction(&state);
@@ -74,7 +73,7 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Branch : {
       auto& state = branch->selectState();
-      action = new ForwardAction(&state);
+      action = new BranchAction(&state);
       break;
     }
 
@@ -103,41 +102,7 @@ Action &BidirectionalSearcher::selectAction() {
 void BidirectionalSearcher::update(ActionResult r) {
   if(std::holds_alternative<ForwardResult>(r)) {
     auto fr = std::get<ForwardResult>(r);
-    ExecutionState* fwdCur = nullptr, *brnchCur = nullptr;
-    std::vector<ExecutionState*> fwdAdded;
-    std::vector<ExecutionState*> brnchAdded;
-    std::vector<ExecutionState*> fwdRemoved;
-    std::vector<ExecutionState*> brnchRemoved;
-
-    if(fr.current) {
-      if(fr.current->isIsolated())
-        brnchCur = fr.current;
-      else
-        fwdCur = fr.current;
-    }
-    for(auto i : fr.addedStates) {
-      if(i->isIsolated())
-        brnchAdded.push_back(i);
-      else fwdAdded.push_back(i);
-    }
-    for(auto i : fr.removedStates) {
-      if(i->isIsolated())
-        brnchRemoved.push_back(i);
-      else fwdRemoved.push_back(i);
-    }
-
-    branch->update(brnchCur, brnchAdded, brnchRemoved);
-    auto reached = branch->collectAndClearReached();
-    for(auto i : reached) {
-      for(auto state : i.second) {
-        if (ex->initialState->getInitPCBlock() == state->getInitPCBlock() ||
-            state->maxLevel == 1) {
-          ex->emanager->states[i.first].insert(&state->copy());
-        }
-      }
-    }
-
-    forward->update(fwdCur, fwdAdded, fwdRemoved);
+    forward->update(fr.current, fr.addedStates, fr.removedStates);
 
     if(fr.validityCore) {
       initializer->addValidityCoreInit(fr.validityCore->core, fr.validityCore->target);
@@ -148,6 +113,34 @@ void BidirectionalSearcher::update(ActionResult r) {
       }
     }
 
+  } else if(std::holds_alternative<BranchResult>(r)) {
+    auto br = std::get<BranchResult>(r);
+    std::vector<ExecutionState *> addedStates = br.addedStates;
+    std::vector<ExecutionState *> removedStates = br.removedStates;
+
+    if (br.current &&
+        std::find(removedStates.begin(), removedStates.end(), br.current) == removedStates.end() &&
+        (ex->initialState->getInitPCBlock() == br.current->getInitPCBlock() ||
+         br.current->maxLevel > 1)) {
+      removedStates.push_back(br.current);
+    }
+    for (auto state : br.addedStates) {
+      if (ex->initialState->getInitPCBlock() == state->getInitPCBlock() ||
+          state->maxLevel > 1) {
+        std::vector<ExecutionState *>::iterator ita =
+          std::find(addedStates.begin(), addedStates.end(), state);
+        addedStates.erase(ita);
+      }
+    }
+
+    branch->update(br.current, addedStates, removedStates);
+
+    auto reached = branch->collectAndClearReached();
+    for (auto &targetStates : reached) {
+      for (auto state : targetStates.second) {
+        ex->emanager->states[targetStates.first].insert(&state->copy());
+      }
+    }
   } else if (std::holds_alternative<BackwardResult>(r)) {
     auto br = std::get<BackwardResult>(r);
     for(auto i : br.newPobs) {

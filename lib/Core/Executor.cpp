@@ -3347,47 +3347,37 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
-// TODO: Refactor
 void Executor::updateResult(ActionResult r) {
   if (searcher) {
-    // ultra hot fix
-    if (std::holds_alternative<ForwardResult>(r)) {
-      auto fr = std::get<ForwardResult>(r);
-      fr.addedStates = addedStates;
-      fr.removedStates = removedStates;
-      searcher->update(fr);
-    } else {
-      searcher->update(r);
+    searcher->update(r);
+  }
+
+  if (std::holds_alternative<ForwardResult>(r)) {
+    auto fr = std::get<ForwardResult>(r);
+    states.insert(fr.addedStates.begin(), fr.addedStates.end());
+    for (const auto state : fr.removedStates) {
+      removeState(state);
     }
   }
 
-  states.insert(addedStates.begin(), addedStates.end());
   addedStates.clear();
-
-  for (std::vector<ExecutionState *>::iterator it = removedStates.begin(),
-                                               ie = removedStates.end();
-       it != ie; ++it) {
-    ExecutionState *es = *it;
-    std::set<ExecutionState *>::iterator it2 = states.find(es);
-    assert(it2 != states.end());
-    states.erase(it2);
-    std::map<ExecutionState *, std::vector<SeedInfo>>::iterator it3 =
-      seedMap.find(es);
-    if (it3 != seedMap.end())
-      seedMap.erase(it3);
-    if (!es->isIsolated()) {
-      processForest->remove(es->ptreeNode);
-      delete es;
-    } else {
-      isolatedStates.push_back(es);
-    }
-  }
   removedStates.clear();
 }
 
-// ultra bad
-void Executor::updateStates(ExecutionState* state) {
-  updateResult(ForwardResult(state));
+void Executor::removeState(ExecutionState *state) {
+  std::set<ExecutionState *>::iterator it2 = states.find(state);
+  assert(it2 != states.end());
+  states.erase(it2);
+  std::map<ExecutionState *, std::vector<SeedInfo>>::iterator it3 =
+    seedMap.find(state);
+  if (it3 != seedMap.end())
+    seedMap.erase(it3);
+  if (!state->isIsolated()) {
+    processForest->remove(state->ptreeNode);
+    delete state;
+  } else {
+    isolatedStates.push_back(state);
+  }
 }
 
 template <typename SqType, typename TypeIt>
@@ -5211,6 +5201,10 @@ ActionResult Executor::executeAction(Action &action) {
   switch (action.getKind()) {
   case Action::Kind::Forward:
     return goForward(cast<ForwardAction>(action));
+  case Action::Kind::Branch: {
+    ForwardResult result = goForward(cast<ForwardAction>(action));
+    return BranchResult(result.current, result.addedStates, result.removedStates);
+  }
   case Action::Kind::Backward:
     return goBackward(cast<BackwardAction>(action));
   case Action::Kind::Initialize:
@@ -5218,7 +5212,7 @@ ActionResult Executor::executeAction(Action &action) {
   case Action::Kind::Terminate:
   default: {
     haltExecution = true;
-    return nullptr;
+    return TerminateResult();
   }
   }
 }
@@ -5377,8 +5371,7 @@ void Executor::run(ExecutionState &state) {
           replayState->targets.insert(Target(pob->root->location, false));
           states.insert(replayState);
           processForest->addRoot(replayState);
-          addedStates.push_back(replayState);
-          updateResult(ForwardResult(nullptr, {}, {}));
+          updateResult(ForwardResult(nullptr, {replayState}, {}));
           searcher->closeProofObligation(pob);
         }
       }
@@ -5392,7 +5385,7 @@ void Executor::run(ExecutionState &state) {
 
 void Executor::pauseState(ExecutionState &state) {
   results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
-  removedStates.push_back(&state);
+  removeState(&state);
 }
 
 void Executor::pauseRedundantState(ExecutionState &state) {

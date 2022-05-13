@@ -323,11 +323,9 @@ private:
   void initializeGlobalObjects(ExecutionState &state);
 
   void stepInstruction(ExecutionState &state);
-  // Refactor _-_
+
   void updateResult(ActionResult);
-public:
-  void updateStates(ExecutionState *state);
-private:
+  void removeState(ExecutionState *state);
   void transferToBasicBlock(llvm::BasicBlock *dst,
                             llvm::BasicBlock *src,
                             ExecutionState &state);

@@ -18,7 +18,7 @@ class ExecutionState;
 class Executor;
 
 struct Action {
-  enum class Kind { Initialize, Forward, Backward, Terminate };
+  enum class Kind { Initialize, Forward, Branch, Backward, Terminate };
 
   Action() {}
 
@@ -46,9 +46,21 @@ struct ForwardAction : public Action {
 
   Kind getKind() const { return Kind::Forward; }
   static bool classof(const Action *A) {
-    return A->getKind() == Kind::Forward;
+    return A->getKind() == Kind::Forward || A->getKind() == Kind::Branch;
   }
   static bool classof(const ForwardAction *) { return true; }
+};
+
+struct BranchAction : public ForwardAction {
+  ExecutionState *state;
+
+  BranchAction(ExecutionState *_state) : ForwardAction(_state) {}
+
+  Kind getKind() const { return Kind::Branch; }
+  static bool classof(const Action *A) {
+    return A->getKind() == Kind::Branch;
+  }
+  static bool classof(const BranchAction *) { return true; }
 };
 
 struct BackwardAction : public Action {
@@ -86,8 +98,8 @@ struct SearcherConfig {
 
 struct ForwardResult {
   ExecutionState *current;
-  std::vector<ExecutionState *> addedStates;
-  std::vector<ExecutionState *> removedStates;
+  const std::vector<ExecutionState *> &addedStates;
+  const std::vector<ExecutionState *> &removedStates;
 
   struct ValidityCore {
     std::pair<Path, SolverQueryMetaData::core_ty> core;
@@ -105,9 +117,16 @@ struct ForwardResult {
   ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
                 const std::vector<ExecutionState *> &r)
     : current(_s), addedStates(a), removedStates(r), validityCore(std::nullopt) {};
+};
 
-  ForwardResult(ExecutionState *_s)
-    : current(_s), addedStates({}), removedStates({}), validityCore(std::nullopt) {};
+struct BranchResult {
+  ExecutionState *current;
+  const std::vector<ExecutionState *> &addedStates;
+  const std::vector<ExecutionState *> &removedStates;
+
+  BranchResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
+               const std::vector<ExecutionState *> &r)
+    : current(_s), addedStates(a), removedStates(r) {};
 };
 
 struct BackwardResult {
@@ -126,6 +145,8 @@ struct InitializeResult {
     location(_loc), state(es) {}
 };
 
-using ActionResult = std::variant<ForwardResult, BackwardResult, InitializeResult>;
+struct TerminateResult {};
+
+using ActionResult = std::variant<ForwardResult, BranchResult, BackwardResult, InitializeResult, TerminateResult>;
 
 }

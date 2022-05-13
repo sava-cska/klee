@@ -3507,6 +3507,7 @@ void Executor::doDumpStates() {
 
   klee_message("halting execution, dumping remaining states");
   for (const auto &state : states) {
+    if (!state->isIsolated())
       terminateStateEarly(*state, "Execution halting.");
   }
   updateResult(ForwardResult(nullptr, addedStates, removedStates));

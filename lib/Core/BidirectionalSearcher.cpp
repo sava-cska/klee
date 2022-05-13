@@ -147,7 +147,7 @@ void BidirectionalSearcher::update(ActionResult r) {
       backward->update(i);
       initializer->addPob(i);
     }
-  } else {
+  } else if (std::holds_alternative<InitializeResult>(r)) {
     auto ir = std::get<InitializeResult>(r);
     branch->update(nullptr, {&ir.state}, {});
   }

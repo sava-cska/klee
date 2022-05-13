@@ -28,8 +28,6 @@ struct Action {
 };
 
 struct TerminateAction : public Action {
-  ExecutionState *state;
-
   TerminateAction() {}
 
   Kind getKind() const { return Kind::Terminate; }

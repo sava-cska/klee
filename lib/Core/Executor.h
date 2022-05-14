@@ -143,10 +143,6 @@ public:
       VisitedTransition;
 
   struct ExecutionBlockResult {
-    ExecutedInterval redundantStates;
-    ExecutedInterval completedStates;
-    ExecutedInterval pausedStates;
-    ExecutedInterval erroneousStates;
     VisitedBlock history;
     VisitedTransition transitionHistory;
   };
@@ -161,8 +157,8 @@ private:
 
   ExecutionResult results;
 
-    // The program state just before any instructions are excecuted.
-  ExecutionState* emptyState;
+  // The program state just before any instructions are excecuted.
+  ExecutionState *emptyState;
 
   static const char *TerminateReasonNames[];
 
@@ -179,7 +175,8 @@ private:
   std::unique_ptr<MemoryManager> memory;
 
   std::set<ExecutionState *, ExecutionStateIDCompare> states;
-  std::vector<ExecutionState *> isolatedStates;
+  std::set<ExecutionState *, ExecutionStateIDCompare> isolatedStates;
+  std::set<ProofObligation *, ProofObligationIDCompare> pobs;
   
   std::unique_ptr<StatsTracker> statsTracker;
 
@@ -190,7 +187,6 @@ private:
   TimerGroup timers;
   std::unique_ptr<PForest> processForest;
   ExprHashMap<std::pair<ref<Expr>, unsigned>> gepExprBases;
-  ExprHashMap<Symbolic> liCache;
 
   /// Used to track states that have been added during the current
   /// instructions step.
@@ -294,6 +290,8 @@ private:
 
   std::unique_ptr<Summary> summary;
 
+  std::vector<Symbolic> *symbolics;
+
 public:
 
   ExecutionManager *emanager;
@@ -326,6 +324,8 @@ private:
 
   void updateResult(ActionResult);
   void removeState(ExecutionState *state);
+  void removeIsolatedState(ExecutionState *state);
+
   void transferToBasicBlock(llvm::BasicBlock *dst,
                             llvm::BasicBlock *src,
                             ExecutionState &state);
@@ -415,10 +415,11 @@ private:
                                      const llvm::Value *allocSite, uint64_t size);
   
   ObjectPair lazyInitialize(ExecutionState &state, bool isLocal,
-                             const MemoryObject *mo);
+                            const MemoryObject *mo, const Array *array);
 
   ObjectPair executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
-                           const std::string &name, bool isAlloca, bool isHandleMakeSymbolic = false);
+                                 const std::string &name, bool isAlloca,
+                                 const Array *array = nullptr);
 
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included
@@ -500,8 +501,6 @@ private:
                                     llvm::Instruction **lastInstruction);
 
   bool shouldExitOn(enum TerminateReason termReason);
-
-  void actionAfterStateTerminating(ExecutionState &state) { delete &state; }
 
 // private:
   // remove state from queue and delete
@@ -675,10 +674,10 @@ public:
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };
   const Array *makeArray(ExecutionState &state, const uint64_t size,
-                         const std::string &name, bool isForeign,
+                         const std::string &name, bool isExternal,
                          ref<Expr> liSource);
   const Array *makeArray(ExecutionState &state, const uint64_t size,
-                         const std::string &name, bool isForeign);
+                         const std::string &name, bool isExternal);
   const Array *makeArray(ExecutionState &state, const uint64_t size,
                          const std::string &name, ref<Expr> liSource = ref<Expr>());
   void executeStep(ExecutionState &state);

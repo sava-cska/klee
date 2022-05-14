@@ -22,9 +22,9 @@ class ProofObligation {
 
 private:
   static unsigned counter;
-  unsigned id;
 
 public:
+  const unsigned id;
   ProofObligation *parent;
   ProofObligation *root;
   std::unordered_set<ProofObligation *> children;
@@ -40,7 +40,7 @@ public:
 
   Path path;
 
-  std::vector<std::pair<ref<const MemoryObject>, const Array *>> symbolics;
+  std::vector<std::pair<ref<const MemoryObject>, const Array *>> foreignSymbolics;
 
   ProofObligation(KBlock *_location, ProofObligation *_parent,
                   bool at_return = false)
@@ -60,16 +60,27 @@ public:
     parent->children.insert(this);
   }
 
-  ~ProofObligation() {
-    if(parent) {
-      parent->children.erase(this);
-    }
-  }
+  // no copy ctor
+  ProofObligation(const ProofObligation &state) = delete;
+  // no copy assignment
+  ProofObligation &operator=(const ProofObligation &) = delete;
+  // no move ctor
+  ProofObligation(ProofObligation &&) noexcept = delete;
+  // no move assignment
+  ProofObligation& operator=(ProofObligation &&) noexcept = delete;
+
+  ~ProofObligation() = default;
 
   bool isOriginPob() const noexcept { return !parent; }
 
   void addCondition(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
   std::string print() const;
+};
+
+struct ProofObligationIDCompare {
+  bool operator()(const ProofObligation *a, const ProofObligation *b) const {
+    return a->id < b->id;
+  }
 };
 
 ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,

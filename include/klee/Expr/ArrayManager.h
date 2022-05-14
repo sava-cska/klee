@@ -23,6 +23,8 @@ struct WeakEquivArrayCmpFn {
   bool operator()(const Array *array1, const Array *array2) const {
     if (array1 == NULL || array2 == NULL)
       return false;
+    if (!array1->liSource.isNull() && !array2->liSource.isNull())
+      return array1->liSource == array2->liSource;
     return (array1->size == array2->size) && (array1->name == array2->name);
   }
 };

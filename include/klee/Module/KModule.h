@@ -75,10 +75,9 @@ namespace klee {
                     KInstruction **);
     KBlock(const KBlock &) = delete;
     KBlock &operator=(const KBlock &) = delete;
+    virtual ~KBlock() = default;
 
     static bool classof(const KBlock *) { return true; }
-
-    ~KBlock();
 
     void handleKInstruction(std::map<llvm::Instruction *, unsigned> &registerMap,
                             llvm::Instruction *inst, KModule *km, KInstruction *ki);

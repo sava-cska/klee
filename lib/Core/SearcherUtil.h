@@ -21,7 +21,8 @@ class Executor;
 struct Action {
   enum class Kind { Initialize, Forward, Branch, Backward, Terminate };
 
-  Action() {}
+  Action() = default;
+  virtual ~Action() = default;
 
   virtual Kind getKind() const = 0;
 

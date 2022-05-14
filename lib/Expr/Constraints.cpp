@@ -62,6 +62,8 @@ private:
       ExprHashMap<ref<Expr>> &_replacements,
       visited_ty *visitorHash)
       : ExprVisitor(true), replacements(_replacements) {
+     usedExternalVisitorHash = true;
+     delete visited;
      visited = visitorHash;
    }
 

@@ -26,8 +26,8 @@ class ComposeVisitor;
 class Composer {
   friend class klee::ComposeVisitor;
 
-  Composer(ExecutionState &_state) : state(_state), copy(state.copy()) {}
-  ~Composer() = default;
+  Composer(ExecutionState &_state) : state(_state), copy(*state.copy()) {}
+  ~Composer();
 
 private:
   static std::map<const ExecutionState *,
@@ -60,6 +60,8 @@ public:
   ComposeVisitor() = delete;
   explicit ComposeVisitor(Composer &_caller, int diff)
       : ExprVisitor(false), caller(_caller), diffLevel(diff) {
+    usedExternalVisitorHash = true;
+    delete visited;
     visited = &globalVisited[&caller.state];
   }
 
@@ -69,9 +71,9 @@ private:
       globalVisited;
 
   bool tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result);
-  ExprVisitor::Action visitRead(const ReadExpr &);
-  ExprVisitor::Action visitConcat(const ConcatExpr &concat);
-  ExprVisitor::Action visitSelect(const SelectExpr &);
+  ExprVisitor::Action visitRead(const ReadExpr &) override;
+  ExprVisitor::Action visitConcat(const ConcatExpr &concat) override;
+  ExprVisitor::Action visitSelect(const SelectExpr &) override;
   void shareUpdates(ref<ObjectState>, const ReadExpr &);
   ref<Expr> processObject(const MemoryObject *object, const Array *array);
   ref<Expr> processRead(const ReadExpr &);

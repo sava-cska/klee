@@ -29,7 +29,7 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
 bool RecencyRankedSearcher::empty() {
   for(auto pob : pobs) {
     Target t(pob->location, pob->at_return);
-    auto states = emanager->states[t];
+    std::unordered_set<ExecutionState *> &states = emanager->at(t);
     for(auto state : states) {
       if(!used.count(std::make_pair(pob,state)) && checkStack(state, pob)) {
         return false;
@@ -47,7 +47,7 @@ std::pair<ProofObligation *, ExecutionState *>
 RecencyRankedSearcher::selectAction() {
   for (auto pob : pobs) {
     Target t(pob->location, pob->at_return);
-    auto states = emanager->states[t];
+    std::unordered_set<ExecutionState *> &states = emanager->at(t);
     unsigned least_used_count = UINT_MAX;
     ExecutionState *least_used_state = nullptr;
     for (auto state : states) {

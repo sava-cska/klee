@@ -21,11 +21,9 @@
 using namespace klee;
 using namespace llvm;
 
-PForest::PForest() {}
-
 void PForest::addRoot(ExecutionState *initialState) {
   PTree *tree = new PTree(initialState);
-  trees[tree->getID()] = tree;
+  trees[tree->getID()] = std::unique_ptr<PTree>(tree);
 }
 
 void PForest::attach(PTreeNode *node, ExecutionState *leftState,
@@ -40,6 +38,6 @@ void PForest::remove(PTreeNode *node) {
 }
 
 void PForest::dump(llvm::raw_ostream &os) {
-  for (auto ntree : trees)
+  for (auto &ntree : trees)
     ntree.second->dump(os);
 }

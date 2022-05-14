@@ -55,20 +55,24 @@ BidirectionalSearcher::selectStep() {
 }
 
 Action &BidirectionalSearcher::selectAction() {
-  Action *action = nullptr;
-  while (!action) {
+  Action *action;
+  bool actionWasSelected = false;
+  while (!actionWasSelected) {
+    actionWasSelected = true;
     switch (selectStep()) {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
-      if(isStuck(state)) {
+      if (isStuck(state)) {
         KBlock *target = ex->calculateTargetByTransitionHistory(state);
         if (target) {
           state.targets.insert(Target(target, false));
           forward->update(&state, {}, {});
           action = new ForwardAction(&state);
         } else {
+          forward->update(nullptr, {}, {&state});
           ex->pauseState(state);
+          actionWasSelected = false;
         }
       } else
         action = new ForwardAction(&state);
@@ -77,7 +81,14 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Branch : {
       auto& state = branch->selectState();
-      action = new BranchAction(&state);
+      if (ex->initialState->getInitPCBlock() == state.getInitPCBlock() ||
+          state.maxLevel > 1) {
+        branch->update(nullptr, {}, {&state});
+        ex->pauseState(state);
+        actionWasSelected = false;
+      } else {
+        action = new BranchAction(&state);
+      }
       break;
     }
 
@@ -113,43 +124,24 @@ void BidirectionalSearcher::update(ActionResult r) {
       if(!mainLocs.count(fr.validityCore->target->basicBlock)) {
         mainLocs.insert(fr.validityCore->target->basicBlock);
         ProofObligation* pob = new ProofObligation(fr.validityCore->target, nullptr, false);
-        backward->update(pob);
+        addPob(pob);
       }
     }
 
   } else if(std::holds_alternative<BranchResult>(r)) {
     auto br = std::get<BranchResult>(r);
-    std::vector<ExecutionState *> addedStates = br.addedStates;
-    std::vector<ExecutionState *> removedStates = br.removedStates;
-
-    if (br.current &&
-        std::find(removedStates.begin(), removedStates.end(), br.current) == removedStates.end() &&
-        (ex->initialState->getInitPCBlock() == br.current->getInitPCBlock() ||
-         br.current->maxLevel > 1)) {
-      removedStates.push_back(br.current);
-    }
-    for (auto state : br.addedStates) {
-      if (ex->initialState->getInitPCBlock() == state->getInitPCBlock() ||
-          state->maxLevel > 1) {
-        std::vector<ExecutionState *>::iterator ita =
-          std::find(addedStates.begin(), addedStates.end(), state);
-        addedStates.erase(ita);
-      }
-    }
-
-    branch->update(br.current, addedStates, removedStates);
+    branch->update(br.current, br.addedStates, br.removedStates);
 
     auto reached = branch->collectAndClearReached();
     for (auto &targetStates : reached) {
       for (auto state : targetStates.second) {
-        ex->emanager->states[targetStates.first].insert(&state->copy());
+        ex->emanager->insert(targetStates.first, *state->copy());
       }
     }
   } else if (std::holds_alternative<BackwardResult>(r)) {
     auto br = std::get<BackwardResult>(r);
-    for(auto i : br.newPobs) {
-      backward->update(i);
-      initializer->addPob(i);
+    for(auto pob : br.newPobs) {
+      addPob(pob);
     }
   } else if (std::holds_alternative<InitializeResult>(r)) {
     auto ir = std::get<InitializeResult>(r);
@@ -163,17 +155,26 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new RecencyRankedSearcher;
-  backward->emanager = ex->emanager;
+  backward = new RecencyRankedSearcher(ex->emanager);
   initializer = new ValidityCoreInitializer(ex->initialState->pc);
 }
 
+BidirectionalSearcher::~BidirectionalSearcher() {
+  for (auto pob : pobs) {
+    delete pob;
+  }
+  pobs.clear();
+  delete forward;
+  delete branch;
+  delete backward;
+  delete initializer;
+}
+
 void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
-  initializer->removePob(pob);
-  backward->removePob(pob);
-  for(auto i : pob->children) {
-    i->parent = nullptr;
-    closeProofObligation(i);
+  removePob(pob);
+  for(auto child : pob->children) {
+    child->parent = nullptr;
+    closeProofObligation(child);
   }
   ProofObligation *parent = pob->parent;
   if (parent) {
@@ -191,6 +192,22 @@ bool BidirectionalSearcher::isStuck(ExecutionState& state) {
   return prevKI->inst->isTerminator() &&
          state.targets.empty() &&
          state.multilevel.count(state.getPCBlock()) > 0;
+}
+
+
+void BidirectionalSearcher::addPob(ProofObligation *pob) {
+  pobs.push_back(pob);
+  backward->update(pob);
+  initializer->addPob(pob);
+}
+
+void BidirectionalSearcher::removePob(ProofObligation *pob) {
+  auto pos = std::find(pobs.begin(), pobs.end(), pob);
+  if(pos != pobs.end()) {
+    pobs.erase(pos);
+  }
+  backward->removePob(pob);
+  initializer->removePob(pob);
 }
 
 bool BidirectionalSearcher::empty() {

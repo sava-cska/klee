@@ -5,7 +5,9 @@ namespace klee {
 
 ArrayManager::ArrayManager(ArrayCache *_arrayCache) : arrayCache(_arrayCache) {}
 
-ArrayManager::~ArrayManager() {}
+ArrayManager::~ArrayManager() {
+  delete arrayCache;
+}
 
 const Array *
 ArrayManager::CreateArray(const std::string &_name, uint64_t _size,

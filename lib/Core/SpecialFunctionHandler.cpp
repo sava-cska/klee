@@ -870,7 +870,7 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
     assert(success && "FIXME: Unhandled solver failure");
 
     if (res) {
-      executor.executeMakeSymbolic(*s, mo, name, false, true);
+      executor.executeMakeSymbolic(*s, mo, name, false);
       // Increment symbolic counter to track the current klee_make_symbolic
       // symbolic in case of pre-loaded symbolics.
       s->symbolicCounter++;

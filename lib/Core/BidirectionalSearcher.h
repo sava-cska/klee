@@ -24,10 +24,11 @@ namespace klee {
 
 class IBidirectionalSearcher {
 public:
-  virtual Action& selectAction() = 0;
+  virtual Action &selectAction() = 0;
   virtual void update(ActionResult) = 0;
   virtual void closeProofObligation(ProofObligation *) = 0;
   virtual bool empty() = 0;
+  virtual ~IBidirectionalSearcher() {}
 };
 
 
@@ -38,6 +39,7 @@ public:
   void closeProofObligation(ProofObligation *) override;
   bool empty() override;
   explicit BidirectionalSearcher(const SearcherConfig &);
+  ~BidirectionalSearcher() override;
 
 private:
   enum class StepKind { Initialize, Forward, Branch, Backward, Terminate };
@@ -49,12 +51,15 @@ private:
   RecencyRankedSearcher *backward;
   ValidityCoreInitializer *initializer;
 
+  std::vector<ProofObligation *> pobs;
+
   Ticker ticker;
 
   // Temporary _-_
   std::unordered_set<llvm::BasicBlock *> mainLocs;
 
   StepKind selectStep();
+  void addPob(ProofObligation *);
   void removePob(ProofObligation *);
   bool isStuck(ExecutionState &);
 };

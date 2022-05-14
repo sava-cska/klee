@@ -501,7 +501,8 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       pathWriter(0), symPathWriter(0), specialFunctionHandler(nullptr), timers{time::Span(TimerInterval)},
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
-      ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString), emanager(new ExecutionManager) {
+      ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString),
+      symbolics(new std::vector<Symbolic>()), emanager(new ExecutionManager) {
 
   const time::Span maxTime{MaxTime};
   if (maxTime) timers.add(
@@ -562,7 +563,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       klee_error("Could not open file %s : %s", summary_file_name.c_str(),
                  error.c_str());
   }
-  summary =  std::make_unique<Summary>(summaryFile);
+  summary =  std::make_unique<Summary>(summaryFile.get());
 
   Composer::executor = this;
 }
@@ -949,7 +950,7 @@ void Executor::branch(ExecutionState &state,
     result.push_back(&state);
     for (unsigned i=1; i<N; ++i) {
       ExecutionState *es = result[theRNG.getInt32() % i];
-      ExecutionState *ns = &es->branch();
+      ExecutionState *ns = es->branch();
       addedStates.push_back(ns);
       result.push_back(ns);
       processForest->attach(es->ptreeNode, ns, es);
@@ -1156,7 +1157,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
     ++stats::forks;
 
-    falseState = &trueState->branch();
+    falseState = trueState->branch();
     addedStates.push_back(falseState);
 
 
@@ -3359,6 +3360,12 @@ void Executor::updateResult(ActionResult r) {
     for (const auto state : fr.removedStates) {
       removeState(state);
     }
+  } else if (std::holds_alternative<BranchResult>(r)) {
+    auto br = std::get<BranchResult>(r);
+    isolatedStates.insert(br.addedStates.begin(), br.addedStates.end());
+    for (const auto state : br.removedStates) {
+      removeIsolatedState(state);
+    }
   }
 
   addedStates.clear();
@@ -3373,12 +3380,16 @@ void Executor::removeState(ExecutionState *state) {
     seedMap.find(state);
   if (it3 != seedMap.end())
     seedMap.erase(it3);
-  if (!state->isIsolated()) {
-    processForest->remove(state->ptreeNode);
-    delete state;
-  } else {
-    isolatedStates.push_back(state);
-  }
+  processForest->remove(state->ptreeNode);
+  delete state;
+}
+
+void Executor::removeIsolatedState(ExecutionState *state) {
+  std::set<ExecutionState *>::iterator it2 = isolatedStates.find(state);
+  assert(it2 != isolatedStates.end());
+  isolatedStates.erase(it2);
+  processForest->remove(state->ptreeNode);
+  delete state;
 }
 
 template <typename SqType, typename TypeIt>
@@ -3503,19 +3514,18 @@ bool Executor::checkMemoryUsage() {
 }
 
 void Executor::doDumpStates() {
-  if (!DumpStatesOnHalt || states.empty())
+  if (!DumpStatesOnHalt || (states.empty() && isolatedStates.empty()))
     return;
 
   klee_message("halting execution, dumping remaining states");
   for (const auto &state : states) {
-    if (!state->isIsolated())
-      terminateStateEarly(*state, "Execution halting.");
+    terminateStateEarly(*state, "Execution halting.");
   }
   updateResult(ForwardResult(nullptr, addedStates, removedStates));
-  for (auto es : isolatedStates) {
-    processForest->remove(es->ptreeNode);
-    delete es;
+  for (const auto state : isolatedStates) {
+    terminateStateEarly(*state, "Execution halting.");
   }
+  updateResult(BranchResult(nullptr, addedStates, removedStates));
 }
 
 void Executor::seed(ExecutionState &initialState) {
@@ -3686,6 +3696,7 @@ void Executor::terminateState(ExecutionState &state) {
       seedMap.erase(it3);
     addedStates.erase(ita);
     processForest->remove(state.ptreeNode);
+    delete &state;
   }
 }
 
@@ -4025,6 +4036,7 @@ ObjectState *Executor::bindSymbolicInState(ExecutionState &state, const MemoryOb
     ref<Expr> address = os->read(0, 8 * os->size);
     addAllocaDisequality(state, mo->allocSite, address);
   }
+  symbolics->emplace_back(ref<const MemoryObject>(mo), array);
   state.addSymbolic(mo, array);
   return os;
 }
@@ -4423,8 +4435,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 }
 
-ObjectPair Executor::lazyInitialize(ExecutionState &state, bool isAlloca, const MemoryObject *mo) {
-  return executeMakeSymbolic(state, mo, "lazy_initialization", isAlloca);
+ObjectPair Executor::lazyInitialize(ExecutionState &state, bool isAlloca,
+                                    const MemoryObject *mo, const Array *array) {
+  return executeMakeSymbolic(state, mo, "lazy_initialization", isAlloca, array);
 }
 
 ObjectPair Executor::lazyInitializeVariable(ExecutionState &state,
@@ -4433,31 +4446,21 @@ ObjectPair Executor::lazyInitializeVariable(ExecutionState &state,
                                              const llvm::Value *allocSite,
                                              uint64_t size) {
   assert(!isa<ConstantExpr>(address));
-  MemoryObject *mo =
+  const Array *array = makeArray(state, size, "lazy_instantiation", address);
+  MemoryObject *mo = array->binding ? const_cast<MemoryObject *>(array->binding) :
       memory->allocate(size, isLocal, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
-  return lazyInitialize(state, isLocal, mo);
+  return lazyInitialize(state, isLocal, mo, array);
 }
 
 ObjectPair Executor::transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
   assert(!isa<ConstantExpr>(address));
-  if (liCache.count(address)) {
-    auto symbolic = liCache[address];
-    const MemoryObject *mo = symbolic.first.get();
-    const ObjectState *os = state.addressSpace.findObject(mo);
-    if (!os) {
-      os = bindSymbolicInState(state, mo, false, symbolic.second);
-    }
-    return ObjectPair(mo, os);
-  }
-
-  MemoryObject *mo =
-      memory->allocateTransparent(size, false, /*isGlobal=*/false,
-                                  allocSite, /*allocationAlignment=*/8, address);
   const Array *array = makeArray(state, size, "lazy_instantiation", address);
+  MemoryObject *mo = array->binding ? const_cast<MemoryObject *>(array->binding) :
+    memory->allocateTransparent(size, false, /*isGlobal=*/false,
+                                allocSite, /*allocationAlignment=*/8, address);
   ObjectState *os = bindSymbolicInState(state, mo, false, array);
   const_cast<Array*>(array)->binding = mo;
-  liCache[address] = Symbolic(ref<const MemoryObject>(mo), array);
   return ObjectPair(mo, os);
 }
 
@@ -4495,25 +4498,19 @@ ObjectPair Executor::executeMakeSymbolic(ExecutionState &state,
                                          const MemoryObject *mo,
                                          const std::string &name,
                                          bool isAlloca,
-                                         bool isHandleMakeSymbolic) {
+                                         const Array *array) {
   // Create a new object state for the memory object (instead of a copy).
   if (!replayKTest) {
-    // Find a unique name for this array.  First try the original name,
-    // or if that fails try adding a unique identifier.
-    const Array *array = nullptr;
-
-    if (isHandleMakeSymbolic) {
+    if (!array) {
       auto isKleeSymbolic = [=](Symbolic x) { return x.second->isForeign; };
       std::vector<Symbolic> kleeSymbolic;
       std::copy_if(begin(state.symbolics), end(state.symbolics),
                    std::back_inserter(kleeSymbolic), isKleeSymbolic);
       if (state.symbolicCounter < kleeSymbolic.size()) {
         array = const_cast<Array *>(kleeSymbolic[state.symbolicCounter].second);
+      } else {
+        array = makeArray(state, mo->size, name, true, mo->lazyInitializedSource);
       }
-    }
-
-    if (!array) {
-      array = makeArray(state, mo->size, name, isHandleMakeSymbolic, mo->lazyInitializedSource);
     }
 
     ObjectState *os = bindObjectInState(state, mo, isAlloca, array);
@@ -4731,10 +4728,10 @@ void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
 }
 
 ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
-  MemoryObject *mo =
+  const Array *array = makeArray(state, size, name);
+  MemoryObject *mo = array->binding ? const_cast<MemoryObject *>(array->binding) :
     memory->allocateTransparent(size, true, /*isGlobal=*/false,
                                 value, /*allocationAlignment=*/8);
-  const Array *array = makeArray(state, size, name);
 
   if (state.initPC->parent->getKBlockType() == KBlockType::Call &&
       state.initPC == state.initPC->parent->getLastInstruction() &&
@@ -4767,6 +4764,9 @@ void Executor::runFunctionAsMain(Function *f,
   bindModuleConstants();
   run(*state);
   processForest = nullptr;
+
+  delete symbolics;
+  delete emanager;
 
   // hack to clear memory objects
   memory = std::make_unique<MemoryManager>(nullptr);
@@ -5179,24 +5179,14 @@ bool Executor::isGEPExpr(ref<Expr> expr) {
   return gepExprBases.find(expr) != gepExprBases.end();
 }
 
-void Executor::addCompletedResult(ExecutionState &state) {
-  results[state.getInitPCBlock()]
-      .completedStates[state.getPrevPCBlock()]
-      .insert(&state);
-}
-
-void Executor::addErroneousResult(ExecutionState &state) {
-  results[state.getInitPCBlock()]
-      .erroneousStates[state.getPrevPCBlock()]
-      .insert(&state);
-}
-
 void Executor::addHistoryResult(ExecutionState &state) {
-  results[state.getInitPCBlock()].history[state.getPrevPCBlock()].insert(
-      state.level.begin(), state.level.end());
-  results[state.getInitPCBlock()]
-      .transitionHistory[state.getPrevPCBlock()]
-      .insert(state.transitionLevel.begin(), state.transitionLevel.end());
+  if (!state.isIsolated()) {
+    results[state.getInitPCBlock()].history[state.getPrevPCBlock()].insert(
+        state.level.begin(), state.level.end());
+    results[state.getInitPCBlock()]
+        .transitionHistory[state.getPrevPCBlock()]
+        .insert(state.transitionLevel.begin(), state.transitionLevel.end());
+  }
 }
 
 ActionResult Executor::executeAction(Action &action) {
@@ -5336,8 +5326,8 @@ void Executor::addState(ExecutionState &state) {
 }
 
 void Executor::run(ExecutionState &state) {
-  initialState = &state.copy();
-  emptyState = &state.copy();
+  initialState = state.copy();
+  emptyState = state.copy();
   emptyState->stack.clear();
   emptyState->isolated = true;
 
@@ -5348,12 +5338,12 @@ void Executor::run(ExecutionState &state) {
   cfg.initial_state = &state;
   cfg.executor = this;
 
-  processForest->addRoot(&state);
   searcher = std::make_unique<BidirectionalSearcher>(cfg);
 
   while (!haltExecution) {
     auto &action = searcher->selectAction();
     auto result = executeAction(action);
+    delete &action;
     updateResult(result);
 
     if (std::holds_alternative<BackwardResult>(result)) {
@@ -5361,12 +5351,12 @@ void Executor::run(ExecutionState &state) {
       for(auto pob : br.newPobs) {
         if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
           assert(br.newPobs.size() == 1);
-          ExecutionState *replayState = &initialState->copy();
+          ExecutionState *replayState = initialState->copy();
           for (auto &constraint : pob->condition) {
             replayState->addConstraint(
                 constraint, pob->condition.get_location(constraint));
           }
-          for (auto &symbolic : pob->symbolics) {
+          for (auto &symbolic : pob->foreignSymbolics) {
             replayState->symbolics.push_back(symbolic);
           }
 
@@ -5381,59 +5371,42 @@ void Executor::run(ExecutionState &state) {
   }
 
   doDumpStates();
+  searcher = nullptr;
+  delete initialState;
+  delete emptyState;
   results.clear();
   haltExecution = false;
 }
 
 void Executor::pauseState(ExecutionState &state) {
-  results[state.getInitPCBlock()].pausedStates[state.getPCBlock()].insert(&state);
-  removeState(&state);
-}
-
-void Executor::pauseRedundantState(ExecutionState &state) {
-  results[state.getInitPCBlock()].redundantStates[state.getPCBlock()].insert(&state);
-  removedStates.push_back(&state);
-}
-
-void Executor::unpauseState(ExecutionState &state) {
-  ExecutedInterval &pausedStates = results[state.getInitPCBlock()].pausedStates;
-
-  pausedStates[state.getPCBlock()].erase(&state);
-  if (pausedStates[state.getPCBlock()].empty())
-    pausedStates.erase(state.getPCBlock());
-  addedStates.push_back(&state);
+  if (state.isIsolated())
+    removeIsolatedState(&state);
+  else
+    removeState(&state);
 }
 
 void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReason reason) {
-  switch (reason) {
-    case TerminateReason::Model       : addCompletedResult(state); break;
-    case TerminateReason::ReportError : addErroneousResult(state); break;
-    default                           : assert(false && "unreachable");
-  }
   addHistoryResult(state);
 }
-
 
 InitializeResult Executor::initBranch(InitializeAction &action) {
   KInstruction* loc = action.location;
   std::set<Target> &targets = action.targets;
-  timers.invoke();
 
   ExecutionState* state = nullptr;
   if (loc == initialState->initPC) {
-    state = &initialState->copy();
+    state = initialState->copy();
     state->isolated = true;
   } else {
-    state = &emptyState->withKInstruction(loc);
+    state = emptyState->withKInstruction(loc);
     prepareSymbolicArgs(*state, loc->parent->parent);
   }
-  if (statsTracker)
-    statsTracker->framePushed(*state, 0);
+  isolatedStates.insert(state);
   processForest->addRoot(state);
-  addedStates.push_back(state);
   for (auto target: targets) {
     state->targets.insert(target);
   }
+  timers.invoke();
   return InitializeResult(loc, *state);
 }
 
@@ -5456,7 +5429,6 @@ ForwardResult Executor::goForward(ForwardAction &action) {
     ret.validityCore = validityCore;
     validityCore = std::nullopt;
   }
-  states.insert(addedStates.begin(), addedStates.end());
 
   return ret;
 }
@@ -5465,13 +5437,13 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   ExecutionState *state = action.state;
   ProofObligation *pob = action.pob;
 
-  timers.invoke();
-
   SolverQueryMetaData queryMetaData;
   ExprHashMap<ref<Expr>> rebuildMap;
 
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   bool success = Composer::tryRebuild(*pob, *state, *newPob, queryMetaData, rebuildMap);
+  timers.invoke();
+
   if (success) {
     newPob->propagation_count[state]++;
     newPob->path = concat(state->path, pob->path);

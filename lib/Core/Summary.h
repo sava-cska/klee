@@ -16,13 +16,14 @@ namespace klee {
 
   class Summary {
   private:
-    std::unique_ptr<llvm::raw_fd_ostream> &summaryFile;
+    llvm::raw_fd_ostream *summaryFile;
   public:
     std::map<ProofObligation*, Lemma> lemmas;
 
   public:
-    explicit Summary(std::unique_ptr<llvm::raw_fd_ostream> &_summaryFile)
+    explicit Summary(llvm::raw_fd_ostream *_summaryFile)
         : summaryFile(_summaryFile) {}
+    ~Summary() = default;
     void summarize(const Path &path, ProofObligation *pob,
                    const SolverQueryMetaData &metadata,
                    ExprHashMap<ref<Expr>> &rebuildMap);

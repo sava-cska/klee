@@ -22,8 +22,8 @@ namespace klee {
     int registeredIds = 0;
 
   public:
-    std::map<uint32_t, PTree*> trees;
-    PForest();
+    std::map<uint32_t, std::unique_ptr<PTree>> trees;
+    PForest() = default;
     ~PForest() = default;
     void addRoot(ExecutionState *initialState);
     void attach(PTreeNode *node, ExecutionState *leftState,

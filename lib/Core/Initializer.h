@@ -12,7 +12,7 @@
 namespace klee {
 class Initializer {
 public:
-  
+  virtual ~Initializer() {}
   virtual std::pair<KInstruction*, std::set<Target>> selectAction() = 0;
   virtual bool empty() = 0;
   virtual void addPob(ProofObligation* pob) = 0;
@@ -29,7 +29,8 @@ public:
   void removePob(ProofObligation* pob) override;
   void addValidityCoreInit(std::pair<Path,SolverQueryMetaData::core_ty>, KBlock*) override;
 
-  ValidityCoreInitializer(KInstruction* initInst) : initInst(initInst) {};
+  explicit ValidityCoreInitializer(KInstruction* initInst) : initInst(initInst) {};
+  ~ValidityCoreInitializer() override {}
 
 private:
   KInstruction* initInst;

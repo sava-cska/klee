@@ -43,8 +43,15 @@ namespace klee {
 
   protected:
     explicit
-    ExprVisitor(bool _recursive=false) : visited(new ExprHashMap<ref<Expr>>()), recursive(_recursive), aborted(false) {}
-    virtual ~ExprVisitor() {}
+    ExprVisitor(bool _recursive=false)
+      : visited(new ExprHashMap<ref<Expr>>()),
+        usedExternalVisitorHash(false),
+        recursive(_recursive),
+        aborted(false) {}
+    virtual ~ExprVisitor() {
+      if (!usedExternalVisitorHash)
+        delete visited;
+    }
 
     virtual Action visitExpr(const Expr&);
     virtual Action visitExprPost(const Expr&);
@@ -84,6 +91,7 @@ namespace klee {
   protected:
     typedef ExprHashMap<ref<Expr>> visited_ty;
     visited_ty *visited;
+    bool usedExternalVisitorHash;
 
   private:
     bool recursive;

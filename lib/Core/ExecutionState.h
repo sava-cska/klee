@@ -329,11 +329,11 @@ public:
   // dtor
   ~ExecutionState();
 
-  ExecutionState &branch();
-  ExecutionState &withKFunction(KFunction *kf) const;
-  ExecutionState &withKBlock(KBlock *kb) const;
-  ExecutionState &withKInstruction(KInstruction* ki) const;
-  ExecutionState &copy() const;
+  ExecutionState *branch();
+  ExecutionState *withKFunction(KFunction *kf) const;
+  ExecutionState *withKBlock(KBlock *kb) const;
+  ExecutionState *withKInstruction(KInstruction* ki) const;
+  ExecutionState *copy() const;
 
   void pushFrame(KInstIterator caller, KFunction *kf);
   void popFrame();
@@ -367,8 +367,15 @@ struct ExecutionStateIDCompare {
 };
 
 class ExecutionManager {
+private:
+  std::map<Target, std::unordered_set<ExecutionState *>> mapTargetToStates;
 public:
-  std::map<Target, std::unordered_set<ExecutionState *>> states;
+  std::set<ExecutionState *, ExecutionStateIDCompare> states;
+
+  ~ExecutionManager();
+
+  void insert(Target target, ExecutionState &state);
+  std::unordered_set<ExecutionState *> &at(Target target);
 };
 
 }

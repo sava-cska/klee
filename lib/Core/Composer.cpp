@@ -81,6 +81,12 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
          ExecutionStateIDCompare>
     Composer::globalDerefCache;
 
+Composer::~Composer() {
+  globalReadCache.erase(&copy);
+  globalDerefCache.erase(&copy);
+  delete &copy;
+}
+
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
   ComposeVisitor visitor(*this, -copy.stackBalance);
   res = visitor.visit(expr);
@@ -91,7 +97,6 @@ bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
 bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState &state, ref<Expr> &res) {
   Composer composer(state);
   bool success = composer.tryRebuild(expr, res);
-  delete &composer.copy;
   return success;
 }
 
@@ -133,8 +138,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
   rebuilt.condition = composer.copy.constraints;
   std::vector<Symbolic> foreign;
   composer.copy.extractForeignSymbolics(foreign);
-  rebuilt.symbolics = old.symbolics;
-  rebuilt.symbolics.insert(rebuilt.symbolics.end(), foreign.begin(), foreign.end());
+  rebuilt.foreignSymbolics.insert(rebuilt.foreignSymbolics.end(), foreign.begin(), foreign.end());
   return success;
 }
 

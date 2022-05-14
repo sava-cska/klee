@@ -657,7 +657,7 @@ void RandomPathSearcher::update(ExecutionState *current,
 
 bool RandomPathSearcher::empty() {
   bool res = true;
-  for (auto ntree : processForest.trees)
+  for (auto &ntree : processForest.trees)
     res = res && !IS_OUR_NODE_VALID(ntree.second->root);
   return res;
 }

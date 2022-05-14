@@ -4019,26 +4019,11 @@ ObjectState *Executor::bindObjectInState(ExecutionState &state,
 }
 
 ObjectState *Executor::bindSymbolicInState(ExecutionState &state, const MemoryObject *mo,
-                                 bool IsAlloca, const Array *array) {
+                                           bool IsAlloca, const Array *array) {
   ObjectState *os = bindObjectInState(state, mo, IsAlloca, array);
-  Value *allocSite = const_cast<Value *>(mo->allocSite);
-  if (!mo->isLazyInitialized() && isa<AllocaInst>(allocSite)) {
-    Instruction *inst = cast<Instruction>(allocSite);
+  if (!mo->isLazyInitialized() && isa<AllocaInst>(mo->allocSite)) {
     ref<Expr> address = os->read(0, 8 * os->size);
-    addAllocaDisequality(state, inst, address);
-
-    AllocaInst *ai = cast<AllocaInst>(inst);
-    unsigned elementSize =
-      kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
-    ref<Expr> size = Expr::createPointer(elementSize);
-    if (ai->isArrayAllocation()) {
-      ref<Expr> count = eval(getKInst(inst), 0, state).value;
-      count = Expr::createZExtToPointerWidth(count);
-      size = MulExpr::create(size, count);
-      if (isa<ConstantExpr>(size))
-        elementSize = cast<ConstantExpr>(size)->getZExtValue();
-    }
-    lazyInitializeVariable(state, address, true, inst, elementSize);
+    addAllocaDisequality(state, mo->allocSite, address);
   }
   state.addSymbolic(mo, array);
   return os;
@@ -4711,6 +4696,21 @@ void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target)
   std::string name = allocSite ? target->toString() : "symbolic_value";
   ref<Expr> result = makeSymbolicValue(allocSite, state, size, width, name);
   bindLocal(target, state, result);
+
+  if (isa<AllocaInst>(allocSite)) {
+    AllocaInst *ai = cast<AllocaInst>(allocSite);
+    unsigned elementSize =
+      kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
+    ref<Expr> size = Expr::createPointer(elementSize);
+    if (ai->isArrayAllocation()) {
+      ref<Expr> count = eval(target, 0, state).value;
+      count = Expr::createZExtToPointerWidth(count);
+      size = MulExpr::create(size, count);
+      if (isa<ConstantExpr>(size))
+        elementSize = cast<ConstantExpr>(size)->getZExtValue();
+    }
+   lazyInitializeVariable(state, result, true, target->inst, elementSize);
+  }
 }
 
 void Executor:: prepareSymbolicRegister(ExecutionState &state, unsigned regNum) {

@@ -29,6 +29,7 @@ public:
   ProofObligation *root;
   std::unordered_set<ProofObligation *> children;
   std::vector<KInstruction*> stack;
+  std::map<ExecutionState*, unsigned> propagation_count;
 
   KBlock* location;
   ConstraintSet condition;
@@ -53,6 +54,7 @@ public:
 
   explicit ProofObligation(ProofObligation *pob)
       : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
+        propagation_count(pob->propagation_count),
         location(pob->location), condition(pob->condition),
         at_return(pob->at_return), path(pob->path) {
     parent->children.insert(this);

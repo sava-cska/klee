@@ -5473,6 +5473,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
   bool success = Composer::tryRebuild(*pob, *state, *newPob, queryMetaData, rebuildMap);
   if (success) {
+    newPob->propagation_count[state]++;
     newPob->path = concat(state->path, pob->path);
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.

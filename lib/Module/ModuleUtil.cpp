@@ -553,11 +553,11 @@ std::vector<std::pair<KBlock *, KBlock *>>
   auto kf = from->parent;
 
   auto distance = kf->getDistance(from);
-  std::unordered_set<llvm::BasicBlock *> queued;
   std::vector<std::pair<KBlock *, KBlock*>> dismantled;
   std::queue<KBlock *> queue;
+  std::unordered_set<llvm::BasicBlock *> used;
   for(auto block : to) {
-    queued.insert(block->basicBlock);
+    used.insert(block->basicBlock);
     queue.push(block);
   }
   while(!queue.empty()) {
@@ -567,8 +567,8 @@ std::vector<std::pair<KBlock *, KBlock *>>
     for(auto const &pred : predecessors(block->basicBlock)) {
       auto nearest = kf->getNearestJoinOrCallBlock(kf->blockMap[pred]);
       if (distance.count(nearest)) {
-        if(!queued.count(nearest->basicBlock)) {
-          queued.insert(nearest->basicBlock);
+        if(!used.count(nearest->basicBlock)) {
+          used.insert(nearest->basicBlock);
           queue.push(nearest);
         }
         linked = true;

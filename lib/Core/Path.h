@@ -38,7 +38,7 @@ public:
     return path.empty();
   }
 
-  std::string print() const;
+  std::string toString() const;
 
   friend bool operator==(const Path& lhs, const Path& rhs) {
     return lhs.path == rhs.path;

@@ -40,9 +40,9 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   }
 
   (*summaryFile) << "State Path is:\n";
-  (*summaryFile) << path.print() << "\n";
+  (*summaryFile) << path.toString() << "\n";
   (*summaryFile) << "Pob Path is:\n";
-  (*summaryFile) << pob->path.print() << "\n";
+  (*summaryFile) << pob->path.toString() << "\n";
   (*summaryFile) << "\n";
 
   lemma.paths.push_back(path);

@@ -778,7 +778,8 @@ KBlock *KFunction::getNearestJoinOrCallBlock(KBlock *kb) {
     if (kbd.first->basicBlock->hasNPredecessorsOrMore(2) ||
         kbd.first->basicBlock->hasNPredecessors(0) ||
         (kbd.first->getKBlockType() == KBlockType::Call &&
-         dyn_cast<KCallBlock>(kbd.first)->internal()))
+         dyn_cast<KCallBlock>(kbd.first)->internal() &&
+         !dyn_cast<KCallBlock>(kbd.first)->intrinsic()))
       return kbd.first;
   }
   return nullptr;

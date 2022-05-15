@@ -260,6 +260,9 @@ namespace klee {
     bool internal() const {
       return parent->parent->functionMap[calledFunction] != nullptr;
     }
+    KFunction* getKFunction() const {
+      return parent->parent->functionMap[calledFunction];
+    }
   };
 } // End klee namespace
 

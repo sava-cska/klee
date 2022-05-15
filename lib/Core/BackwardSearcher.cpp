@@ -3,6 +3,7 @@
 #include "SearcherUtil.h"
 #include "klee/Module/KInstruction.h"
 #include <algorithm>
+#include <climits>
 #include <cstddef>
 #include <utility>
 
@@ -39,7 +40,7 @@ bool BFSBackwardSearcher::empty() {
 }
 
 void BFSBackwardSearcher::update(ProofObligation* pob) {
-  pobs.insert(pob);
+  pobs.push_back(pob);
 }
 
 std::pair<ProofObligation *, ExecutionState *>
@@ -47,18 +48,29 @@ BFSBackwardSearcher::selectAction() {
   for (auto pob : pobs) {
     Target t(pob->location, pob->at_return);
     auto states = emanager->states[t];
+    unsigned least_used_count = UINT_MAX;
+    ExecutionState *least_used_state = nullptr;
     for (auto state : states) {
       if (!used.count(std::make_pair(pob,state)) && checkStack(state, pob)) {
-        used.insert(std::make_pair(pob,state));
-        return std::make_pair(pob, state);
+        if(pob->propagation_count[state] < least_used_count) {
+          least_used_count = pob->propagation_count[state];
+          least_used_state = state;
+        }
       }
+    }
+    if(least_used_state) {
+      used.insert(std::make_pair(pob, least_used_state));
+      return std::make_pair(pob, least_used_state);
     }
   }
   return std::make_pair(nullptr, nullptr);
 }
 
 void BFSBackwardSearcher::removePob(ProofObligation* pob) {
-  pobs.erase(pob);
+  auto pos = std::find(pobs.begin(), pobs.end(), pob);
+  if(pos != pobs.end()) {
+    pobs.erase(pos);
+  }
 }
 
 };

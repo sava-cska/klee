@@ -24,7 +24,7 @@ public:
 
 class BFSBackwardSearcher : public BackwardSearcher {
 private:
-  std::unordered_set<ProofObligation *> pobs;
+  std::vector<ProofObligation *> pobs;
   std::set<std::pair<ProofObligation *, ExecutionState *>> used;
 
 public:

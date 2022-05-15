@@ -49,7 +49,7 @@ private:
   BFSBackwardSearcher *backward;
   ValidityCoreInitializer *initializer;
 
-  uint choice = 0;
+  Ticker ticker;
 
   // Temporary _-_
   std::unordered_set<llvm::BasicBlock *> mainLocs;

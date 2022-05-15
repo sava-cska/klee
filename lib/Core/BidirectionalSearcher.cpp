@@ -33,19 +33,23 @@ namespace klee {
 
 BidirectionalSearcher::StepKind
 BidirectionalSearcher::selectStep() {
-  unsigned int tick = choice;
+  size_t initial_choice = ticker.getCurrent();
+  size_t choice = initial_choice;
+
   do {
-    unsigned int i = choice;
-    choice = (choice + 1) % 4;
-    if (i == 0 && !forward->empty())
-      return StepKind::Forward;
-    else if (i == 1 && !branch->empty())
-      return StepKind::Branch;
-    else if (i == 2 && !backward->empty())
-      return StepKind::Backward;
-    else if (i == 3 && !initializer->empty())
-      return StepKind::Initialize;
-  } while (tick != choice);
+    switch (choice) {
+    case 0:
+      if(!forward->empty()) return StepKind::Forward;
+    case 1:
+      if(!branch->empty()) return StepKind::Branch;
+    case 2:
+      if(!backward->empty()) return StepKind::Backward;
+    case 3:
+      if(!initializer->empty()) return StepKind::Initialize;
+    }
+    ticker.moveToNext();
+    choice = ticker.getCurrent();
+  } while (choice != initial_choice);
 
   return StepKind::Terminate;
 }
@@ -153,7 +157,8 @@ void BidirectionalSearcher::update(ActionResult r) {
   }
 }
 
-BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg) {
+BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
+    : ticker({80,10,5,5}) {
   ex = cfg.executor;
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   forward->update(nullptr,{cfg.initial_state},{});

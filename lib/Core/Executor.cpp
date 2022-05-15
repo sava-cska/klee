@@ -2164,6 +2164,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       ref<Expr> cond = eval(ki, 0, state).value;
 
       cond = optimizer.optimizeExpr(cond, false);
+      state.queryMetaData.queryValidityCore = std::nullopt;
       Executor::StatePair branches = fork(state, cond, false);
 
       if (state.queryMetaData.queryValidityCore &&

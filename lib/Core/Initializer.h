@@ -35,6 +35,7 @@ private:
   KInstruction* initInst;
   std::queue<std::pair<KInstruction *, std::set<Target>>> validityCoreInits;
   std::map<KInstruction*, std::set<Target>> initialized;
+  std::set<KFunction*> dismantled_fns;
 };
 
 };

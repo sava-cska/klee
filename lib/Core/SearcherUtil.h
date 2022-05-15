@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace klee {
 
@@ -146,5 +147,31 @@ struct InitializeResult {
 struct TerminateResult {};
 
 using ActionResult = std::variant<ForwardResult, BranchResult, BackwardResult, InitializeResult, TerminateResult>;
+
+class Ticker {
+  std::vector<unsigned> ticks;
+  size_t index = 0;
+  unsigned counter = 0;
+
+public:
+  Ticker(std::vector<unsigned> ticks) : ticks(ticks) {}
+
+  unsigned getCurrent() {
+    unsigned current = index;
+    counter += 1;
+    if (counter == ticks[index]) {
+      index = (index + 1) % ticks.size();
+      counter = 0;
+    }
+    return current;
+  }
+
+  void moveToNext() {
+    if (counter != 0) {
+      index = (index + 1) % ticks.size();
+      counter = 0;
+    }
+  }
+};
 
 }

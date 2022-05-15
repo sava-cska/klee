@@ -22,7 +22,7 @@ public:
   virtual bool empty() = 0;
 };
 
-class BFSBackwardSearcher : public BackwardSearcher {
+class RecencyRankedSearcher : public BackwardSearcher {
 private:
   std::vector<ProofObligation *> pobs;
   std::set<std::pair<ProofObligation *, ExecutionState *>> used;
@@ -36,7 +36,7 @@ public:
   std::pair<ProofObligation*, ExecutionState*> selectAction() override;
   bool empty() override;
   void removePob(ProofObligation* pob) override;
-  BFSBackwardSearcher() {
+  RecencyRankedSearcher() {
   }
 };
 

@@ -163,7 +163,7 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new BFSBackwardSearcher;
+  backward = new RecencyRankedSearcher;
   backward->emanager = ex->emanager;
   initializer = new ValidityCoreInitializer(ex->initialState->pc);
 }

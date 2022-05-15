@@ -46,7 +46,7 @@ private:
 
   GuidedSearcher *forward;
   GuidedSearcher *branch;
-  BFSBackwardSearcher *backward;
+  RecencyRankedSearcher *backward;
   ValidityCoreInitializer *initializer;
 
   Ticker ticker;

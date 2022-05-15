@@ -26,7 +26,7 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
 }
 
 
-bool BFSBackwardSearcher::empty() {
+bool RecencyRankedSearcher::empty() {
   for(auto pob : pobs) {
     Target t(pob->location, pob->at_return);
     auto states = emanager->states[t];
@@ -39,12 +39,12 @@ bool BFSBackwardSearcher::empty() {
   return true;
 }
 
-void BFSBackwardSearcher::update(ProofObligation* pob) {
+void RecencyRankedSearcher::update(ProofObligation* pob) {
   pobs.push_back(pob);
 }
 
 std::pair<ProofObligation *, ExecutionState *>
-BFSBackwardSearcher::selectAction() {
+RecencyRankedSearcher::selectAction() {
   for (auto pob : pobs) {
     Target t(pob->location, pob->at_return);
     auto states = emanager->states[t];
@@ -66,7 +66,7 @@ BFSBackwardSearcher::selectAction() {
   return std::make_pair(nullptr, nullptr);
 }
 
-void BFSBackwardSearcher::removePob(ProofObligation* pob) {
+void RecencyRankedSearcher::removePob(ProofObligation* pob) {
   auto pos = std::find(pobs.begin(), pobs.end(), pob);
   if(pos != pobs.end()) {
     pobs.erase(pos);

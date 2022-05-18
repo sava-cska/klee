@@ -43,7 +43,7 @@ cl::opt<bool> UseFastCexSolver(
     cl::desc("Enable an experimental range-based solver (default=false)"),
     cl::cat(SolvingCat));
 
-cl::opt<bool> UseCexCache("use-cex-cache", cl::init(false),
+cl::opt<bool> UseCexCache("use-cex-cache", cl::init(true),
                           cl::desc("Use the counterexample cache (default=true)"),
                           cl::cat(SolvingCat));
 

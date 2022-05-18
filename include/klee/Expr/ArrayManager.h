@@ -60,7 +60,7 @@ public:
                            Expr::Width _domain = Expr::Int32,
                            Expr::Width _range = Expr::Int8);
 
-  const Array *CreateArray(const std::string &name, uint64_t size, bool isForeign, ref<Expr> liSource = ref<Expr>());
+  const Array *CreateArray(const std::string &name, uint64_t size, bool isExternal, ref<Expr> liSource = ref<Expr>());
 
   const Array *CreateArray(const Array *array, int index, ref<Expr> liSource = ref<Expr>());
 

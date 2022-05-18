@@ -136,9 +136,9 @@ bool Composer::tryRebuild(const ProofObligation &old,
     }
   }
   rebuilt.condition = composer.copy.constraints;
-  std::vector<Symbolic> foreign;
-  composer.copy.extractForeignSymbolics(foreign);
-  rebuilt.foreignSymbolics.insert(rebuilt.foreignSymbolics.end(), foreign.begin(), foreign.end());
+  std::vector<Symbolic> sourced;
+  composer.copy.extractSourcedSymbolics(sourced);
+  rebuilt.sourcedSymbolics.insert(rebuilt.sourcedSymbolics.end(), sourced.begin(), sourced.end());
   return success;
 }
 
@@ -303,7 +303,7 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
 
   ref<Expr> index = visit(re.index);
   ref<ObjectState> os;
-  if(re.updates.root->isForeign ||
+  if(re.updates.root->isExternal ||
      re.updates.root->isConstantArray()) {
     os = new ObjectState(re.updates.root, caller.executor->getMemoryManager());
     shareUpdates(os, re);
@@ -327,7 +327,7 @@ ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExp
 
   ref<Expr> index = visit(base.index);
   ref<ObjectState> os;
-  if(base.updates.root->isForeign ||
+  if(base.updates.root->isExternal ||
     base.updates.root->isConstantArray()) {
     os = new ObjectState(base.updates.root, caller.executor->getMemoryManager());
     shareUpdates(os, base);
@@ -360,7 +360,7 @@ ref<Expr> ComposeVisitor::processSelect(const SelectExpr &sexpr) {
 
 ref<Expr> ComposeVisitor::reindexArray(const Array *array) {
   int reindex = array->index + diffLevel;
-  const MemoryObject *mo = array->binding ? array->binding : nullptr;
+  const MemoryObject *mo = array->binding;
   assert(mo && mo->isLocal);
   assert(array->liSource.isNull());
   const Array *root = caller.executor->getArrayManager()->CreateArray(array, reindex);

@@ -40,7 +40,7 @@ public:
 
   Path path;
 
-  std::vector<std::pair<ref<const MemoryObject>, const Array *>> foreignSymbolics;
+  std::vector<std::pair<ref<const MemoryObject>, const Array *>> sourcedSymbolics;
 
   ProofObligation(KBlock *_location, ProofObligation *_parent,
                   bool at_return = false)

@@ -18,8 +18,8 @@ ArrayManager::CreateArray(const std::string &_name, uint64_t _size,
 }
 
 const Array *
-ArrayManager::CreateArray(const std::string &name, uint64_t size, bool isForeign, ref<Expr> liSource) {
-  return arrayCache->CreateArray(name, size, 0, isForeign, liSource);
+ArrayManager::CreateArray(const std::string &name, uint64_t size, bool isExternal, ref<Expr> liSource) {
+  return arrayCache->CreateArray(name, size, 0, isExternal, liSource);
 }
 
 const Array *
@@ -30,7 +30,7 @@ ArrayManager::CreateArray(const Array *array, int index, ref<Expr> liSource) {
   } else {
     liSource = liSource.isNull() ? array->liSource : liSource;
     indexedSymbolicArrays[array][index] =
-      arrayCache->CreateArray(array->name, array->size, index, array->isForeign, liSource, &array->constantValues[0],
+      arrayCache->CreateArray(array->name, array->size, index, array->isExternal, liSource, &array->constantValues[0],
                               &array->constantValues[0] + array->constantValues.size(), array->domain, array->range);
     return indexedSymbolicArrays.at(array).at(index);
   }

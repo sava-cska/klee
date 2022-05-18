@@ -342,7 +342,7 @@ public:
 
   void addConstraint(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
   int resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &);
-  void extractForeignSymbolics(std::vector<Symbolic> &);
+  void extractSourcedSymbolics(std::vector<Symbolic> &);
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;

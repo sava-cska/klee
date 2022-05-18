@@ -465,12 +465,12 @@ void ExecutionState::addConstraint(ref<Expr> e, std::optional<size_t> loc, bool 
 
 int ExecutionState::resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &resolved) {
   int status = 0;
-  for (auto i : symbolics) {
-    if (!i.first->isLazyInitialized()) {
+  for (auto &symbolic : symbolics) {
+    if (!symbolic.first->isLazyInitialized()) {
       continue;
     }
     status = 1;
-    auto lisource = i.first->lazyInitializedSource;
+    auto lisource = symbolic.first->lazyInitializedSource;
     switch (lisource->getKind()) {
     case Expr::Read: {
       ref<ReadExpr> base = dyn_cast<ReadExpr>(lisource);
@@ -502,11 +502,11 @@ int ExecutionState::resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbo
   return status;
 }
 
-void ExecutionState::extractForeignSymbolics(std::vector<Symbolic> &foreign) {
+void ExecutionState::extractSourcedSymbolics(std::vector<Symbolic> &foreign) {
   std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> resolved;
   resolveLazyInstantiation(resolved);
   for (auto &moArray : symbolics) {
-    if (moArray.second->isForeign)
+    if (moArray.second->isExternal)
       foreign.push_back(moArray);
   }
 

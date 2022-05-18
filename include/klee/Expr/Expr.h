@@ -496,7 +496,7 @@ public:
   // Index of the array with same name and size.
   const int index;
 
-  const bool isForeign;
+  const bool isExternal;
 
   ref<Expr> liSource;
 
@@ -529,7 +529,7 @@ private:
   /// not parse correctly since two arrays with the same name cannot be
   /// distinguished once printed.
   Array(const std::string &_name, uint64_t _size,
-        unsigned _index, bool _isForeign, ref<Expr> _liSource = ref<Expr>(),
+        unsigned _index, bool _isExternal, ref<Expr> _liSource = ref<Expr>(),
         const ref<ConstantExpr> *constantValuesBegin = 0,
         const ref<ConstantExpr> *constantValuesEnd = 0,
         Expr::Width _domain = Expr::Int32, Expr::Width _range = Expr::Int8);

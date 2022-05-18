@@ -4467,15 +4467,15 @@ ObjectPair Executor::transparentLazyInitializeVariable(ExecutionState &state, re
 const Array * Executor::makeArray(ExecutionState &state,
                                   const uint64_t size,
                                   const std::string &name,
-                                  bool isForeign,
+                                  bool isExternal,
                                   ref<Expr> liSource) {
   static uint64_t id = 0;
-  std::string uniqueName = isForeign ? name + "#" + std::to_string(id++) : name;
+  std::string uniqueName = isExternal ? name + "#" + std::to_string(id++) : name;
   // std::string uniqueName = name;
   // while (!state.arrayNames.insert(uniqueName).second) {
   //   uniqueName = name + "#" + llvm::utostr(++id);
   // }
-  const Array *array = arrayManager.CreateArray(uniqueName, size, isForeign, liSource);
+  const Array *array = arrayManager.CreateArray(uniqueName, size, isExternal, liSource);
 
   return array;
 }
@@ -4483,8 +4483,8 @@ const Array * Executor::makeArray(ExecutionState &state,
 const Array *Executor::makeArray(ExecutionState &state,
                                  const uint64_t size,
                                  const std::string &name,
-                                 bool isForeign) {
-  return makeArray(state, size, name, isForeign, ref<Expr>());
+                                 bool isExternal) {
+  return makeArray(state, size, name, isExternal, ref<Expr>());
 }
 
 const Array *Executor::makeArray(ExecutionState &state,
@@ -4502,7 +4502,7 @@ ObjectPair Executor::executeMakeSymbolic(ExecutionState &state,
   // Create a new object state for the memory object (instead of a copy).
   if (!replayKTest) {
     if (!array) {
-      auto isKleeSymbolic = [=](Symbolic x) { return x.second->isForeign; };
+      auto isKleeSymbolic = [=](Symbolic x) { return x.second->isExternal; };
       std::vector<Symbolic> kleeSymbolic;
       std::copy_if(begin(state.symbolics), end(state.symbolics),
                    std::back_inserter(kleeSymbolic), isKleeSymbolic);
@@ -5356,7 +5356,7 @@ void Executor::run(ExecutionState &state) {
             replayState->addConstraint(
                 constraint, pob->condition.get_location(constraint));
           }
-          for (auto &symbolic : pob->foreignSymbolics) {
+          for (auto &symbolic : pob->sourcedSymbolics) {
             replayState->symbolics.push_back(symbolic);
           }
 

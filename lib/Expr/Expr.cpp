@@ -537,11 +537,11 @@ ref<Expr>  NotOptimizedExpr::create(ref<Expr> src) {
 /***/
 
 Array::Array(const std::string &_name, uint64_t _size,
-             unsigned _index, bool _isForeign, ref<Expr> _liSource,
+             unsigned _index, bool _isExternal, ref<Expr> _liSource,
              const ref<ConstantExpr> *constantValuesBegin,
              const ref<ConstantExpr> *constantValuesEnd, Expr::Width _domain,
              Expr::Width _range)
-    : name(_name), size(_size), index(_index), isForeign(_isForeign), liSource(_liSource),
+    : name(_name), size(_size), index(_index), isExternal(_isExternal), liSource(_liSource),
       domain(_domain), range(_range),
       constantValues(constantValuesBegin, constantValuesEnd) {
 

@@ -339,7 +339,6 @@ void TargetedSearcher::update(ExecutionState *current,
     state->targets.erase(t);
     states->remove(state);
     states_set.erase(state);
-    state->targets.erase(t);
   }
 }
 

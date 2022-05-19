@@ -220,6 +220,9 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
       initialized[init.first].insert(init.second);
     }
   }
+  if (DebugInitializer) {
+    llvm::errs() << "\n";
+  }
   for(auto i : ret) {
     validityCoreInits.push(i);
   }

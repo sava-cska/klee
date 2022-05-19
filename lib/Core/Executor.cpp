@@ -2178,7 +2178,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         if (DebugExecutor) {
           llvm::errs() << "Contradiction was found\n";
           llvm::errs() << "Path: " << state.path.toString() << "\n";
-          llvm::errs() << "Constraint:" << state.constraints << "\n";
+          llvm::errs() << "Constraint:" << state.constraints;
         }
         KBlock* target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
         ref<Expr> last_cond = (branches.first ? Expr::createIsZero(cond) : cond);
@@ -2186,6 +2186,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         if (DebugExecutor) {
           llvm::errs() << "Condition:\n" << last_cond << "\n";
           llvm::errs() << "Target: " << target->getIRLocation() << "\n";
+          llvm::errs() << "\n";
         }
 
         state.queryMetaData.queryValidityCore->push_back(

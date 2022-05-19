@@ -136,6 +136,7 @@ void BidirectionalSearcher::update(ActionResult r) {
         if (DebugBidirectionalSearcher) {
           llvm::errs() << "Add new proof obligation.\n";
           llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
+          llvm::errs() << "\n";
         }
         addPob(pob);
       }

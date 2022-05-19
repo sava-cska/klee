@@ -2175,12 +2175,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           state.depth && !state.isIsolated()) {
         assert((branches.first && !branches.second) ||
                (!branches.first && branches.second));
-        llvm::errs() << "Contradiction was found.\n";
+        llvm::errs() << "Contradiction was found\n";
         llvm::errs() << "Path: " << state.path.toString() << "\n";
-        llvm::errs() << "Constraint: " << state.constraints << "\n";
+        llvm::errs() << "Constraint:" << state.constraints << "\n";
         KBlock* target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
         ref<Expr> last_cond = (branches.first ? Expr::createIsZero(cond) : cond);
-        llvm::errs() << "Condition: " << last_cond << "\n";
+        llvm::errs() << "Condition:\n" << last_cond << "\n";
         llvm::errs() << "Target: " << target->getIRLocation() << "\n";
 
         state.queryMetaData.queryValidityCore->push_back(

@@ -197,12 +197,12 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
   inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(b, false)));
 
   std::map<KInstruction *, std::set<Target>> ret;
-  // std::cout << "Initializing: " << std::endl;
+  llvm::errs() << "Initialization of entry points and targets: \n";
   for (auto init : inits) {
     if (!initialized[init.first].count(init.second) &&
         !(!init.second.at_end && init.first->parent == init.second.targetBlock)) {
-      // std::cout << init.first->getIRLocation() << std::endl << init.first->getSourceLocation() << std::endl;
-      // std::cout << init.second.print() << std::endl << init.second.targetBlock->instructions[0]->getSourceLocation() << std::endl << std::endl;
+      llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
+      llvm::errs() << init.second.print() << "\n" << init.second.targetBlock->instructions[0]->getSourceLocation() << "\n";
       ret[init.first].insert(init.second);
       initialized[init.first].insert(init.second);
     }

@@ -124,6 +124,8 @@ void BidirectionalSearcher::update(ActionResult r) {
       if(!mainLocs.count(fr.validityCore->target->basicBlock)) {
         mainLocs.insert(fr.validityCore->target->basicBlock);
         ProofObligation* pob = new ProofObligation(fr.validityCore->target, nullptr, false);
+        llvm::errs() << "Add new proof obligation.\n";
+        llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
         addPob(pob);
       }
     }
@@ -135,6 +137,11 @@ void BidirectionalSearcher::update(ActionResult r) {
     auto reached = branch->collectAndClearReached();
     for (auto &targetStates : reached) {
       for (auto state : targetStates.second) {
+        llvm::errs() << "New isolated state.\n";
+        llvm::errs() << "Id: " << state->id << "\n";
+        llvm::errs() << "Path: " << state->path.toString() << "\n";
+        llvm::errs() << "Constraints:\n" << state->constraints << "\n";
+        llvm::errs() << "\n";
         ex->emanager->insert(targetStates.first, *state->copy());
       }
     }

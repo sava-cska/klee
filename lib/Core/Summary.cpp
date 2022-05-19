@@ -14,16 +14,22 @@ ref<Expr> Lemma::getAsExpr() {
   return expr;
 }
 
+#ifndef divider
+#define divider(n) std::string(n, '-') + "\n"
+#endif
+
 void Summary::summarize(const Path& path, ProofObligation *pob,
                         const SolverQueryMetaData &metaData,
                         ExprHashMap<ref<Expr>> &rebuildMap) {
   if(!metaData.queryValidityCore) {
     return;
   }
+  std::string label;
+  llvm::raw_string_ostream label_stream(label);
 
-  (*summaryFile) << "Summary for pob at: " << pob->location->getIRLocation() << (pob->at_return ? "(at return)" : "") << "\n";
+  label_stream << "Add lemma for pob at: " << pob->location->getIRLocation() << (pob->at_return ? "(at return)" : "") << "\n";
 
-  (*summaryFile) << "Pob at "
+  label_stream << "Pob at "
                  << (pob->at_return
                          ? pob->location->getFirstInstruction()->getSourceLocation()
                          : pob->location->getLastInstruction()->getSourceLocation())
@@ -31,19 +37,39 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
 
   auto core = *metaData.queryValidityCore;
   auto& lemma = lemmas[pob];
-  (*summaryFile) << "Constraints are:\n";
+  label_stream << "Constraints are:\n";
   for(auto &constraint : core) {
     if(rebuildMap.count(constraint.first)) {
       lemma.constraints.push_back(Expr::createIsZero(rebuildMap.at(constraint.first)));
-      (*summaryFile) << lemma.constraints.back()->toString() << "\n";
+      label_stream << lemma.constraints.back()->toString() << "\n";
     }
   }
 
-  (*summaryFile) << "State Path is:\n";
-  (*summaryFile) << path.toString() << "\n";
-  (*summaryFile) << "Pob Path is:\n";
-  (*summaryFile) << pob->path.toString() << "\n";
-  (*summaryFile) << "\n";
+  label_stream << "State Path is:\n";
+  label_stream << path.toString() << "\n";
+  label_stream << "Pob Path is:\n";
+  label_stream << pob->path.toString() << "\n";
+  label_stream << "\n";
+
+  (*summaryFile) << label_stream.str();
+  llvm::errs() << label_stream.str();
 
   lemma.paths.push_back(path);
+  llvm::errs() << "Summary for pob at " << pob->location->getIRLocation() << "\n";
+
+  llvm::errs() << "Paths:\n";
+  for (auto &path : lemma.paths) {
+    llvm::errs() << path.toString() << "\n";
+  }
+  ExprHashSet summary;
+  for (auto &expr : lemma.constraints) {
+    summary.insert(expr);
+  }
+  llvm::errs() << "Lemma:\n";
+  for (auto &expr : summary) {
+    llvm::errs() << divider(30);
+    llvm::errs() << expr << "\n";
+    llvm::errs() << divider(30);
+  }
+  llvm::errs() << "\n";
 }

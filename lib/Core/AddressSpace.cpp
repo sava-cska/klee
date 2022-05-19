@@ -238,7 +238,7 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     if (symPointer != end(state.symbolics)) {
       const MemoryObject *symMO = symPointer->first.get();
       auto os = findObject(symMO);
-      if(os) {
+      if (os) {
         rl.push_back(ObjectPair(symMO, os));
         return false;
       }
@@ -276,7 +276,7 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     while (oi != begin) {
       --oi;
       const MemoryObject *mo = oi->first;
-      if (mo->isTransparent || (skipGlobal && mo->isGlobal))
+      if (mo->isTransparent || (skipGlobal && mo->isGlobal) || mo->isLocal)
         continue;
       if (timeout && timeout < timer.delta())
         return true;
@@ -300,7 +300,7 @@ bool AddressSpace::resolve(const ExecutionState &state, TimingSolver *solver,
     // search forwards
     for (oi = start; oi != end; ++oi) {
       const MemoryObject *mo = oi->first;
-      if (mo->isTransparent || (skipGlobal && mo->isGlobal))
+      if (mo->isTransparent || (skipGlobal && mo->isGlobal) || mo->isLocal)
         continue;
       if (timeout && timeout < timer.delta())
         return true;

@@ -5,6 +5,7 @@
 #include "ProofObligation.h"
 #include <map>
 #include <vector>
+#include <unordered_map>
 
 namespace klee {
   struct Lemma {
@@ -18,7 +19,7 @@ namespace klee {
   private:
     llvm::raw_fd_ostream *summaryFile;
   public:
-    std::map<ProofObligation*, Lemma> lemmas;
+    std::unordered_map<klee::KBlock *, std::unordered_map<ProofObligation *, Lemma>> lemmas;
 
   public:
     explicit Summary(llvm::raw_fd_ostream *_summaryFile)

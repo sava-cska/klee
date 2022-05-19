@@ -48,7 +48,7 @@ public:
   explicit Path(std::vector<KBlock*> path) : path(path) {}
 
 private:
-  std::vector<KBlock*> path;
+  std::vector<KBlock *> path;
 };
 
 Path concat(const Path& lhs, const Path& rhs);

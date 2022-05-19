@@ -1787,6 +1787,8 @@ int main(int argc, char **argv, char **envp) {
     *theStatisticManager->getStatisticByName("UnsatCoresSize");
   uint64_t instructions =
     *theStatisticManager->getStatisticByName("Instructions");
+  uint64_t summarizedLocationCount =
+    *theStatisticManager->getStatisticByName("SummarizedLocationCount");
   uint64_t forks =
     *theStatisticManager->getStatisticByName("Forks");
 
@@ -1815,10 +1817,8 @@ int main(int argc, char **argv, char **envp) {
         << handler->getNumPathsExplored() << "\n";
   stats << "KLEE: done: generated tests = "
         << handler->getNumTestCases() << "\n";
-  stats << "KLEE:UNSAT done: count of unsat assertions = "
-        << unsatQueriesAssertionsCount << "\n";
-  stats << "KLEE:UNSAT done: size of unsat cores = "
-        << unsatCoresSize << "\n";
+  stats << "KLEE: done: count of summarized locations = "
+        << summarizedLocationCount << "\n";
 
   bool useColors = llvm::errs().is_displayed();
   if (useColors)

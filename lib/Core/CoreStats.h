@@ -21,11 +21,12 @@ namespace stats {
   extern Statistic instructionTime;
   extern Statistic instructionRealTime;
   extern Statistic coveredInstructions;
-  extern Statistic uncoveredInstructions;  
+  extern Statistic uncoveredInstructions;
   extern Statistic trueBranches;
   extern Statistic falseBranches;
   extern Statistic forkTime;
   extern Statistic solverTime;
+  extern Statistic summarizedLocationCount;
 
   /// The number of process forks.
   extern Statistic forks;

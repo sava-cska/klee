@@ -1,6 +1,8 @@
 #include "Summary.h"
+#include "CoreStats.h"
 #include "klee/ADT/Ref.h"
 #include "klee/Expr/Expr.h"
+#include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
 #include <iostream>
 
@@ -36,7 +38,10 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
                  << "\n";
 
   auto core = *metaData.queryValidityCore;
-  auto& lemma = lemmas[pob];
+  auto &locationLemmas = lemmas[pob->location];
+  if (locationLemmas.empty())
+    ++stats::summarizedLocationCount;
+  auto &lemma = locationLemmas[pob];
   label_stream << "Constraints are:\n";
   for(auto &constraint : core) {
     if(rebuildMap.count(constraint.first)) {
@@ -52,24 +57,30 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   label_stream << "\n";
 
   (*summaryFile) << label_stream.str();
-  llvm::errs() << label_stream.str();
 
-  lemma.paths.push_back(path);
-  llvm::errs() << "Summary for pob at " << pob->location->getIRLocation() << "\n";
+  if (std::find(lemma.paths.begin(), lemma.paths.end(), path) == lemma.paths.end()) {
+    lemma.paths.push_back(path);
 
-  llvm::errs() << "Paths:\n";
-  for (auto &path : lemma.paths) {
-    llvm::errs() << path.toString() << "\n";
-  }
-  ExprHashSet summary;
-  for (auto &expr : lemma.constraints) {
-    summary.insert(expr);
-  }
-  llvm::errs() << "Lemma:\n";
-  for (auto &expr : summary) {
+    llvm::errs() << label_stream.str();
+
+    llvm::errs() << "Summary for pob at " << pob->location->getIRLocation() << "\n";
+
+    llvm::errs() << "Paths:\n";
+    for (auto &path : lemma.paths) {
+      llvm::errs() << path.toString() << "\n";
+    }
+    ExprHashSet summary;
+    for (auto &expr : lemma.constraints) {
+      summary.insert(expr);
+    }
+    llvm::errs() << "Lemma:\n";
+    llvm::errs() << "\n" << divider(30);
+    for (auto &expr : summary) {
+      llvm::errs() << divider(30);
+      llvm::errs() << expr << "\n";
+      llvm::errs() << divider(30);
+    }
     llvm::errs() << divider(30);
-    llvm::errs() << expr << "\n";
-    llvm::errs() << divider(30);
+    llvm::errs() << "\n";
   }
-  llvm::errs() << "\n";
 }

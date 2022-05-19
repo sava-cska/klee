@@ -20,6 +20,7 @@
 #include "klee/Core/Interpreter.h"
 #include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
+#include "klee/Support/OptionCategories.h"
 #include <iostream>
 #include <llvm/ADT/StringExtras.h>
 #include <memory>
@@ -28,6 +29,14 @@
 #include <vector>
 
 #include <cstdlib>
+
+namespace {
+llvm::cl::opt<bool> DebugBidirectionalSearcher(
+    "debug-bidirectional-searcher",
+    llvm::cl::desc(""),
+    llvm::cl::init(false),
+    llvm::cl::cat(klee::DebugCat));
+}
 
 namespace klee {
 
@@ -124,8 +133,10 @@ void BidirectionalSearcher::update(ActionResult r) {
       if(!mainLocs.count(fr.validityCore->target->basicBlock)) {
         mainLocs.insert(fr.validityCore->target->basicBlock);
         ProofObligation* pob = new ProofObligation(fr.validityCore->target, nullptr, false);
-        llvm::errs() << "Add new proof obligation.\n";
-        llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
+        if (DebugBidirectionalSearcher) {
+          llvm::errs() << "Add new proof obligation.\n";
+          llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
+        }
         addPob(pob);
       }
     }
@@ -137,11 +148,12 @@ void BidirectionalSearcher::update(ActionResult r) {
     auto reached = branch->collectAndClearReached();
     for (auto &targetStates : reached) {
       for (auto state : targetStates.second) {
-        llvm::errs() << "New isolated state.\n";
-        llvm::errs() << "Id: " << state->id << "\n";
-        llvm::errs() << "Path: " << state->path.toString() << "\n";
-        llvm::errs() << "Constraints:\n" << state->constraints << "\n";
-        llvm::errs() << "\n";
+        if (DebugBidirectionalSearcher) {
+          llvm::errs() << "New isolated state.\n";
+          llvm::errs() << "Id: " << state->id << "\n";
+          llvm::errs() << "Path: " << state->path.toString() << "\n";
+          llvm::errs() << "Constraints:\n" << state->constraints << "\n";
+        }
         ex->emanager->insert(targetStates.first, *state->copy());
       }
     }

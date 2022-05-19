@@ -6,12 +6,21 @@
 #include "klee/Module/KModule.h"
 #include "klee/Solver/Solver.h"
 #include "klee/Support/ModuleUtil.h"
+#include "klee/Support/OptionCategories.h"
 
 #include <algorithm>
 #include <iostream>
 #include <set>
 #include <stack>
 #include <utility>
+
+namespace {
+llvm::cl::opt<bool> DebugInitializer(
+    "debug-initializer",
+    llvm::cl::desc(""),
+    llvm::cl::init(false),
+    llvm::cl::cat(klee::DebugCat));
+}
 
 namespace klee {
 
@@ -197,12 +206,16 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
   inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(b, false)));
 
   std::map<KInstruction *, std::set<Target>> ret;
-  llvm::errs() << "Initialization of entry points and targets: \n";
+  if (DebugInitializer) {
+    llvm::errs() << "Initialization of entry points and targets: \n";
+  }
   for (auto init : inits) {
     if (!initialized[init.first].count(init.second) &&
         !(!init.second.at_end && init.first->parent == init.second.targetBlock)) {
-      llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
-      llvm::errs() << init.second.print() << "\n" << init.second.targetBlock->instructions[0]->getSourceLocation() << "\n";
+      if (DebugInitializer) {
+        llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
+        llvm::errs() << init.second.print() << "\n" << init.second.targetBlock->instructions[0]->getSourceLocation() << "\n";
+      }
       ret[init.first].insert(init.second);
       initialized[init.first].insert(init.second);
     }

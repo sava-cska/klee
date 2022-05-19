@@ -4,9 +4,18 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
+#include "klee/Support/OptionCategories.h"
 #include <iostream>
 
 using namespace klee;
+
+namespace {
+llvm::cl::opt<bool> DebugSummary(
+    "debug-summary",
+    llvm::cl::desc(""),
+    llvm::cl::init(false),
+    llvm::cl::cat(klee::DebugCat));
+}
 
 ref<Expr> Lemma::getAsExpr() {
   ref<Expr> expr = ConstantExpr::create(0, Expr::Bool);
@@ -61,26 +70,26 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   if (std::find(lemma.paths.begin(), lemma.paths.end(), path) == lemma.paths.end()) {
     lemma.paths.push_back(path);
 
-    llvm::errs() << label_stream.str();
-
-    llvm::errs() << "Summary for pob at " << pob->location->getIRLocation() << "\n";
-
-    llvm::errs() << "Paths:\n";
-    for (auto &path : lemma.paths) {
-      llvm::errs() << path.toString() << "\n";
-    }
-    ExprHashSet summary;
-    for (auto &expr : lemma.constraints) {
-      summary.insert(expr);
-    }
-    llvm::errs() << "Lemma:\n";
-    llvm::errs() << "\n" << divider(30);
-    for (auto &expr : summary) {
+    if (DebugSummary) {
+      llvm::errs() << label_stream.str();
+      llvm::errs() << "Summary for pob at " << pob->location->getIRLocation() << "\n";
+      llvm::errs() << "Paths:\n";
+      for (auto &path : lemma.paths) {
+        llvm::errs() << path.toString() << "\n";
+      }
+      ExprHashSet summary;
+      for (auto &expr : lemma.constraints) {
+        summary.insert(expr);
+      }
+      llvm::errs() << "Lemma:\n";
+      llvm::errs() << "\n" << divider(30);
+      for (auto &expr : summary) {
+        llvm::errs() << divider(30);
+        llvm::errs() << expr << "\n";
+        llvm::errs() << divider(30);
+      }
       llvm::errs() << divider(30);
-      llvm::errs() << expr << "\n";
-      llvm::errs() << divider(30);
+      llvm::errs() << "\n";
     }
-    llvm::errs() << divider(30);
-    llvm::errs() << "\n";
   }
 }

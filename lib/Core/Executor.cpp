@@ -464,9 +464,9 @@ cl::opt<bool> DebugCheckForImpliedValues(
     cl::desc("Debug the implied value optimization"),
     cl::cat(DebugCat));
 
-cl::opt<bool> DebugPrintResult(
-    "debug-print-states",
-    cl::desc("Printing constraints for resulting states after compositional execution"),
+cl::opt<bool> DebugExecutor(
+    "debug-executor",
+    cl::desc(""),
     cl::init(false),
     cl::cat(DebugCat));
 
@@ -2175,13 +2175,18 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           state.depth && !state.isIsolated()) {
         assert((branches.first && !branches.second) ||
                (!branches.first && branches.second));
-        llvm::errs() << "Contradiction was found\n";
-        llvm::errs() << "Path: " << state.path.toString() << "\n";
-        llvm::errs() << "Constraint:" << state.constraints << "\n";
+        if (DebugExecutor) {
+          llvm::errs() << "Contradiction was found\n";
+          llvm::errs() << "Path: " << state.path.toString() << "\n";
+          llvm::errs() << "Constraint:" << state.constraints << "\n";
+        }
         KBlock* target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
         ref<Expr> last_cond = (branches.first ? Expr::createIsZero(cond) : cond);
-        llvm::errs() << "Condition:\n" << last_cond << "\n";
-        llvm::errs() << "Target: " << target->getIRLocation() << "\n";
+
+        if (DebugExecutor) {
+          llvm::errs() << "Condition:\n" << last_cond << "\n";
+          llvm::errs() << "Target: " << target->getIRLocation() << "\n";
+        }
 
         state.queryMetaData.queryValidityCore->push_back(
             std::make_pair(last_cond, state.path.getCurrentIndex()));
@@ -5477,11 +5482,13 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
     } else {
       newPobs.push_back(newPob);
     }
-    llvm::errs() << "Propagated pobs\n";
-    for (auto &pob : newPobs) {
-      llvm::errs() << "Path: " << pob->path.toString() << "\n";
-      llvm::errs() << "Constraints:\n" << pob->condition << "\n";
-      llvm::errs() << "\n";
+    if (DebugExecutor) {
+      llvm::errs() << "Propagated pobs\n";
+      for (auto &pob : newPobs) {
+        llvm::errs() << "Path: " << pob->path.toString() << "\n";
+        llvm::errs() << "Constraints:\n" << pob->condition << "\n";
+        llvm::errs() << "\n";
+      }
     }
     return BackwardResult(newPobs, pob);
   } else {

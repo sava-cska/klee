@@ -70,7 +70,6 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
   ::Z3_symbol unsatCoreParamStrSymbol;
-  uint count = 0u;
 
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
@@ -366,12 +365,14 @@ bool Z3SolverImpl::internalRunSolver(
     metaData.queryValidityCore = validityCore;
 
     Z3_ast_vector assertions = Z3_solver_get_assertions(builder->ctx, theSolver);
+    Z3_ast_vector_inc_ref(builder->ctx, assertions);
     unsigned assertionsCount = Z3_ast_vector_size(builder->ctx, assertions);
 
     stats::unsatQueriesAssertionsCount += assertionsCount;
     stats::unsatCoresSize += size;
 
     Z3_ast_vector_dec_ref(builder->ctx, unsatCore);
+    Z3_ast_vector_dec_ref(builder->ctx, assertions);
   }
 
   Z3_solver_dec_ref(builder->ctx, theSolver);

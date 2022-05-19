@@ -1445,10 +1445,13 @@ void Executor::printDebugInstructions(ExecutionState &state) {
 
 void Executor::stepInstruction(ExecutionState &state) {
   printDebugInstructions(state);
-  if (statsTracker)
-    statsTracker->stepInstruction(state);
+  if (!state.isIsolated()) {
+    if (statsTracker)
+      statsTracker->stepInstruction(state);
 
-  ++stats::instructions;
+    ++stats::instructions;
+  }
+
   ++state.steppedInstructions;
   if (isa<LoadInst>(state.pc->inst) || isa<StoreInst>(state.pc->inst))
     ++state.steppedMemoryInstructions;
@@ -1614,7 +1617,7 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
 
     if (popFrames) {
       state.popFrame();
-      if (statsTracker != nullptr) {
+      if (statsTracker && !state.isIsolated()) {
         statsTracker->framePopped(state);
       }
     }
@@ -1662,7 +1665,7 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
         bindArgument(kf, 1, state, clauses_mo->getSizeExpr());
         bindArgument(kf, 2, state, clauses_mo->getBaseExpr());
 
-        if (statsTracker) {
+        if (statsTracker && !state.isIsolated()) {
           statsTracker->framePushed(state,
                                     &state.stack[state.stack.size() - 2]);
         }
@@ -1862,7 +1865,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
     state.pushFrame(state.prevPC, kf);
     transferToBasicBlock(&*kf->function->begin(), state.getPrevPCBlock(), state);
 
-    if (statsTracker)
+    if (statsTracker && !state.isIsolated())
       statsTracker->framePushed(state, &state.stack[state.stack.size() - 2]);
 
     // TODO: support zeroext, signext, sret attributes
@@ -2066,7 +2069,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     } else {
       state.popFrame();
 
-      if (statsTracker)
+      if (statsTracker && !state.isIsolated())
         statsTracker->framePopped(state);
 
       if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
@@ -4756,7 +4759,7 @@ void Executor::runFunctionAsMain(Function *f,
   if (symPathWriter)
     state->symPathOS = symPathWriter->open();
 
-  if (statsTracker)
+  if (statsTracker && !state->isIsolated())
     statsTracker->framePushed(*state, 0);
 
   processForest = std::make_unique<PForest>();

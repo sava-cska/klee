@@ -25,8 +25,8 @@ std::string Path::toString() const {
   unsigned stackCount = 0;
   std::string repr = "";
   for (size_t i = 0; i<path.size(); i++) {
-    if(i == 0 || (path[i-1]->parent != path[i]->parent &&
-                  path[i-1]->getKBlockType() == KBlockType::Call)) {
+    if (i == 0 || (path[i-1]->parent != path[i]->parent &&
+                   path[i-1]->getKBlockType() == KBlockType::Call)) {
       repr += "(";
       repr += path[i]->parent->function->getName();
       repr += ": ";
@@ -35,16 +35,23 @@ std::string Path::toString() const {
     std::string label;
     llvm::raw_string_ostream label_stream(label);
     path[i]->basicBlock->printAsOperand(label_stream);
-    repr += label_stream.str().erase(0,6) + " ";
-    if(i == path.size() - 1 || (path[i]->parent != path[i + 1]->parent &&
-                                path[i]->getKBlockType() != KBlockType::Call)) {
+    repr += label_stream.str().erase(0, 6) + " ";
+    if (i == path.size() - 1 || (path[i]->parent != path[i + 1]->parent &&
+                                 path[i]->getKBlockType() != KBlockType::Call)) {
       repr.pop_back();
       repr += ") ";
-      stackCount--;
+      if (stackCount == 0) {
+        std::string tmp = "(";
+        tmp += path[i]->parent->function->getName();
+        tmp += ": ";
+        repr = tmp + repr;
+      } else {
+        stackCount--;
+      }
     }
   }
   repr.pop_back();
-  repr += std::string(")",stackCount);
+  repr += std::string(")", stackCount);
   return repr;
 }
 

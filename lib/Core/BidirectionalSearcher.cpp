@@ -197,9 +197,7 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
     closeProofObligation(child);
   }
   ProofObligation *parent = pob->parent;
-  if (parent) {
-    parent->children.erase(pob);
-  }
+  pob->detachParent();
   delete pob;
   if (parent) {
     closeProofObligation(parent);

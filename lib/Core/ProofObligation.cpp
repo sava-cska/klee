@@ -10,6 +10,12 @@ void ProofObligation::addCondition(ref<Expr> e, std::optional<size_t> loc, bool 
   c.addConstraint(e, loc, sat);
 }
 
+void ProofObligation::detachParent() {
+  if (parent) {
+    parent->children.erase(this);
+  }
+}
+
 std::string ProofObligation::print() const {
   std::string ret;
   std::string s;

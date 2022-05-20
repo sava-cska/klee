@@ -5454,7 +5454,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   SolverQueryMetaData queryMetaData;
   ExprHashMap<ref<Expr>> rebuildMap;
 
-  ProofObligation* newPob = new ProofObligation(state->initPC->parent, pob, 0);
+  ProofObligation *newPob = new ProofObligation(state->initPC->parent, pob, 0);
   bool success = Composer::tryRebuild(*pob, *state, *newPob, queryMetaData, rebuildMap);
   timers.invoke();
 
@@ -5491,8 +5491,13 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
         llvm::errs() << "\n";
       }
     }
+    for (auto &newPob : newPobs) {
+      newPob->parent = pob;
+      pob->children.insert(newPob);
+    }
     return BackwardResult(newPobs, pob);
   } else {
+    newPob->detachParent();
     delete newPob;
     summary->summarize(state->path, pob, queryMetaData, rebuildMap);
     return BackwardResult({}, pob);

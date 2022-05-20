@@ -28,8 +28,8 @@ public:
   ProofObligation *parent;
   ProofObligation *root;
   std::unordered_set<ProofObligation *> children;
-  std::vector<KInstruction*> stack;
-  std::map<ExecutionState*, unsigned> propagation_count;
+  std::vector<KInstruction *> stack;
+  std::map<ExecutionState *, unsigned> propagation_count;
 
   KBlock* location;
   ConstraintSet condition;
@@ -47,7 +47,7 @@ public:
       : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
         location(_location), at_return(at_return), path({_location}) {
-    if(parent) {
+    if (parent) {
       parent->children.insert(this);
     }
   }
@@ -57,7 +57,9 @@ public:
         propagation_count(pob->propagation_count),
         location(pob->location), condition(pob->condition),
         at_return(pob->at_return), path(pob->path) {
-    parent->children.insert(this);
+    if (parent) {
+      parent->children.insert(this);
+    }
   }
 
   // no copy ctor
@@ -72,8 +74,8 @@ public:
   ~ProofObligation() = default;
 
   bool isOriginPob() const noexcept { return !parent; }
-
   void addCondition(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
+  void detachParent();
   std::string print() const;
 };
 

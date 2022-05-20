@@ -214,7 +214,8 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
         !(!init.second.at_end && init.first->parent == init.second.targetBlock)) {
       if (DebugInitializer) {
         llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
-        llvm::errs() << init.second.print() << "\n" << init.second.targetBlock->instructions[0]->getSourceLocation() << "\n";
+        llvm::errs() << init.second.print() << "\n" << init.second.targetBlock->instructions[0]->getSourceLocation();
+        llvm::errs() << "\n";
       }
       ret[init.first].insert(init.second);
       initialized[init.first].insert(init.second);

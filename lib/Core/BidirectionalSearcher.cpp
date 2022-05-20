@@ -153,7 +153,8 @@ void BidirectionalSearcher::update(ActionResult r) {
           llvm::errs() << "New isolated state.\n";
           llvm::errs() << "Id: " << state->id << "\n";
           llvm::errs() << "Path: " << state->path.toString() << "\n";
-          llvm::errs() << "Constraints:\n" << state->constraints << "\n";
+          llvm::errs() << "Constraints:\n" << state->constraints;
+          llvm::errs() << "\n";
         }
         ex->emanager->insert(targetStates.first, *state->copy());
       }

@@ -5479,6 +5479,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
             newPob, state->initPC->parent->instructions[0], i);
         newPobs.push_back(callPob);
       }
+      newPob->detachParent();
       delete newPob;
     } else {
       newPobs.push_back(newPob);

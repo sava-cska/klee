@@ -90,7 +90,7 @@ Action &BidirectionalSearcher::selectAction() {
 
     case StepKind::Branch : {
       auto& state = branch->selectState();
-      if (ex->initialState->getInitPCBlock() == state.getInitPCBlock() ||
+      if (ex->initialState->getInitPCBlock() != state.getInitPCBlock() &&
           state.maxLevel > 1) {
         branch->update(nullptr, {}, {&state});
         ex->pauseState(state);

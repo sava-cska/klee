@@ -139,6 +139,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
   std::vector<Symbolic> sourced;
   composer.copy.extractSourcedSymbolics(sourced);
   rebuilt.sourcedSymbolics.insert(rebuilt.sourcedSymbolics.end(), sourced.begin(), sourced.end());
+  rebuilt.path = concat(state.path, old.path);
   return success;
 }
 
@@ -174,7 +175,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
     solver->setTimeout(time::Span());
 
     if (res == Solver::True) {
-      ref<Expr> trueCase = op->second->read(op->first->getOffsetExpr(ptr), 8 * op->second->size);
+      ref<Expr> trueCase = op->second->read(op->first->getOffsetExpr(ptr), 8 * size);
       results.push_back({
         ConstantExpr::create(true, Expr::Bool), SExtExpr::create(trueCase, 8 * size)});
       break;
@@ -182,7 +183,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
       continue;
     } else {
       check = AndExpr::create(check, Expr::createIsZero(inBounds));
-      ref<Expr> trueCase = op->second->read(op->first->getOffsetExpr(ptr), 8 * op->second->size);
+      ref<Expr> trueCase = op->second->read(op->first->getOffsetExpr(ptr), 8 * size);
       results.push_back({inBounds, SExtExpr::create(trueCase, 8 * size)});
     }
   }
@@ -225,7 +226,7 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     return res;
   }
 
-  if(object->isLazyInitialized()) {
+  if (object->isLazyInitialized()) {
     auto LI = visit(object->lazyInitializedSource);
 
     ref<Expr> result;
@@ -238,28 +239,27 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
   } else {
     ref<Expr> prevVal;
 
-    if((array->index >= 0 && diffLevel > 0) ||
-       (array->index > 0 && diffLevel < 0)) {
+    if ((array->index >= 0 && diffLevel > 0) ||
+        (array->index > 0 && diffLevel < 0)) {
       prevVal = reindexArray(array);
       readCache[object] = prevVal;
       return prevVal;
     }
 
     const llvm::Value *allocSite = object->allocSite;
-    if(!allocSite)
+    if (!allocSite)
       return nullptr;
 
     KFunction *kf1 = state.stack.back().kf;
     KBlock *pckb1 = kf1->blockMap[state.getPCBlock()];
 
-    if(isa<Argument>(allocSite)) {
+    if (isa<Argument>(allocSite)) {
       const Argument *arg = cast<Argument>(allocSite);
       const Function *f   = arg->getParent();
       const KFunction *kf = caller.executor->getKFunction(f);
       const unsigned argN = arg->getArgNo();
-      prevVal =
-        kf->function == kf1->function ?
-          caller.executor->getArgumentCell(state, kf, argN).value : nullptr;
+      assert(kf->function == kf1->function);
+      prevVal = caller.executor->getArgumentCell(state, kf, argN).value;
     } else if(isa<Instruction>(allocSite)) {
       const Instruction *inst = cast<Instruction>(allocSite);
       const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
@@ -268,24 +268,30 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
       if (isa<PHINode>(inst))
         prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, false).value;
       else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
+        KFunction *kf = ki->parent->parent;
         Function *f =
           isa<CallInst>(inst) ?
             dyn_cast<CallInst>(inst)->getCalledFunction() :
             dyn_cast<InvokeInst>(inst)->getCalledFunction();
-        prevVal =
-          isFinalPCKb1 && f == kf1->function ?
-            caller.executor->getDestCell(state, state.prevPC).value : nullptr;
+        if (isFinalPCKb1 && f == kf1->function) {
+          prevVal = caller.executor->getDestCell(state, state.prevPC).value;
+        } else if (kf->function == kf1->function) {
+          prevVal = caller.executor->getDestCell(state, ki).value;
+          if (prevVal.isNull()) {
+            caller.executor->prepareSymbolicValue(state, ki);
+            prevVal = caller.executor->getDestCell(state, ki).value;
+          }
+        }
       } else {
         const Instruction *inst = cast<Instruction>(allocSite);
         const Function *f = inst->getParent()->getParent();
         const KFunction *kf = caller.executor->getKFunction(f);
-        prevVal =
-          kf->function == kf1->function ?
-            caller.executor->getDestCell(state, ki).value : nullptr;
+        assert(kf->function == kf1->function);
+        prevVal = caller.executor->getDestCell(state, ki).value;
       }
     }
 
-    if(prevVal.isNull()) {
+    if (prevVal.isNull()) {
       const ObjectState *os = state.addressSpace.findObject(object);
       if(!os) {
         os = caller.executor->bindSymbolicInState(state, object, false, array);
@@ -303,7 +309,7 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
 
   ref<Expr> index = visit(re.index);
   ref<ObjectState> os;
-  if(re.updates.root->isExternal ||
+  if (re.updates.root->isExternal ||
      re.updates.root->isConstantArray()) {
     os = new ObjectState(re.updates.root, caller.executor->getMemoryManager());
     shareUpdates(os, re);
@@ -327,7 +333,7 @@ ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExp
 
   ref<Expr> index = visit(base.index);
   ref<ObjectState> os;
-  if(base.updates.root->isExternal ||
+  if (base.updates.root->isExternal ||
     base.updates.root->isConstantArray()) {
     os = new ObjectState(base.updates.root, caller.executor->getMemoryManager());
     shareUpdates(os, base);

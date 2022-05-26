@@ -840,10 +840,8 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
     klee_warning("klee_make_symbolic: renamed empty name to \"unnamed\"");
   }
 
-  assert(isa<ConstantExpr>(arguments[1]) && "size of object must be constant");
-
   Executor::ExactResolutionList rl;
-  executor.resolveExact(state, arguments[0], rl, "make_symbolic", target, cast<ConstantExpr>(arguments[1])->getZExtValue());
+  executor.resolveExact(state, arguments[0], rl, "make_symbolic", target);
   
   for (Executor::ExactResolutionList::iterator it = rl.begin(), 
          ie = rl.end(); it != ie; ++it) {

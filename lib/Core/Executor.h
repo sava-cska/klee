@@ -353,7 +353,7 @@ private:
       ExactResolutionList;
   void resolveExact(ExecutionState &state, ref<Expr> p,
                     ExactResolutionList &results, const std::string &name,
-                    KInstruction *target = nullptr, unsigned bytes = 0);
+                    KInstruction *target = nullptr);
 
   /// Allocate and bind a new object in a particular state. NOTE: This
   /// function may fork.
@@ -409,10 +409,10 @@ private:
                               std::vector<ExecutionState *> *results = nullptr);
 
   ObjectPair lazyInitializeVariable(ExecutionState &state, ref<Expr> address, bool isLocal,
-                                     const llvm::Value *allocSite, uint64_t size);
+                                    const llvm::Value *allocSite, uint64_t size);
 
   ObjectPair transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address,
-                                     const llvm::Value *allocSite, uint64_t size);
+                                               const llvm::Value *allocSite, uint64_t size);
   
   ObjectPair lazyInitialize(ExecutionState &state, bool isLocal,
                             const MemoryObject *mo, const Array *array);
@@ -455,7 +455,7 @@ private:
     return state.stack.back().locals[target->dest];
   }
 
-  void bindLocal(KInstruction *target, ExecutionState &state, ref<Expr> value);
+  void bindLocal(const KInstruction *target, ExecutionState &state, ref<Expr> value);
 
   void bindArgument(KFunction *kf, unsigned index, ExecutionState &state,
                     ref<Expr> value);
@@ -601,7 +601,7 @@ public:
 
   void addAllocaDisequality(ExecutionState &state, const llvm::Value *allocSite, ref<Expr> address);
 
-  void prepareSymbolicValue(ExecutionState &state, KInstruction *targetW);
+  void prepareSymbolicValue(ExecutionState &state, const KInstruction *targetW);
 
   void prepareSymbolicRegister(ExecutionState &state, unsigned index);
 

@@ -1289,7 +1289,7 @@ const Cell &Executor::eval(const KInstruction *ki, unsigned index,
   }
 }
 
-void Executor::bindLocal(KInstruction *target, ExecutionState &state, 
+void Executor::bindLocal(const KInstruction *target, ExecutionState &state, 
                          ref<Expr> value) {
   getDestCell(state, target).value = value;
 }
@@ -2788,9 +2788,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::GetElementPtr: {
     KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
     GetElementPtrInst *gepInst = static_cast<GetElementPtrInst*>(kgepi->inst);
-    unsigned size = gepInst->getSourceElementType()->isAggregateType() ?
-      kmodule->targetData->getTypeStoreSize(gepInst->getSourceElementType()) :
-      kmodule->targetData->getTypeStoreSize(gepInst->getResultElementType());
+    unsigned size = kmodule->targetData->getTypeStoreSize(gepInst->getSourceElementType());
     ref<Expr> base = eval(ki, 0, state).value;
     ref<Expr> offset = ConstantExpr::create(0, base->getWidth());
     for (std::vector< std::pair<unsigned, uint64_t> >::iterator
@@ -4210,8 +4208,7 @@ void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
                             ExactResolutionList &results, 
                             const std::string &name,
-                            KInstruction *target,
-                            unsigned bytes) {
+                            KInstruction *target) {
   p = optimizer.optimizeExpr(p, true);
   // XXX we may want to be capping this?
   ResolutionList rl;
@@ -4344,6 +4341,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
   // XXX there is some query wasteage here. who cares?
   ExecutionState *unbound = &state;
+  ExecutionState *bound = nullptr;
   
   for (ResolutionList::iterator i = rl.begin(), ie = rl.end(); i != ie; ++i) {
     const MemoryObject *mo = i->first;
@@ -4354,7 +4352,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     inBounds = AndExpr::create(inBounds, mo->getBoundsCheckPointer(address, bytes));
 
     StatePair branches = fork(*unbound, inBounds, true);
-    ExecutionState *bound = branches.first;
+    bound = branches.first;
     unbound = branches.second;
 
 
@@ -4419,13 +4417,13 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       }
 
       if (needAddressLazyInitialization) {
-        // if (unbound->isIsolated()) {
-        //   p = lazyInitializeVariable(*unbound, address, false, target ? target->inst : nullptr, bytes);
-        // } else {
+        if (!bound && unbound->isIsolated()) {
+          p = lazyInitializeVariable(*unbound, address, false, target ? target->inst : nullptr, bytes);
+        } else {
           terminateStateOnError(*unbound, "memory error: out of bound pointer", Ptr,
                                 NULL, getAddressInfo(*unbound, address));
           return;
-        // }
+        }
       }
       switch (operation) {
         case Write: {
@@ -4700,7 +4698,7 @@ void Executor::addAllocaDisequality(ExecutionState &state, const Value *allocSit
   }
 }
 
-void Executor::prepareSymbolicValue(ExecutionState &state, KInstruction *target) {
+void Executor::prepareSymbolicValue(ExecutionState &state, const KInstruction *target) {
   Instruction *allocSite = target->inst;
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
@@ -4743,15 +4741,15 @@ void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
 
 ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
   const Array *array = makeArray(state, size, name);
-  MemoryObject *mo = array->binding ? const_cast<MemoryObject *>(array->binding) :
-    memory->allocateTransparent(size, true, /*isGlobal=*/false,
-                                value, /*allocationAlignment=*/8);
-
   if (state.initPC->parent->getKBlockType() == KBlockType::Call &&
       state.initPC == state.initPC->parent->getLastInstruction() &&
       state.initPC->parent->getFirstInstruction()->inst == value) {
     array = arrayManager.CreateArray(array, -1);
   }
+
+  MemoryObject *mo = array->binding ? const_cast<MemoryObject *>(array->binding) :
+    memory->allocateTransparent(size, true, /*isGlobal=*/false,
+                                value, /*allocationAlignment=*/8);
 
   ObjectState *os = bindSymbolicInState(state, mo, false, array);
   const_cast<Array*>(array)->binding = mo;
@@ -5460,7 +5458,6 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
 
   if (success) {
     newPob->propagation_count[state]++;
-    newPob->path = concat(state->path, pob->path);
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
     for (auto it = state->stack.rbegin();

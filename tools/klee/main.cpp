@@ -1817,7 +1817,7 @@ int main(int argc, char **argv, char **envp) {
         << handler->getNumPathsExplored() << "\n";
   stats << "KLEE: done: generated tests = "
         << handler->getNumTestCases() << "\n";
-  stats << "KLEE: done: count of summarized locations = "
+  stats << "KLEE: done: summarized locations = "
         << summarizedLocationCount << "\n";
 
   bool useColors = llvm::errs().is_displayed();

@@ -463,7 +463,8 @@ void StatsTracker::writeStatsHeader() {
              << "ResolveTime INTEGER,"
              << "QueryCexCacheMisses INTEGER,"
              << "QueryCexCacheHits INTEGER,"
-             << "ArrayHashTime INTEGER"
+             << "ArrayHashTime INTEGER,"
+             << "SummarizedLocations INTEGER"
          << ')';
   char *zErrMsg = nullptr;
   if(sqlite3_exec(statsFile, create.str().c_str(), nullptr, nullptr, &zErrMsg)) {
@@ -496,8 +497,10 @@ void StatsTracker::writeStatsHeader() {
              << "ResolveTime,"
              << "QueryCexCacheMisses,"
              << "QueryCexCacheHits,"
-             << "ArrayHashTime"
+             << "ArrayHashTime,"
+             << "SummarizedLocations"
          << ") VALUES ("
+             << "?,"
              << "?,"
              << "?,"
              << "?,"
@@ -554,6 +557,7 @@ void StatsTracker::writeStatsLine() {
 #else
   sqlite3_bind_int64(insertStmt, 20, -1LL);
 #endif
+  sqlite3_bind_int64(insertStmt, 21, stats::summarizedLocationCount);
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
   sqlite3_reset(insertStmt);

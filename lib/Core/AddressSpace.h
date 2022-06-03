@@ -98,14 +98,10 @@ namespace klee {
                  TimingSolver *solver,
                  ref<Expr> p,
                  ResolutionList &rl,
+                 bool skipGlobal = false,
+                 bool skipLocal = false,
                  unsigned maxResolutions=0,
-                 time::Span timeout=time::Span(),
-                 bool skipGlobal = false) const;
-    bool resolve(const ExecutionState &state,
-                 TimingSolver *solver,
-                 ref<Expr> p,
-                 ResolutionList &rl,
-                 bool skipGlobal) const;
+                 time::Span timeout=time::Span()) const;
 
     /***/
 

@@ -4348,7 +4348,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   solver->setTimeout(coreSolverTimeout);
   bool incomplete;
 
-  incomplete = state.addressSpace.resolve(state, solver.get(), base, rl, 0, coreSolverTimeout, true);
+  incomplete = state.addressSpace.resolve(state, solver.get(), base, rl, true, false, 0, coreSolverTimeout);
 
   solver->setTimeout(time::Span());
 

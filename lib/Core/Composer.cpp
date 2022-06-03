@@ -154,7 +154,7 @@ bool ComposeVisitor::tryDeref(ref<Expr> ptr, unsigned size, ref<Expr> &result) {
 
   ResolutionList rl;
   Solver::Validity res = Solver::False;
-  state.addressSpace.resolve(state, caller.executor->getSolver(), ptr, rl, true);
+  state.addressSpace.resolve(state, caller.executor->getSolver(), ptr, rl, true, true);
 
   if (rl.empty() && isa<ConstantExpr>(ptr)) {
     faultyPtr = ptr;

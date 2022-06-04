@@ -29,24 +29,24 @@ public:
   ProofObligation *root;
   std::unordered_set<ProofObligation *> children;
   std::vector<KInstruction *> stack;
-  std::map<ExecutionState *, unsigned> propagation_count;
+  std::map<ExecutionState *, unsigned> propagationCount;
 
-  KBlock* location;
+  KBlock *location;
   ConstraintSet condition;
 
   // Indicates that this proof obligation was pushed from the outer stack frame, and so,
   // it is actually at the return statement of the current basic block.
-  bool at_return;
+  bool atReturn;
 
   Path path;
 
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> sourcedSymbolics;
 
   ProofObligation(KBlock *_location, ProofObligation *_parent,
-                  bool at_return = false)
+                  bool atReturn = false)
       : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
-        location(_location), at_return(at_return), path({_location}) {
+        location(_location), atReturn(atReturn), path({_location}) {
     if (parent) {
       parent->children.insert(this);
     }
@@ -54,9 +54,9 @@ public:
 
   explicit ProofObligation(ProofObligation *pob)
       : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
-        propagation_count(pob->propagation_count),
+        propagationCount(pob->propagationCount),
         location(pob->location), condition(pob->condition),
-        at_return(pob->at_return), path(pob->path) {
+        atReturn(pob->atReturn), path(pob->path) {
     if (parent) {
       parent->children.insert(this);
     }
@@ -85,7 +85,7 @@ struct ProofObligationIDCompare {
   }
 };
 
-ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,
-                                   KBlock* returnBlock);
+ProofObligation *propagateToReturn(ProofObligation *pob, KInstruction *callSite,
+                                   KBlock *returnBlock);
 
 } // namespace klee

@@ -64,7 +64,7 @@ void ValidityCoreInitializer::removePob(ProofObligation *pob) {}
 //   KBlock* current = path.getBlock(front);
 //   std::vector<KBlock*> targets;
 //   bool after_return = false;
-//   bool at_return = false;
+//   bool atReturn = false;
 //   bool done = false;
 
 //   while(!done) {
@@ -75,30 +75,30 @@ void ValidityCoreInitializer::removePob(ProofObligation *pob) {}
 
 //     if (path.getBlock(path_index - 1)->getKBlockType() == KBlockType::Call) {
 //       targets = {path.getBlock(path_index - 1)};
-//       at_return = false;
+//       atReturn = false;
 //       if(path_index == path.size() - 1) {
 //         done = true;
 //       }
 //     } else if (path.getBlock(path_index)->parent != current->parent) {
 //       targets = current->parent->returnKBlocks;
 
-//       at_return = true;
+//       atReturn = true;
 //     } else if (path_index == path.size() - 1) {
 //       targets = {path.getBlock(path_index)};
-//       at_return = false;
+//       atReturn = false;
 //       done = true;
 //     }
 
 //     auto dismantled = dismantle(current, targets);
 //     for (auto blockpair: dismantled) {
 //       bool instruction_index = (blockpair.first == current && after_return) ? 1 : 0;
-//       bool target_at_return =
-//           (at_return && std::find(targets.begin(), targets.end(),
+//       bool target_atReturn =
+//           (atReturn && std::find(targets.begin(), targets.end(),
 //                                   blockpair.second) != targets.end()
 //                ? true
 //                : false);
 //       inits.insert(std::make_pair(blockpair.first->instructions[instruction_index],
-//                                   Target(blockpair.second, target_at_return)));
+//                                   Target(blockpair.second, target_atReturn)));
 //     }
 
 //     if (path.getBlock(path_index - 1)->getKBlockType() == KBlockType::Call) {
@@ -186,12 +186,12 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
     dismantled_fns.insert(fn);
     auto dismantled = dismantle(fn->entryKBlock, fn->returnKBlocks);
     for (auto blockpair : dismantled) {
-      bool at_return =
+      bool atReturn =
           std::find(fn->returnKBlocks.begin(), fn->returnKBlocks.end(),
                     blockpair.second) != fn->returnKBlocks.end();
 
       inits.insert(std::make_pair(blockpair.first->instructions[0],
-                                  Target(blockpair.second, at_return)));
+                                  Target(blockpair.second, atReturn)));
 
       if (blockpair.second->getKBlockType() == KBlockType::Call) {
         KFunction *f =

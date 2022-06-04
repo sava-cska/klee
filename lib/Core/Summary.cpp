@@ -38,10 +38,10 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   std::string label;
   llvm::raw_string_ostream label_stream(label);
 
-  label_stream << "Add lemma for pob at: " << pob->location->getIRLocation() << (pob->at_return ? "(at return)" : "") << "\n";
+  label_stream << "Add lemma for pob at: " << pob->location->getIRLocation() << (pob->atReturn ? "(at return)" : "") << "\n";
 
   label_stream << "Pob at "
-                 << (pob->at_return
+                 << (pob->atReturn
                          ? pob->location->getFirstInstruction()->getSourceLocation()
                          : pob->location->getLastInstruction()->getSourceLocation())
                  << "\n";

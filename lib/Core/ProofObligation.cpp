@@ -39,7 +39,7 @@ std::string ProofObligation::print() const {
 ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,
                                      KBlock* returnBlock) {
     ProofObligation* ret = new ProofObligation(pob);
-    ret->at_return = true;
+    ret->atReturn = true;
     ret->location = returnBlock;
     ret->path.prepend(returnBlock);
     ret->condition.shift_location(1);

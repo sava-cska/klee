@@ -2194,16 +2194,16 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           llvm::errs() << "Constraint:" << state.constraints;
         }
         KBlock* target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
-        ref<Expr> last_cond = (branches.first ? Expr::createIsZero(cond) : cond);
+        ref<Expr> lastCondition = (branches.first ? Expr::createIsZero(cond) : cond);
 
         if (DebugExecutor) {
-          llvm::errs() << "Condition:\n" << last_cond << "\n";
+          llvm::errs() << "Condition:\n" << lastCondition << "\n";
           llvm::errs() << "Target: " << target->getIRLocation() << "\n";
           llvm::errs() << "\n";
         }
 
         state.queryMetaData.queryValidityCore->push_back(
-            std::make_pair(last_cond, state.path.getCurrentIndex()));
+            std::make_pair(lastCondition, state.prevPC));
         validityCore = std::make_optional<ForwardResult::ValidityCore>(
             state.path, *(state.queryMetaData.queryValidityCore), target);
         state.queryMetaData.queryValidityCore = std::nullopt;
@@ -5472,7 +5472,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   timers.invoke();
 
   if (success) {
-    newPob->propagation_count[state]++;
+    newPob->propagationCount[state]++;
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
     for (auto it = state->stack.rbegin();

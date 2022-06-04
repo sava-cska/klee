@@ -169,8 +169,8 @@ struct Target {
   KBlock* targetBlock;
   bool at_end;
 
-  Target(KBlock* targetBlock, bool at_return) :
-    targetBlock(targetBlock), at_end(at_return) {}
+  Target(KBlock* targetBlock, bool atReturn) :
+    targetBlock(targetBlock), at_end(atReturn) {}
 
   bool operator<(const Target& other) const {
     if (targetBlock == other.targetBlock) {

@@ -11,15 +11,15 @@
 
 using namespace klee;
 
-KBlock* Path::getInitialBlock() const {
+KBlock *Path::getInitialBlock() const {
   return path.front();
 }
 
-KBlock* Path::getFinalBlock() const {
+KBlock *Path::getFinalBlock() const {
   return path.back();
 }
 
-KBlock* Path::getBlock(size_t index) const {
+KBlock *Path::getBlock(size_t index) const {
   return path[index];
 }
 
@@ -56,14 +56,14 @@ std::string Path::toString() const {
 
 
 Path klee::concat(const Path& lhs, const Path& rhs) {
-  if(lhs.empty()) {
+  if (lhs.empty()) {
     return rhs;
   }
-  if(rhs.empty()) {
+  if (rhs.empty()) {
     return lhs;
   }
   assert(lhs.getFinalBlock() == rhs.getInitialBlock() && "Paths are not compatible.");
-  std::vector<KBlock*> path;
+  std::vector<KBlock *> path;
   path.reserve(lhs.path.size() + rhs.path.size() - 1);
   path.insert(path.end(), lhs.path.begin(), lhs.path.end());
   path.insert(path.end(), rhs.path.begin() + 1, rhs.path.end());

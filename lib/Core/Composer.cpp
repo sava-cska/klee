@@ -109,9 +109,6 @@ bool Composer::tryRebuild(const ProofObligation &old,
   Composer composer(state);
   for(auto& constraint : old.condition) {
     auto loc = old.condition.get_location(constraint);
-    if (loc){
-      loc = *loc + state.path.size();
-    }
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
     rebuildMap[rebuiltConstraint] = constraint;
@@ -126,7 +123,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
       );
       success = success && mayBeTrue;
       if(!success && queryMetaData.queryValidityCore) {
-        queryMetaData.queryValidityCore->push_back(std::make_pair(rebuiltConstraint, std::nullopt));
+        queryMetaData.queryValidityCore->push_back(std::make_pair(rebuiltConstraint, loc));
       }
     }
     if (success) {

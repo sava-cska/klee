@@ -419,7 +419,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
   ConstraintManager m(constraints);
   for (const auto &constraint : commonConstraints)
     m.addConstraint(constraint, oldConstraints.get_location(constraint));
-  m.addConstraint(OrExpr::create(inA, inB), std::nullopt);
+  m.addConstraint(OrExpr::create(inA, inB), nullptr);
 
   return true;
 }
@@ -458,7 +458,7 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
   }
 }
 
-void ExecutionState::addConstraint(ref<Expr> e, std::optional<size_t> loc, bool *sat) {
+void ExecutionState::addConstraint(ref<Expr> e, KInstruction *loc, bool *sat) {
   ConstraintManager c(constraints);
   c.addConstraint(e, loc, sat);
 }

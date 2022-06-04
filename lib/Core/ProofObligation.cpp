@@ -5,7 +5,7 @@ namespace klee {
 
 unsigned ProofObligation::counter = 0;
 
-void ProofObligation::addCondition(ref<Expr> e, std::optional<size_t> loc, bool *sat) {
+void ProofObligation::addCondition(ref<Expr> e, KInstruction *loc, bool *sat) {
   ConstraintManager c(condition);
   c.addConstraint(e, loc, sat);
 }
@@ -42,7 +42,6 @@ ProofObligation* propagateToReturn(ProofObligation* pob, KInstruction* callSite,
     ret->atReturn = true;
     ret->location = returnBlock;
     ret->path.prepend(returnBlock);
-    ret->condition.shift_location(1);
     ret->stack.push_back(callSite);
     return ret;
 }

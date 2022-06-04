@@ -281,7 +281,7 @@ bool Z3SolverImpl::internalRunSolver(
   std::vector<Z3ASTHandle> z3_ast_expr_constraints;
   std::unordered_map<
     Z3ASTHandle,
-    std::pair<ref<Expr>, std::optional<size_t>>,
+    std::pair<ref<Expr>, KInstruction *>,
     Z3ASTHandleHash,
     Z3ASTHandleCmp>
       z3_ast_expr_to_klee_expr;

@@ -30,7 +30,7 @@ namespace klee {
   /// independent of the actual constraints but can be used as a two-way
   /// communication between solver and context of query.
   struct SolverQueryMetaData {
-    using core_ty = std::vector<std::pair<ref<Expr>, std::optional<size_t>>>;
+    using core_ty = std::vector<std::pair<ref<Expr>, KInstruction *>>;
     /// @brief Costs for all queries issued for this state
     time::Span queryCost;
     std::optional<core_ty> queryValidityCore{std::nullopt};

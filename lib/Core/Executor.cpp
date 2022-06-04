@@ -1273,7 +1273,7 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
       klee_warning("seeds patched for violating constraint"); 
   }
 
-  state.addConstraint(condition, state.path.getCurrentIndex()); // Check
+  state.addConstraint(condition, state.prevPC);
   if (ivcEnabled)
     doImpliedValueConcretization(state, condition, 
                                  ConstantExpr::alloc(1, Expr::Bool));
@@ -4028,7 +4028,7 @@ ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state,
   ref<Expr> res = Expr::createTempRead(array, e->getWidth());
   ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
   llvm::errs() << "Making symbolic: " << eq << "\n";
-  state.addConstraint(eq, std::nullopt);
+  state.addConstraint(eq, nullptr);
   return res;
 }
 
@@ -4706,7 +4706,7 @@ void Executor::addAllocaDisequality(ExecutionState &state, const Value *allocSit
       Instruction *inst = const_cast<Instruction *>(cast<Instruction>(allocSite));
       state.addConstraint(
         Expr::createIsZero(
-            EqExpr::create(symbolicAlloca, address)), /*getKInst(inst)*/ std::nullopt);
+            EqExpr::create(symbolicAlloca, address)), getKInst(inst));
     }
   }
 }
@@ -4940,7 +4940,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
       // If the particular constraint operated on in this iteration through
       // the loop isn't implied then add it to the list of constraints.
       if (!mustBeTrue)
-        cm.addConstraint(*pi, std::nullopt);
+        cm.addConstraint(*pi, nullptr);
     }
     if (pi!=pie) break;
   }

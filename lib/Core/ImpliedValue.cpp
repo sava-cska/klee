@@ -221,7 +221,7 @@ void ImpliedValue::checkForImpliedValues(Solver *S, ref<Expr> e,
     ReadExpr *re = i->get();
     assumption.push_back(UltExpr::create(re->index, 
                                          ConstantExpr::alloc(re->updates.root->size, 
-                                                             Context::get().getPointerWidth())), std::nullopt);
+                                                             Context::get().getPointerWidth())), nullptr);
   }
 
   for (const auto &var : reads) {

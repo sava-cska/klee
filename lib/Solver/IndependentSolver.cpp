@@ -107,7 +107,7 @@ public:
                                         // be invoked.
 
   IndependentElementSet() {}
-  IndependentElementSet(ref<Expr> e, std::optional<size_t> loc) {
+  IndependentElementSet(ref<Expr> e, KInstruction *loc) {
     exprs.push_back(e, loc);
     // Track all reads in the program.  Determines whether reads are
     // concrete or symbolic.  If they are symbolic, "collapses" array
@@ -268,7 +268,7 @@ getAllIndependentConstraintsSets(const Query &query) {
                                   "therefore not included in factors");
   } else {
     ref<Expr> neg = Expr::createIsZero(query.expr);
-    factors->push_back(IndependentElementSet(neg, std::nullopt));
+    factors->push_back(IndependentElementSet(neg, nullptr));
   }
 
   for (const auto &constraint : query.constraints) {
@@ -320,7 +320,7 @@ getAllIndependentConstraintsSets(const Query &query) {
 static 
 IndependentElementSet getIndependentConstraints(const Query& query,
                                                 ConstraintSet &result) {
-  IndependentElementSet eltsClosure(query.expr, std::nullopt);
+  IndependentElementSet eltsClosure(query.expr, nullptr);
   std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
 
   for (const auto &constraint : query.constraints)
@@ -353,7 +353,7 @@ IndependentElementSet getIndependentConstraints(const Query& query,
     ExprHashSet reqset(result.begin(), result.end());
     errs() << "--\n";
     errs() << "Q: " << query.expr << "\n";
-    errs() << "\telts: " << IndependentElementSet(query.expr, std::nullopt) << "\n";
+    errs() << "\telts: " << IndependentElementSet(query.expr, nullptr) << "\n";
     int i = 0;
     for (const auto &constraint: query.constraints) {
       errs() << "C" << i++ << ": " << constraint;

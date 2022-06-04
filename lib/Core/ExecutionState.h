@@ -340,7 +340,7 @@ public:
 
   void addSymbolic(const MemoryObject *mo, const Array *array);
 
-  void addConstraint(ref<Expr> e, std::optional<size_t> loc, bool *sat = 0);
+  void addConstraint(ref<Expr> e, KInstruction *loc, bool *sat = 0);
   int resolveLazyInstantiation(std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &);
   void extractSourcedSymbolics(std::vector<Symbolic> &);
 

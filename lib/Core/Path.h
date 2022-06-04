@@ -13,17 +13,15 @@ struct Path {
   friend Path concat(const Path& lhs, const Path& rhs);
 
 public:
+  KBlock *getInitialBlock() const;
+  KBlock *getFinalBlock() const;
+  KBlock *getBlock(size_t index) const;
 
-  KBlock* getInitialBlock() const;
-  KBlock* getFinalBlock() const;
-
-  KBlock* getBlock(size_t index) const;
-
-  void append(KBlock* bb) {
+  void append(KBlock *bb) {
     path.push_back(bb);
   }
 
-  void prepend(KBlock* bb) {
+  void prepend(KBlock *bb) {
     path.insert(path.begin(), bb);
   }
 
@@ -55,7 +53,7 @@ public:
   }
 
   Path() = default;
-  explicit Path(std::vector<KBlock*> path) : path(path) {}
+  explicit Path(std::vector<KBlock *> path) : path(path) {}
 
 private:
   std::vector<KBlock *> path;

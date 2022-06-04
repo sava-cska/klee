@@ -110,7 +110,7 @@ bool ValidatingSolver::computeInitialValues(
         bindings.push_back(EqExpr::create(
             ReadExpr::create(UpdateList(array, 0),
                              ConstantExpr::alloc(j, array->getDomain())),
-            ConstantExpr::alloc(value, array->getRange())), std::nullopt);
+            ConstantExpr::alloc(value, array->getRange())), nullptr);
       }
     }
     ConstraintManager tmp(bindings);

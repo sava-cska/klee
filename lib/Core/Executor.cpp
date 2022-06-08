@@ -1280,7 +1280,8 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
 }
 
 const Cell &Executor::eval(const KInstruction *ki, unsigned index,
-                           ExecutionState &state, bool isSymbolic) {
+                           ExecutionState &state, StackFrame &sf,
+                           bool isSymbolic) {
   assert(index < ki->inst->getNumOperands());
   int vnumber = ki->operands[index];
 
@@ -1293,13 +1294,27 @@ const Cell &Executor::eval(const KInstruction *ki, unsigned index,
     return kmodule->constantTable[index];
   } else {
     unsigned index = vnumber;
-    StackFrame &sf = state.stack.back();
     ref<Expr> reg = sf.locals[index].value;
     if (isSymbolic && reg.isNull()) {
-      prepareSymbolicRegister(state, index);
+      prepareSymbolicRegister(state, sf, index);
     }
     return sf.locals[index];
   }
+}
+
+const Cell &Executor::eval(const KInstruction *ki, unsigned index,
+                           ExecutionState &state, bool isSymbolic) {
+  return eval(ki, index, state, state.stack.back(), isSymbolic);
+}
+
+void Executor::bindLocal(const KInstruction *target, StackFrame &frame, 
+                                      ref<Expr> value) {
+  getDestCell(frame, target).value = value;
+}
+
+void Executor::bindArgument(KFunction *kf, unsigned index, 
+                                         StackFrame &frame, ref<Expr> value) {
+  getArgumentCell(frame, kf, index).value = value;
 }
 
 void Executor::bindLocal(const KInstruction *target, ExecutionState &state, 
@@ -2550,7 +2565,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
   case Instruction::PHI: {
     if (state.incomingBBIndex == -1)
-      prepareSymbolicValue(state, ki);
+      prepareSymbolicValue(state, state.stack.back(), ki);
     else {
       ref<Expr> result;
       result = eval(ki, state.incomingBBIndex, state).value;
@@ -4459,9 +4474,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 }
 
-ObjectPair Executor::lazyInitialize(ExecutionState &state, bool isAlloca,
-                                    const MemoryObject *mo, const Array *array) {
-  return executeMakeSymbolic(state, mo, "lazy_initialization", isAlloca, array);
+ObjectPair Executor::lazyInitialize(ExecutionState &state, const MemoryObject *mo, const Array *array) {
+  return executeMakeSymbolic(state, mo, "lazy_initialization", false, array);
 }
 
 ObjectPair Executor::lazyInitializeVariable(ExecutionState &state,
@@ -4474,7 +4488,7 @@ ObjectPair Executor::lazyInitializeVariable(ExecutionState &state,
   MemoryObject *mo = array->binding ? const_cast<MemoryObject *>(array->binding) :
       memory->allocate(size, isLocal, /*isGlobal=*/false,
                        allocSite, /*allocationAlignment=*/8, address);
-  return lazyInitialize(state, isLocal, mo, array);
+  return lazyInitialize(state, mo, array);
 }
 
 ObjectPair Executor::transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address, const llvm::Value *allocSite, uint64_t size) {
@@ -4711,13 +4725,13 @@ void Executor::addAllocaDisequality(ExecutionState &state, const Value *allocSit
   }
 }
 
-void Executor::prepareSymbolicValue(ExecutionState &state, const KInstruction *target) {
+void Executor::prepareSymbolicValue(ExecutionState &state, StackFrame &frame, const KInstruction *target) {
   Instruction *allocSite = target->inst;
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
   std::string name = allocSite ? target->toRegisterString() : "symbolic_value";
   ref<Expr> result = makeSymbolicValue(allocSite, state, size, width, name);
-  bindLocal(target, state, result);
+  bindLocal(target, frame, result);
 
   if (isa<AllocaInst>(allocSite)) {
     AllocaInst *ai = cast<AllocaInst>(allocSite);
@@ -4725,7 +4739,7 @@ void Executor::prepareSymbolicValue(ExecutionState &state, const KInstruction *t
       kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
     ref<Expr> size = Expr::createPointer(elementSize);
     if (ai->isArrayAllocation()) {
-      ref<Expr> count = eval(target, 0, state).value;
+      ref<Expr> count = eval(target, 0, state, frame).value;
       count = Expr::createZExtToPointerWidth(count);
       size = MulExpr::create(size, count);
       if (isa<ConstantExpr>(size))
@@ -4735,28 +4749,32 @@ void Executor::prepareSymbolicValue(ExecutionState &state, const KInstruction *t
   }
 }
 
-void Executor:: prepareSymbolicRegister(ExecutionState &state, unsigned regNum) {
-  StackFrame &sf = state.stack.back();
-  KInstruction *allocInst = sf.kf->reg2inst[regNum];
-  prepareSymbolicValue(state, allocInst);
+void Executor::prepareSymbolicRegister(ExecutionState &state, StackFrame &frame, unsigned regNum) {
+  KInstruction *allocInst = frame.kf->reg2inst[regNum];
+  prepareSymbolicValue(state, frame, allocInst);
 }
 
-void Executor::prepareSymbolicArgs(ExecutionState &state, KFunction *kf) {
+void Executor::prepareSymbolicArgs(ExecutionState &state, StackFrame &frame) {
+  KFunction *kf = frame.kf;
   for (auto ai = kf->function->arg_begin(), ae = kf->function->arg_end(); ai != ae; ai++) {
     Argument *arg = *&ai;
     uint64_t size = kmodule->targetData->getTypeStoreSize(arg->getType());
     uint64_t width = kmodule->targetData->getTypeSizeInBits(arg->getType());
     std::string name = kf->argToString(arg);
     ref<Expr> result = makeSymbolicValue(arg, state, size, width, name);
-    bindArgument(state.stack.back().kf, arg->getArgNo(), state, result);
+    bindArgument(frame.kf, arg->getArgNo(), frame, result);
   }
+}
+
+bool isReturnValueFromInitBlock(const ExecutionState &state, const llvm::Value *value) {
+  return state.initPC->parent->getKBlockType() == KBlockType::Call &&
+         state.initPC == state.initPC->parent->getLastInstruction() &&
+         state.initPC->parent->getFirstInstruction()->inst == value;
 }
 
 ref<Expr> Executor::makeSymbolicValue(Value *value, ExecutionState &state, uint64_t size, Expr::Width width, const std::string &name) {
   const Array *array = makeArray(state, size, name);
-  if (state.initPC->parent->getKBlockType() == KBlockType::Call &&
-      state.initPC == state.initPC->parent->getLastInstruction() &&
-      state.initPC->parent->getFirstInstruction()->inst == value) {
+  if (isReturnValueFromInitBlock(state, value)) {
     array = arrayManager.CreateArray(array, -1);
   }
 
@@ -5417,7 +5435,7 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 }
 
 InitializeResult Executor::initBranch(InitializeAction &action) {
-  KInstruction* loc = action.location;
+  KInstruction *loc = action.location;
   std::set<Target> &targets = action.targets;
 
   ExecutionState* state = nullptr;
@@ -5426,7 +5444,7 @@ InitializeResult Executor::initBranch(InitializeAction &action) {
     state->isolated = true;
   } else {
     state = emptyState->withKInstruction(loc);
-    prepareSymbolicArgs(*state, loc->parent->parent);
+    prepareSymbolicArgs(*state, state->stack.back());
   }
   isolatedStates.insert(state);
   processForest->addRoot(state);

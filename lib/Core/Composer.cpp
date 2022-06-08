@@ -237,7 +237,7 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     ref<Expr> prevVal;
 
     if ((array->index >= 0 && diffLevel > 0) ||
-        (array->index > 0 && diffLevel < 0)) {
+        (array->index > 0 && array->index + diffLevel > 0)) {
       prevVal = reindexArray(array);
       readCache[object] = prevVal;
       return prevVal;
@@ -247,44 +247,55 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     if (!allocSite)
       return nullptr;
 
-    KFunction *kf1 = state.stack.back().kf;
-    KBlock *pckb1 = kf1->blockMap[state.getPCBlock()];
-
-    if (isa<Argument>(allocSite)) {
-      const Argument *arg = cast<Argument>(allocSite);
-      const Function *f   = arg->getParent();
-      const KFunction *kf = caller.executor->getKFunction(f);
-      const unsigned argN = arg->getArgNo();
-      assert(kf->function == kf1->function);
-      prevVal = caller.executor->getArgumentCell(state, kf, argN).value;
-    } else if(isa<Instruction>(allocSite)) {
+    if (array->index == -1) {
+      assert(isa<CallInst>(allocSite) || isa<InvokeInst>(allocSite));
       const Instruction *inst = cast<Instruction>(allocSite);
       const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
-      bool isFinalPCKb1 =
-        std::find(kf1->finalKBlocks.begin(), kf1->finalKBlocks.end(), pckb1) != kf1->finalKBlocks.end();
-      if (isa<PHINode>(inst))
-        prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, false).value;
-      else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
-        KFunction *kf = ki->parent->parent;
-        Function *f =
-          isa<CallInst>(inst) ?
-            dyn_cast<CallInst>(inst)->getCalledFunction() :
-            dyn_cast<InvokeInst>(inst)->getCalledFunction();
-        if (isFinalPCKb1 && f == kf1->function) {
-          prevVal = caller.executor->getDestCell(state, state.prevPC).value;
-        } else if (kf->function == kf1->function) {
-          prevVal = caller.executor->getDestCell(state, ki).value;
-          if (prevVal.isNull()) {
-            caller.executor->prepareSymbolicValue(state, ki);
-            prevVal = caller.executor->getDestCell(state, ki).value;
-          }
-        }
-      } else {
-        const Instruction *inst = cast<Instruction>(allocSite);
-        const Function *f = inst->getParent()->getParent();
+      KFunction *kf = ki->parent->parent;
+      Function *calledf =
+        isa<CallInst>(inst) ?
+          dyn_cast<CallInst>(inst)->getCalledFunction() :
+          dyn_cast<InvokeInst>(inst)->getCalledFunction();
+      KFunction *lastkf = state.stack.back().kf;
+      KBlock *pckb = lastkf->blockMap[state.getPCBlock()];
+      bool isFinalPCKB = std::find(lastkf->finalKBlocks.begin(),
+                                    lastkf->finalKBlocks.end(),
+                                    pckb) != lastkf->finalKBlocks.end();
+      assert(isFinalPCKB && calledf == lastkf->function);
+      prevVal = caller.executor->getDestCell(state, state.prevPC).value;
+    } else {
+      StackFrame &frame = state.stack.at(state.stack.size() - array->index - 1);
+      KFunction *framekf = frame.kf;
+
+      if (isa<Argument>(allocSite)) {
+        const Argument *arg = cast<Argument>(allocSite);
+        const Function *f   = arg->getParent();
         const KFunction *kf = caller.executor->getKFunction(f);
-        assert(kf->function == kf1->function);
-        prevVal = caller.executor->getDestCell(state, ki).value;
+        const unsigned argN = arg->getArgNo();
+        assert(kf->function == framekf->function);
+        prevVal = caller.executor->getArgumentCell(frame, kf, argN).value;
+      } else if(isa<Instruction>(allocSite)) {
+        const Instruction *inst = cast<Instruction>(allocSite);
+        const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
+        if (isa<PHINode>(inst)) {
+          assert(framekf->function == state.stack.back().kf->function);
+          prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, frame, false).value;
+        }
+        else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
+          KFunction *kf = ki->parent->parent;
+          assert(kf->function == framekf->function);
+          prevVal = caller.executor->getDestCell(frame, ki).value;
+          if (prevVal.isNull()) {
+            caller.executor->prepareSymbolicValue(state, frame, ki);
+            prevVal = caller.executor->getDestCell(frame, ki).value;
+          }
+        } else {
+          const Instruction *inst = cast<Instruction>(allocSite);
+          const Function *f = inst->getParent()->getParent();
+          const KFunction *kf = caller.executor->getKFunction(f);
+          assert(kf->function == framekf->function);
+          prevVal = caller.executor->getDestCell(frame, ki).value;
+        }
       }
     }
 

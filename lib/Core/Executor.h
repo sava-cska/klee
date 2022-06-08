@@ -414,8 +414,7 @@ private:
   ObjectPair transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address,
                                                const llvm::Value *allocSite, uint64_t size);
   
-  ObjectPair lazyInitialize(ExecutionState &state, bool isLocal,
-                            const MemoryObject *mo, const Array *array);
+  ObjectPair lazyInitialize(ExecutionState &state, const MemoryObject *mo, const Array *array);
 
   ObjectPair executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                                  const std::string &name, bool isAlloca,
@@ -444,16 +443,34 @@ private:
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
   const Cell &eval(const KInstruction *ki, unsigned index,
+                   ExecutionState &state, StackFrame &sf,
+                   bool isSymbolic = true);
+
+  Cell &getArgumentCell(const StackFrame &frame, const KFunction *kf,
+                        unsigned index) {
+    return frame.locals[kf->getArgRegister(index)];
+  }
+
+  Cell &getDestCell(const StackFrame &frame, const KInstruction *target) {
+    return frame.locals[target->dest];
+  }
+
+  const Cell &eval(const KInstruction *ki, unsigned index,
                    ExecutionState &state, bool isSymbolic = true);
 
   Cell &getArgumentCell(const ExecutionState &state, const KFunction *kf,
                         unsigned index) {
-    return state.stack.back().locals[kf->getArgRegister(index)];
+    return getArgumentCell(state.stack.back(), kf, index);
   }
 
   Cell &getDestCell(const ExecutionState &state, const KInstruction *target) {
-    return state.stack.back().locals[target->dest];
+    return getDestCell(state.stack.back(), target);
   }
+
+  void bindLocal(const KInstruction *target, StackFrame &frame, ref<Expr> value);
+
+  void bindArgument(KFunction *kf, unsigned index, StackFrame &frame,
+                                 ref<Expr> value);
 
   void bindLocal(const KInstruction *target, ExecutionState &state, ref<Expr> value);
 
@@ -601,11 +618,9 @@ public:
 
   void addAllocaDisequality(ExecutionState &state, const llvm::Value *allocSite, ref<Expr> address);
 
-  void prepareSymbolicValue(ExecutionState &state, const KInstruction *targetW);
-
-  void prepareSymbolicRegister(ExecutionState &state, unsigned index);
-
-  void prepareSymbolicArgs(ExecutionState &state, KFunction *kf);
+  void prepareSymbolicValue(ExecutionState &state, StackFrame &frame, const KInstruction *targetW);
+  void prepareSymbolicRegister(ExecutionState &state, StackFrame &frame, unsigned index);
+  void prepareSymbolicArgs(ExecutionState &state, StackFrame &frame);
 
   ref<Expr> makeSymbolicValue(llvm::Value *value, ExecutionState &state,
                               uint64_t size, Expr::Width width,

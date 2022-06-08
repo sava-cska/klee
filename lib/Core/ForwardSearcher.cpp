@@ -238,7 +238,8 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(const Ex
 TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(const ExecutionState &es, double &weight) {
   if (atReturn) {
     if (es.prevPC->parent == target &&
-        es.prevPC == es.prevPC->parent->getLastInstruction() {
+        es.prevPC == es.prevPC->parent->getLastInstruction() &&
+        es.stackBalance == -1) {
       return Done;
     } else if (es.pc->parent == target) {
       weight = 0;

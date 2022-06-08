@@ -13,10 +13,22 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
   size_t range = std::min(state->stack.size() - 1, pob->stack.size());
   auto state_it = state->stack.rbegin();
   auto pob_it = pob->stack.rbegin();
-  for (size_t i = 0; i < range; i++) {
-    KInstruction* state_inst = state_it->caller;
-    KInstruction* pob_inst = *pob_it;
-    if(state_inst != pob_inst) {
+
+  // TODO: should improve correspondence between Target and stack
+  if (pob->atReturn && state->stackBalance >= 0) {
+    KInstruction *state_inst = state->prevPC;
+    KInstruction *pob_inst = *pob_it;
+    if (state_inst != pob_inst) {
+      return false;
+    }
+    pob_it++;
+    range = std::min(range, pob->stack.size() - 1);
+  }
+
+  for (size_t i = 0; i < range; ++i) {
+    KInstruction *state_inst = state_it->caller;
+    KInstruction *pob_inst = *pob_it;
+    if (state_inst != pob_inst) {
       return false;
     }
     state_it++;
@@ -27,11 +39,11 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
 
 
 bool RecencyRankedSearcher::empty() {
-  for(auto pob : pobs) {
+  for (auto pob : pobs) {
     Target t(pob->location, pob->atReturn);
     std::unordered_set<ExecutionState *> &states = emanager->at(t);
-    for(auto state : states) {
-      if(!used.count(std::make_pair(pob,state)) && checkStack(state, pob)) {
+    for (auto state : states) {
+      if (!used.count(std::make_pair(pob, state)) && checkStack(state, pob)) {
         return false;
       }
     }

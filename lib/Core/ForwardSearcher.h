@@ -127,7 +127,7 @@ namespace klee {
         states;
 
     KBlock* target;
-    bool at_end;
+    bool atReturn;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
     std::vector<ExecutionState *> reachedOnLastUpdate;
 

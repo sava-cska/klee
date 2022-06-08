@@ -167,27 +167,27 @@ typedef std::pair<ref<const MemoryObject>, const Array *> Symbolic;
 
 struct Target {
   KBlock* targetBlock;
-  bool at_end;
+  bool atReturn;
 
   Target(KBlock* targetBlock, bool atReturn) :
-    targetBlock(targetBlock), at_end(atReturn) {}
+    targetBlock(targetBlock), atReturn(atReturn) {}
 
   bool operator<(const Target& other) const {
     if (targetBlock == other.targetBlock) {
-      return at_end < other.at_end;
+      return atReturn < other.atReturn;
     } else {
       return targetBlock < other.targetBlock;
     }
   }
 
   bool operator==(const Target& other) const {
-    return targetBlock == other.targetBlock && at_end == other.at_end;
+    return targetBlock == other.targetBlock && atReturn == other.atReturn;
   }
 
   std::string print() const {
     std::string repr = "Target: ";
     repr += targetBlock->getIRLocation();
-    if(at_end) {
+    if(atReturn) {
       repr += " (at the end)";
     }
     return repr;

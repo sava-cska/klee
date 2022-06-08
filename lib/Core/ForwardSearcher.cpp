@@ -145,14 +145,14 @@ void RandomSearcher::printName(llvm::raw_ostream &os) {
   os << "RandomSearcher\n";
 }
 
-TargetedSearcher::TargetedSearcher(KBlock *target, bool at_end)
+TargetedSearcher::TargetedSearcher(KBlock *target, bool atReturn)
   : states(std::make_unique<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>>()),
-    target(target), at_end(at_end),
+    target(target), atReturn(atReturn),
     distanceToTargetFunction(target->parent->parent->getBackwardDistance(target->parent)) {}
 
 
 TargetedSearcher::~TargetedSearcher() {
-  Target t(target, at_end);
+  Target t(target, atReturn);
   for(auto state: states_set) {
     state->targets.erase(t);
   }
@@ -236,11 +236,11 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(const Ex
 }
 
 TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(const ExecutionState &es, double &weight) {
-  if(at_end) {
-    if(es.prevPC->parent == target &&
-       es.prevPC == es.prevPC->parent->getLastInstruction()) {
+  if (atReturn) {
+    if (es.prevPC->parent == target &&
+        es.prevPC == es.prevPC->parent->getLastInstruction() {
       return Done;
-    } else if(es.pc->parent == target) {
+    } else if (es.pc->parent == target) {
       weight = 0;
       return Continue;
     }
@@ -306,7 +306,7 @@ void TargetedSearcher::update(ExecutionState *current,
       reachedOnLastUpdate.push_back(current);
       break;
     case Miss:
-      Target t(target, at_end);
+      Target t(target, atReturn);
       current->targets.erase(t);
       states->remove(current);
       states_set.erase(current);
@@ -327,7 +327,7 @@ void TargetedSearcher::update(ExecutionState *current,
       reachedOnLastUpdate.push_back(state);
       break;
     case Miss:
-      Target t(target, at_end);
+      Target t(target, atReturn);
       state->targets.erase(t);
       break;
     }
@@ -335,7 +335,7 @@ void TargetedSearcher::update(ExecutionState *current,
 
   // remove states
   for (const auto state : removedStates) {
-    Target t(target, at_end);
+    Target t(target, atReturn);
     state->targets.erase(t);
     states->remove(state);
     states_set.erase(state);
@@ -355,7 +355,7 @@ std::vector<ExecutionState *> TargetedSearcher::reached() {
 }
 
 void TargetedSearcher::removeReached() {
-  Target t(target, at_end);
+  Target t(target, atReturn);
   for (auto state : reachedOnLastUpdate) {
     states->remove(state);
     states_set.erase(state);
@@ -462,7 +462,7 @@ void GuidedSearcher::printName(llvm::raw_ostream &os) {
 }
 
 void GuidedSearcher::addTarget(Target target) {
-  targetedSearchers[target] = std::make_unique<TargetedSearcher>(target.targetBlock, target.at_end);
+  targetedSearchers[target] = std::make_unique<TargetedSearcher>(target.targetBlock, target.atReturn);
 }
 
 WeightedRandomSearcher::WeightedRandomSearcher(WeightType type, RNG &rng)

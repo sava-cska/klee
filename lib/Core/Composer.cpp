@@ -279,7 +279,10 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
         const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
         if (isa<PHINode>(inst)) {
           assert(framekf->function == state.stack.back().kf->function);
-          prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, frame, false).value;
+          if (inst->getParent() == state.getPCBlock())
+            prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, frame, false).value;
+          else
+            prevVal = caller.executor->getDestCell(frame, ki).value;
         }
         else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
           KFunction *kf = ki->parent->parent;

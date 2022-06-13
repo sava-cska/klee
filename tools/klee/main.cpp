@@ -365,8 +365,7 @@ private:
 
   void writeTestCaseXML(
       bool isError,
-      const std::vector<std::pair<std::string, std::vector<unsigned char>>>
-          &out,
+      const TestCase &assignments,
       unsigned id);
 
   void writeTestCasePlain(const TestCase &tc, unsigned id, bool back = false);
@@ -559,8 +558,7 @@ void KleeHandler::writeTestCaseKTest(const TestCase &tc, unsigned id) {
 
 void KleeHandler::writeTestCaseXML(
     bool isError,
-    const std::vector<std::pair<std::string, std::vector<unsigned char>>>
-        &assignments,
+    const TestCase &assignments,
     unsigned id) {
 
   // TODO: This is super specific to test-comp and assumes that the name is the
@@ -577,7 +575,14 @@ void KleeHandler::writeTestCaseXML(
   if (isError)
     *file << " coversError=\"true\"";
   *file << ">\n";
-  for (auto &item : assignments) {
+  unsigned numObjects = assignments.n_objects;
+  for (unsigned i = 0; i < numObjects; ++i) {
+    ConcretizedObject &object = assignments.objects[i];
+    std::pair<std::string, std::vector<unsigned char>> item;
+    item.first = object.name;
+    for (unsigned j = 0; j < object.size; ++j) {
+      item.second.push_back(object.values[j]);
+    }
     *file << "\t<input variable=\"" << item.first << "\" ";
     *file << "type =\"";
     // print type of the input
@@ -681,7 +686,11 @@ void KleeHandler::processTestCase(ExecutionState &state,
     unsigned test_id = ++m_numTotalTests;
 
     if (WriteKTestFiles && success && lazy_instantiation_resolved == 0) {
-      writeTestCaseKTest(assignments, test_id);
+      if (WriteXMLTests) {
+        writeTestCaseXML(errorMessage != nullptr, assignments, test_id);
+      } else {
+        writeTestCaseKTest(assignments, test_id);
+      }
     }
 
     if (success && lazy_instantiation_resolved != -1) {

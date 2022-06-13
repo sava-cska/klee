@@ -28,8 +28,8 @@ struct ConcretizedObject {
 
 typedef struct TestCase TestCase;
 struct TestCase {
-  ConcretizedObject* objects;
-  size_t n_objects;
+  ConcretizedObject *objects;
+  unsigned n_objects;
 
   unsigned numArgs;
   char **args;

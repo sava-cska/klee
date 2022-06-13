@@ -15,6 +15,7 @@
 #include <unordered_map>
 
 namespace klee {
+struct Conflict;
 
 struct Lemma {
   Path path;
@@ -48,7 +49,7 @@ public:
   std::set<Lemma *> lemmas;
 
 public:
-  explicit Summary(llvm::raw_fd_ostream *_summaryFile, std::string _DBFile)
+  Summary(llvm::raw_fd_ostream *_summaryFile, std::string _DBFile)
       : summaryFile(_summaryFile), db(new Database(_DBFile)) {}
 
   void setModule(KModule *_module) { module = _module; }
@@ -61,9 +62,9 @@ public:
     delete db;
   }
 
-  void summarize(const Path &path, ProofObligation *pob,
-                 const SolverQueryMetaData &metadata,
-                 ExprHashMap<ref<Expr>> &rebuildMap);
+  void summarize(const ProofObligation *pob,
+                 const Conflict &conflict,
+                 const ExprHashMap<ref<Expr>> &rebuildMap);
 
   void storeLemma(const Lemma *l);
 

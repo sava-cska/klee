@@ -1023,7 +1023,8 @@ void Executor::branch(ExecutionState &state,
 }
 
 Executor::StatePair 
-Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
+Executor::fork(ExecutionState &current, ref<Expr> condition,
+               bool isInternal, std::vector<ref<Expr>> *conflict) {
   Solver::Validity res;
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
     seedMap.find(&current);
@@ -1061,8 +1062,14 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
-  bool success = solver->evaluate(current.constraints, condition, res,
-                                  current.queryMetaData);
+  bool success = false;
+  if (conflict) {
+    success = solver->evaluate(current.constraints, condition, res,
+                               current.queryMetaData, conflict);
+  } else {
+    success = solver->evaluate(current.constraints, condition, res,
+                     current.queryMetaData);
+  }
 
   solver->setTimeout(time::Span());
   if (!success) {
@@ -2070,6 +2077,49 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
   state.path.append(kf->blockMap[dst]); // Why not just here?
 }
 
+void Executor::makeConflictCore(const ExecutionState &state,
+                                const std::vector<ref<Expr>> &unsatCore,
+                                ref<Expr> condition,
+                                KInstruction *location,
+                                Conflict::core_ty &core) {
+  for (auto &constraint : unsatCore) {
+    core.push_back(std::make_pair(constraint, state.constraintInfos.getLocation(constraint)));
+  }
+  core.push_back(std::make_pair(condition, location));
+}
+
+Conflict::core_ty
+makeConflictCore(const ExecutionState &state,
+                 const std::vector<ref<Expr>> &unsatCore,
+                 ref<Expr> condition,
+                 KInstruction *location) {
+  Conflict::core_ty core;
+  Executor::makeConflictCore(state, unsatCore, condition, location, core);
+  return core;
+}
+
+Conflict makeConflict(const ExecutionState &state,
+                      const std::vector<ref<Expr>> &unsatCore,
+                      ref<Expr> condition) {
+  Conflict::core_ty core =
+    makeConflictCore(state, unsatCore, condition, state.prevPC);
+  return Conflict(state.path, core);
+}
+
+Conflict makeConflict(const ExecutionState &state,
+                      const Conflict::core_ty &conflictCore) {
+  return Conflict(state.path, conflictCore);
+}
+
+TargetedConflict
+makeTargetedConflict(const ExecutionState &state,
+                     const std::vector<ref<Expr>> &unsatCore,
+                     ref<Expr> condition,
+                     KBlock *target) {
+  Conflict conflilct = makeConflict(state, unsatCore, condition);
+  return TargetedConflict(conflilct, target);
+}
+
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
@@ -2106,7 +2156,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         state.pc = kcaller;
         ++state.pc;
         state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
-        // state.path.append(state.pc->parent);
       }
 
       if (ri->getFunction()->getName() == "_klee_eh_cxx_personality") {
@@ -2196,10 +2245,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       ref<Expr> cond = eval(ki, 0, state).value;
 
       cond = optimizer.optimizeExpr(cond, false);
-      state.queryMetaData.queryValidityCore = std::nullopt;
-      Executor::StatePair branches = fork(state, cond, false);
+      std::vector<ref<Expr>> conflict;
+      Executor::StatePair branches = fork(state, cond, false, &conflict);
 
-      if (state.queryMetaData.queryValidityCore &&
+      if (!conflict.empty() &&
           state.depth && !state.isIsolated()) {
         assert((branches.first && !branches.second) ||
                (!branches.first && branches.second));
@@ -2217,11 +2266,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           llvm::errs() << "\n";
         }
 
-        state.queryMetaData.queryValidityCore->push_back(
-            std::make_pair(lastCondition, state.prevPC));
-        validityCore = std::make_optional<ForwardResult::ValidityCore>(
-            state.path, *(state.queryMetaData.queryValidityCore), target);
-        state.queryMetaData.queryValidityCore = std::nullopt;
+        targetedConflict = std::make_optional<TargetedConflict>(
+          makeTargetedConflict(state, conflict, lastCondition, target));
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -4930,7 +4976,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                                    TestCase &res) {
   solver->setTimeout(coreSolverTimeout);
 
-  ConstraintSet extendedConstraints(state.constraints);
+  Constraints extendedConstraints(state.constraintInfos);
   ConstraintManager cm(extendedConstraints);
 
   // Go through each byte in every test case and attempt to restrict
@@ -5396,9 +5442,9 @@ void Executor::run(ExecutionState &state) {
         if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
           assert(br.newPobs.size() == 1);
           ExecutionState *replayState = initialState->copy();
-          for (auto &constraint : pob->condition) {
+          for (const auto &constraint : pob->condition) {
             replayState->addConstraint(
-                constraint, pob->condition.get_location(constraint));
+                constraint, pob->condition.getLocation(constraint));
           }
           for (auto &symbolic : pob->sourcedSymbolics) {
             replayState->symbolics.push_back(symbolic);
@@ -5470,9 +5516,9 @@ ForwardResult Executor::goForward(ForwardAction &action) {
   if (::dumpPForest) dumpPForest();
 
   ForwardResult ret(state, addedStates, removedStates);
-  if(validityCore) {
-    ret.validityCore = validityCore;
-    validityCore = std::nullopt;
+  if (targetedConflict) {
+    ret.targetedConflict = targetedConflict;
+    targetedConflict = std::nullopt;
   }
 
   return ret;
@@ -5482,11 +5528,11 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   ExecutionState *state = action.state;
   ProofObligation *pob = action.pob;
 
-  SolverQueryMetaData queryMetaData;
+  Conflict::core_ty conflictCore;
   ExprHashMap<ref<Expr>> rebuildMap;
 
   ProofObligation *newPob = new ProofObligation(state->initPC->parent, pob, 0);
-  bool success = Composer::tryRebuild(*pob, *state, *newPob, queryMetaData, rebuildMap);
+  bool success = Composer::tryRebuild(*pob, *state, *newPob, conflictCore, rebuildMap);
   timers.invoke();
 
   if (success) {
@@ -5530,7 +5576,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   } else {
     newPob->detachParent();
     delete newPob;
-    summary->summarize(state->path, pob, queryMetaData, rebuildMap);
+    summary->summarize(pob, makeConflict(*state, conflictCore), rebuildMap);
     return BackwardResult({}, pob);
   }
 }

@@ -9,6 +9,7 @@
 #include "QueryLoggingSolver.h"
 
 #include "klee/Config/config.h"
+#include "klee/Expr/Constraints.h"
 #include "klee/Support/OptionCategories.h"
 #include "klee/Statistics/Statistics.h"
 #include "klee/Support/ErrorHandling.h"
@@ -110,11 +111,10 @@ void QueryLoggingSolver::flushBuffer() {
 }
 
 bool QueryLoggingSolver::computeTruth(const Query &query,
-                                      bool &isValid,
-                                      SolverQueryMetaData &metaData) {
+                                      bool &isValid) {
   startQuery(query, "Truth");
 
-  bool success = solver->impl->computeTruth(query, isValid, metaData);
+  bool success = solver->impl->computeTruth(query, isValid);
 
   finishQuery(success);
 
@@ -130,11 +130,10 @@ bool QueryLoggingSolver::computeTruth(const Query &query,
 }
 
 bool QueryLoggingSolver::computeValidity(const Query &query,
-                                         Solver::Validity &result,
-                                         SolverQueryMetaData &metaData) {
+                                         Solver::Validity &result) {
   startQuery(query, "Validity");
 
-  bool success = solver->impl->computeValidity(query, result, metaData);
+  bool success = solver->impl->computeValidity(query, result);
 
   finishQuery(success);
 
@@ -149,12 +148,11 @@ bool QueryLoggingSolver::computeValidity(const Query &query,
 }
 
 bool QueryLoggingSolver::computeValue(const Query &query,
-                                      ref<Expr> &result,
-                                      SolverQueryMetaData &metaData) {
+                                      ref<Expr> &result) {
   Query withFalse = query.withFalse();
   startQuery(query, "Value", &withFalse);
 
-  bool success = solver->impl->computeValue(query, result, metaData);
+  bool success = solver->impl->computeValue(query, result);
 
   finishQuery(success);
 
@@ -170,12 +168,11 @@ bool QueryLoggingSolver::computeValue(const Query &query,
 
 bool QueryLoggingSolver::computeInitialValues(
     const Query &query, const std::vector<const Array *> &objects,
-    std::vector<std::vector<unsigned char> > &values, bool &hasSolution,
-    SolverQueryMetaData &metaData) {
+    std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   startQuery(query, "InitialValues", 0, &objects);
 
   bool success =
-      solver->impl->computeInitialValues(query, objects, values, hasSolution, metaData);
+      solver->impl->computeInitialValues(query, objects, values, hasSolution);
 
   finishQuery(success);
 

@@ -11,6 +11,7 @@
 
 #include "klee/Expr/Constraints.h"
 #include "klee/Solver/SolverImpl.h"
+#include "klee/Support/ErrorHandling.h"
 
 using namespace klee;
 
@@ -34,7 +35,11 @@ void Solver::setCoreSolverTimeout(time::Span timeout) {
     impl->setCoreSolverTimeout(timeout);
 }
 
-bool Solver::evaluate(const Query& query, Validity &result, SolverQueryMetaData &metaData) {
+void Solver::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
+  impl->getLastQueryCore(queryCore);
+}
+
+bool Solver::evaluate(const Query& query, Validity &result) {
   assert(query.expr->getWidth() == Expr::Bool && "Invalid expression type!");
 
   // Maintain invariants implementations expect.
@@ -43,10 +48,10 @@ bool Solver::evaluate(const Query& query, Validity &result, SolverQueryMetaData 
     return true;
   }
 
-  return impl->computeValidity(query, result, metaData);
+  return impl->computeValidity(query, result);
 }
 
-bool Solver::mustBeTrue(const Query& query, bool &result, SolverQueryMetaData &metaData) {
+bool Solver::mustBeTrue(const Query& query, bool &result) {
   assert(query.expr->getWidth() == Expr::Bool && "Invalid expression type!");
 
   // Maintain invariants implementations expect.
@@ -55,30 +60,30 @@ bool Solver::mustBeTrue(const Query& query, bool &result, SolverQueryMetaData &m
     return true;
   }
 
-  return impl->computeTruth(query, result, metaData);
+  return impl->computeTruth(query, result);
 }
 
-bool Solver::mustBeFalse(const Query& query, bool &result, SolverQueryMetaData &metaData) {
-  return mustBeTrue(query.negateExpr(), result, metaData);
+bool Solver::mustBeFalse(const Query& query, bool &result) {
+  return mustBeTrue(query.negateExpr(), result);
 }
 
-bool Solver::mayBeTrue(const Query& query, bool &result, SolverQueryMetaData &metaData) {
+bool Solver::mayBeTrue(const Query& query, bool &result) {
   bool res;
-  if (!mustBeFalse(query, res, metaData))
+  if (!mustBeFalse(query, res))
     return false;
   result = !res;
   return true;
 }
 
-bool Solver::mayBeFalse(const Query& query, bool &result, SolverQueryMetaData &metaData) {
+bool Solver::mayBeFalse(const Query& query, bool &result) {
   bool res;
-  if (!mustBeTrue(query, res, metaData))
+  if (!mustBeTrue(query, res))
     return false;
   result = !res;
   return true;
 }
 
-bool Solver::getValue(const Query& query, ref<ConstantExpr> &result, SolverQueryMetaData &metaData) {
+bool Solver::getValue(const Query& query, ref<ConstantExpr> &result) {
   // Maintain invariants implementation expect.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
     result = CE;
@@ -87,7 +92,7 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result, SolverQuery
 
   // FIXME: Push ConstantExpr requirement down.
   ref<Expr> tmp;
-  if (!impl->computeValue(query, tmp, metaData))
+  if (!impl->computeValue(query, tmp))
     return false;
   
   result = cast<ConstantExpr>(tmp);
@@ -97,11 +102,10 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result, SolverQuery
 bool 
 Solver::getInitialValues(const Query& query,
                          const std::vector<const Array*> &objects,
-                         std::vector< std::vector<unsigned char> > &values,
-                         SolverQueryMetaData &metaData) {
+                         std::vector< std::vector<unsigned char> > &values) {
   bool hasSolution;
   bool success =
-    impl->computeInitialValues(query, objects, values, hasSolution, metaData);
+    impl->computeInitialValues(query, objects, values, hasSolution);
   // FIXME: Propogate this out.
   if (!hasSolution)
     return false;
@@ -110,14 +114,14 @@ Solver::getInitialValues(const Query& query,
 }
 
 std::pair< ref<Expr>, ref<Expr> >
-Solver::getRange(const Query& query, SolverQueryMetaData &metaData) {
+Solver::getRange(const Query& query) {
   ref<Expr> e = query.expr;
   Expr::Width width = e->getWidth();
   uint64_t min, max;
 
   if (width==1) {
     Solver::Validity result;
-    if (!evaluate(query, result, metaData))
+    if (!evaluate(query, result))
       assert(0 && "computeValidity failed");
     switch (result) {
     case Solver::True: 
@@ -141,8 +145,7 @@ Solver::getRange(const Query& query, SolverQueryMetaData &metaData) {
                                                      ConstantExpr::create(mid, 
                                                                           width)),
                                     ConstantExpr::create(0, width))),
-                   res,
-                   metaData);
+                   res);
 
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
@@ -164,8 +167,7 @@ Solver::getRange(const Query& query, SolverQueryMetaData &metaData) {
     bool success = 
       mayBeTrue(query.withExpr(EqExpr::create(e, ConstantExpr::create(0, 
                                                                       width))), 
-                res,
-                metaData);
+                res);
 
     assert(success && "FIXME: Unhandled solver failure");      
     (void) success;
@@ -182,8 +184,7 @@ Solver::getRange(const Query& query, SolverQueryMetaData &metaData) {
           mayBeTrue(query.withExpr(UleExpr::create(e, 
                                                    ConstantExpr::create(mid, 
                                                                         width))),
-                    res,
-                    metaData);
+                    res);
 
         assert(success && "FIXME: Unhandled solver failure");      
         (void) success;
@@ -202,8 +203,7 @@ Solver::getRange(const Query& query, SolverQueryMetaData &metaData) {
     success = 
       mayBeTrue(query.withExpr(EqExpr::create(e, ConstantExpr::create(bits64::maxValueOfNBits(bits), 
                                                                       width))), 
-                res,
-                metaData);
+                res);
 
     assert(success && "FIXME: Unhandled solver failure");      
     (void) success;
@@ -220,8 +220,7 @@ Solver::getRange(const Query& query, SolverQueryMetaData &metaData) {
           mustBeTrue(query.withExpr(UleExpr::create(e, 
                                                     ConstantExpr::create(mid, 
                                                                         width))),
-                    res,
-                    metaData);
+                    res);
 
         assert(success && "FIXME: Unhandled solver failure");      
         (void) success;

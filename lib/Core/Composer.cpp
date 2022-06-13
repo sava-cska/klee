@@ -103,27 +103,31 @@ bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState &state, ref<Expr>
 bool Composer::tryRebuild(const ProofObligation &old,
                           ExecutionState &state,
                           ProofObligation &rebuilt,
-                          SolverQueryMetaData &queryMetaData,
+                          Conflict::core_ty &conflictCore,
                           ExprHashMap<ref<Expr>> &rebuildMap) {
   bool success = true;
   Composer composer(state);
   for(auto& constraint : old.condition) {
-    auto loc = old.condition.get_location(constraint);
+    auto loc = old.condition.getLocation(constraint);
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
     rebuildMap[rebuiltConstraint] = constraint;
     bool mayBeTrue = true;
+    std::vector<ref<Expr>> unsatCore;
+    time::Span timeout = executor->getSolverTimeout();
+    executor->getSolver()->setTimeout(timeout);
     if (success) {
       rebuildMap[rebuiltConstraint] = constraint;
       success = executor->getSolver()->mayBeTrue(
         composer.copy.constraints,
         rebuiltConstraint,
         mayBeTrue,
-        queryMetaData
+        composer.copy.queryMetaData,
+        &unsatCore
       );
       success = success && mayBeTrue;
-      if(!success && queryMetaData.queryValidityCore) {
-        queryMetaData.queryValidityCore->push_back(std::make_pair(rebuiltConstraint, loc));
+      if (!success && unsatCore.size()) {
+        Executor::makeConflictCore(composer.copy, unsatCore, rebuiltConstraint, loc, conflictCore);
       }
     }
     if (success) {
@@ -132,7 +136,7 @@ bool Composer::tryRebuild(const ProofObligation &old,
       break;
     }
   }
-  rebuilt.condition = composer.copy.constraints;
+  rebuilt.condition = composer.copy.constraintInfos;
   std::vector<Symbolic> sourced;
   composer.copy.extractSourcedSymbolics(sourced);
   rebuilt.sourcedSymbolics.insert(rebuilt.sourcedSymbolics.end(), sourced.begin(), sourced.end());

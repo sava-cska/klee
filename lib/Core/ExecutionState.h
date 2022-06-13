@@ -247,7 +247,8 @@ public:
   AddressSpace addressSpace;
 
   /// @brief Constraints collected so far
-  ConstraintSet constraints;
+  Constraints constraintInfos;
+  const ConstraintSet &constraints;
 
   /// Statistics and information
 
@@ -315,11 +316,11 @@ public:
 public:
   #ifdef KLEE_UNITTEST
   // provide this function only in the context of unittests
-  ExecutionState(){}
+  ExecutionState() : constraints(constraintInfos) {}
   #endif
   // only to create the initial state
   explicit ExecutionState(KFunction *kf);
-  explicit ExecutionState(KFunction *kf, KBlock *kb);
+  ExecutionState(KFunction *kf, KBlock *kb);
   // no copy assignment, use copy constructor
   ExecutionState &operator=(const ExecutionState &) = delete;
   // no move ctor

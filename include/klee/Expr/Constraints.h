@@ -13,6 +13,7 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprHashMap.h"
 #include "klee/Module/KInstruction.h"
+#include <memory>
 #include <string>
 
 namespace klee {
@@ -37,9 +38,7 @@ public:
   explicit ConstraintSet(constraints_ty cs) : constraints(std::move(cs)) {}
   ConstraintSet() = default;
 
-  void push_back(const ref<Expr> &e, KInstruction *loc = nullptr);
-  KInstruction *get_location(const ref<Expr> &e) const;
-
+  void push_back(const ref<Expr> &e);
 
   bool operator==(const ConstraintSet &b) const {
     return constraints == b.constraints;
@@ -47,7 +46,31 @@ public:
 
 private:
   constraints_ty constraints;
-  ExprHashMap<KInstruction *> mapToLocations;
+};
+
+class Constraints {
+  friend class ConstraintManager;
+
+public:
+  bool empty() const;
+  ConstraintSet::constraint_iterator begin() const;
+  ConstraintSet::constraint_iterator end() const;
+  size_t size() const noexcept;
+
+  Constraints() = default;
+  void insert(const ref<Expr> &e, KInstruction *location);
+  KInstruction *getLocation(const ref<Expr> &e) const;
+  const ConstraintSet &set() const;
+
+  bool operator==(const Constraints &b) const {
+    return constraints == b.constraints;
+  }
+
+  operator const ConstraintSet &() const { return constraints; }
+
+private:
+  ConstraintSet constraints;
+  ExprHashMap<KInstruction *> constraintLocations;
 };
 
 class ExprVisitor;
@@ -57,7 +80,7 @@ class ConstraintManager {
 public:
   /// Create constraint manager that modifies constraints
   /// \param constraints
-  explicit ConstraintManager(ConstraintSet &constraints);
+  explicit ConstraintManager(Constraints &constraints);
 
   /// Simplify expression expr based on constraints
   /// \param constraints set of constraints used for simplification
@@ -79,7 +102,7 @@ private:
   /// Add constraint to the set of constraints
   void addConstraintInternal(const ref<Expr> &constraint, KInstruction *location, bool *sat = 0);
 
-  ConstraintSet &constraints;
+  Constraints &constraints;
 };
 
 #ifndef divider

@@ -225,14 +225,10 @@ static bool EvaluateInputAST(const char *Filename,
     if (QueryCommand *QC = dyn_cast<QueryCommand>(D)) {
       llvm::outs() << "Query " << Index << ":\t";
 
-      SolverQueryMetaData MetaData;
-
       assert("FIXME: Support counterexample query commands!");
       if (QC->Values.empty() && QC->Objects.empty()) {
         bool result;
-        if (S->mustBeTrue(Query(ConstraintSet(QC->Constraints), QC->Query),
-                          result,
-                          MetaData)) {
+        if (S->mustBeTrue(Query(ConstraintSet(QC->Constraints), QC->Query), result)) {
           llvm::outs() << (result ? "VALID" : "INVALID");
         } else {
           llvm::outs() << "FAIL (reason: "
@@ -247,9 +243,7 @@ static bool EvaluateInputAST(const char *Filename,
         assert(QC->Query->isFalse() &&
                "FIXME: Support counterexamples with non-trivial query!");
         ref<ConstantExpr> result;
-        if (S->getValue(Query(ConstraintSet(QC->Constraints), QC->Values[0]),
-                        result,
-                        MetaData)) {
+        if (S->getValue(Query(ConstraintSet(QC->Constraints), QC->Values[0]), result)) {
           llvm::outs() << "INVALID\n";
           llvm::outs() << "\tExpr 0:\t" << result;
         } else {
@@ -261,9 +255,7 @@ static bool EvaluateInputAST(const char *Filename,
         std::vector< std::vector<unsigned char> > result;
 
         if (S->getInitialValues(
-                Query(ConstraintSet(QC->Constraints), QC->Query), QC->Objects,
-                result,
-                MetaData)) {
+                Query(ConstraintSet(QC->Constraints), QC->Query), QC->Objects, result)) {
           llvm::outs() << "INVALID\n";
 
           for (unsigned i = 0, e = result.size(); i != e; ++i) {

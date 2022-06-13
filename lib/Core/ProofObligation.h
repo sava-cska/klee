@@ -32,7 +32,7 @@ public:
   std::map<ExecutionState *, unsigned> propagationCount;
 
   KBlock *location;
-  ConstraintSet condition;
+  Constraints condition;
 
   // Indicates that this proof obligation was pushed from the outer stack frame, and so,
   // it is actually at the return statement of the current basic block.

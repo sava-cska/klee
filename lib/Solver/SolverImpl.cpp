@@ -9,25 +9,30 @@
 
 #include "klee/Solver/Solver.h"
 #include "klee/Solver/SolverImpl.h"
+#include "klee/Expr/Constraints.h"
+#include "klee/Support/ErrorHandling.h"
 
 using namespace klee;
 
 SolverImpl::~SolverImpl() {}
 
 bool SolverImpl::computeValidity(const Query &query,
-                                 Solver::Validity &result,
-                                 SolverQueryMetaData &metaData) {
+                                 Solver::Validity &result) {
   bool isTrue, isFalse;
-  if (!computeTruth(query, isTrue, metaData))
+  if (!computeTruth(query, isTrue))
     return false;
   if (isTrue) {
     result = Solver::True;
   } else {
-    if (!computeTruth(query.negateExpr(), isFalse, metaData))
+    if (!computeTruth(query.negateExpr(), isFalse))
       return false;
     result = isFalse ? Solver::False : Solver::Unknown;
   }
   return true;
+}
+
+void SolverImpl::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
+  klee_warning("getLastQueryCore is not implemented");
 }
 
 const char *SolverImpl::getOperationStatusString(SolverRunStatus statusCode) {

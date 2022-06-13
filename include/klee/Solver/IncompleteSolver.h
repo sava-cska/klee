@@ -92,16 +92,17 @@ public:
   StagedSolverImpl(IncompleteSolver *_primary, Solver *_secondary);
   ~StagedSolverImpl();
     
-  bool computeTruth(const Query&, bool &isValid, SolverQueryMetaData &metaData);
-  bool computeValidity(const Query&, Solver::Validity &result, SolverQueryMetaData &metaData);
-  bool computeValue(const Query&, ref<Expr> &result, SolverQueryMetaData &metaData);
+  bool computeTruth(const Query&, bool &isValid);
+  bool computeValidity(const Query&, Solver::Validity &result);
+  bool computeValue(const Query&, ref<Expr> &result);
   bool computeInitialValues(const Query&,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution, SolverQueryMetaData &metaData);
+                            bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query&);
   void setCoreSolverTimeout(time::Span timeout);
+  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
 };
 
 }

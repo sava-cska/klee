@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "BidirectionalSearcher.h"
+#include "SearcherUtil.h"
 #include "BackwardSearcher.h"
 #include "Executor.h"
 #include "ExecutionState.h"
@@ -15,7 +16,6 @@
 #include "Initializer.h"
 #include "MergeHandler.h"
 #include "ProofObligation.h"
-#include "SearcherUtil.h"
 #include "UserSearcher.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Module/KModule.h"
@@ -124,15 +124,15 @@ Action &BidirectionalSearcher::selectAction() {
 }
 
 void BidirectionalSearcher::update(ActionResult r) {
-  if(std::holds_alternative<ForwardResult>(r)) {
+  if (std::holds_alternative<ForwardResult>(r)) {
     auto fr = std::get<ForwardResult>(r);
     forward->update(fr.current, fr.addedStates, fr.removedStates);
 
-    if(fr.validityCore) {
-      initializer->addValidityCoreInit(fr.validityCore->core, fr.validityCore->target);
-      if(!mainLocs.count(fr.validityCore->target->basicBlock)) {
-        mainLocs.insert(fr.validityCore->target->basicBlock);
-        ProofObligation* pob = new ProofObligation(fr.validityCore->target, nullptr, false);
+    if (fr.targetedConflict) {
+      initializer->addConflictInit(fr.targetedConflict->conflict, fr.targetedConflict->target);
+      if (!mainLocs.count(fr.targetedConflict->target->basicBlock)) {
+          mainLocs.insert(fr.targetedConflict->target->basicBlock);
+          ProofObligation* pob = new ProofObligation(fr.targetedConflict->target, nullptr, false);
         if (DebugBidirectionalSearcher) {
           llvm::errs() << "Add new proof obligation.\n";
           llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
@@ -142,7 +142,7 @@ void BidirectionalSearcher::update(ActionResult r) {
       }
     }
 
-  } else if(std::holds_alternative<BranchResult>(r)) {
+  } else if (std::holds_alternative<BranchResult>(r)) {
     auto br = std::get<BranchResult>(r);
     branch->update(br.current, br.addedStates, br.removedStates);
 
@@ -177,7 +177,7 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new RecencyRankedSearcher(ex->emanager);
-  initializer = new ValidityCoreInitializer(ex->initialState->pc);
+  initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
 
 BidirectionalSearcher::~BidirectionalSearcher() {

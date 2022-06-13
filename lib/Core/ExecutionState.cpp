@@ -88,6 +88,7 @@ ExecutionState::ExecutionState(KFunction *kf) :
     incomingBBIndex(-1),
     depth(0),
     maxLevel(0),
+    constraints(constraintInfos),
     ptreeNode(nullptr),
     steppedInstructions(0),
     steppedMemoryInstructions(0),
@@ -112,6 +113,7 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     incomingBBIndex(-1),
     depth(0),
     maxLevel(0),
+    constraints(constraintInfos),
     ptreeNode(nullptr),
     steppedInstructions(0),
     steppedMemoryInstructions(0),
@@ -150,7 +152,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     transitionLevel(state.transitionLevel),
     maxLevel(state.maxLevel),
     addressSpace(state.addressSpace),
-    constraints(state.constraints),
+    constraintInfos(state.constraintInfos),
+    constraints(constraintInfos),
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
     executionPath(state.executionPath),
@@ -289,7 +292,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   ExprHashSet aConstraints(constraints.begin(), constraints.end());
   ExprHashSet bConstraints(b.constraints.begin(), 
-                                     b.constraints.end());
+                           b.constraints.end());
   ExprHashSet commonConstraints, aSuffix, bSuffix;
   std::set_intersection(aConstraints.begin(), aConstraints.end(),
                         bConstraints.begin(), bConstraints.end(),
@@ -413,12 +416,12 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
-  ConstraintSet oldConstraints = constraints;
-  constraints = ConstraintSet();
+  Constraints oldConstraintInfos = constraintInfos;
+  constraintInfos = Constraints();
 
-  ConstraintManager m(constraints);
+  ConstraintManager m(constraintInfos);
   for (const auto &constraint : commonConstraints)
-    m.addConstraint(constraint, oldConstraints.get_location(constraint));
+    m.addConstraint(constraint, oldConstraintInfos.getLocation(constraint));
   m.addConstraint(OrExpr::create(inA, inB), nullptr);
 
   return true;
@@ -459,7 +462,7 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
 }
 
 void ExecutionState::addConstraint(ref<Expr> e, KInstruction *loc, bool *sat) {
-  ConstraintManager c(constraints);
+  ConstraintManager c(constraintInfos);
   c.addConstraint(e, loc, sat);
 }
 

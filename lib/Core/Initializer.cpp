@@ -2,6 +2,7 @@
 #include "ExecutionState.h"
 #include "Path.h"
 #include "ProofObligation.h"
+#include "SearcherUtil.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
 #include "klee/Solver/Solver.h"
@@ -25,81 +26,84 @@ llvm::cl::opt<bool> DebugInitializer(
 namespace klee {
 
 std::pair<KInstruction *, std::set<Target>>
-ValidityCoreInitializer::selectAction() {
-  auto v = validityCoreInits.front();
-  validityCoreInits.pop();
+ConflictCoreInitializer::selectAction() {
+  auto v = conflictCoreInits.front();
+  conflictCoreInits.pop();
   return std::make_pair(v.first, v.second);
 }
 
-bool ValidityCoreInitializer::empty() {
-  return validityCoreInits.empty();
+bool ConflictCoreInitializer::empty() {
+  return conflictCoreInits.empty();
 }
 
-void ValidityCoreInitializer::addPob(ProofObligation *pob) {}
+void ConflictCoreInitializer::addPob(ProofObligation *pob) {}
 
-void ValidityCoreInitializer::removePob(ProofObligation *pob) {}
+void ConflictCoreInitializer::removePob(ProofObligation *pob) {}
 
-void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMetaData::core_ty> v, KBlock* b) {
-  SolverQueryMetaData::core_ty core = v.second;
+void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *target) {
+  const Conflict::core_ty &core = conflict.core;
   assert(!core.empty());
-  Path path = v.first;
+  const Path &path = conflict.path;
   std::set<std::pair<KInstruction*, Target>> inits;
-  KFunction* main_fn = initInst->parent->parent;
+  KFunction *mainKF = initInst->parent->parent;
   KInstruction* current = initInst;
-  std::set<KFunction*> visited;
-  for(size_t path_index = 1; path_index < path.size(); path_index++) {
-    if(path.getBlock(path_index)->parent != path.getBlock(path_index - 1)->parent) {
-      if(path.getBlock(path_index - 1)->parent == main_fn) {
-        auto dismantled = dismantle(current->parent, {path.getBlock(path_index - 1)});
-        for(auto blockpair : dismantled) {
+  std::set<KFunction *> visited;
+  for (size_t pathIndex = 1; pathIndex < path.size(); pathIndex++) {
+    if (path.getBlock(pathIndex)->parent != path.getBlock(pathIndex - 1)->parent) {
+      if (path.getBlock(pathIndex - 1)->parent == mainKF) {
+        auto dismantled = dismantle(current->parent, {path.getBlock(pathIndex - 1)});
+        for (auto &blockpair : dismantled) {
           inits.insert(std::make_pair(blockpair.first == current->parent ? current : blockpair.first->instructions[0],
                                       Target(blockpair.second, false)));
-          if(blockpair.second->getKBlockType() == KBlockType::Call) {
+          if (blockpair.second->getKBlockType() == KBlockType::Call) {
             KFunction* f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
             if (f) {
-              inits.insert(std::make_pair(blockpair.second->instructions[0], Target(f->entryKBlock,false)));
+              inits.insert(std::make_pair(blockpair.second->instructions[0], 
+                                          Target(f->entryKBlock, false)));
             }
           }
         }
-        inits.insert(std::make_pair(path.getBlock(path_index-1)->instructions[0], Target(path.getBlock(path_index),false)));
-        current = path.getBlock(path_index - 1)->instructions[1];
+        inits.insert(std::make_pair(path.getBlock(pathIndex-1)->instructions[0],
+                                    Target(path.getBlock(pathIndex), false)));
+        current = path.getBlock(pathIndex - 1)->instructions[1];
       }
-      if(path.getBlock(path_index)->parent != main_fn &&
-         !dismantled_fns.count(path.getBlock(path_index)->parent)) {
-        visited.insert(path.getBlock(path_index)->parent);
+      if (path.getBlock(pathIndex)->parent != mainKF &&
+          !dismantledKFunctions.count(path.getBlock(pathIndex)->parent)) {
+        visited.insert(path.getBlock(pathIndex)->parent);
       }
     }
-    if(path_index == path.size() - 1) {
-      if(path.getBlock(path_index)->parent == main_fn &&
-         path.getBlock(path_index) != current->parent) {
-        auto dismantled = dismantle(current->parent, {path.getBlock(path_index)});
-        for(auto blockpair : dismantled) {
-          inits.insert(std::make_pair(blockpair.first == current->parent ? current : blockpair.first->instructions[0],
-                                      Target(blockpair.second, false)));
-          if(blockpair.second->getKBlockType() == KBlockType::Call) {
+    if (pathIndex == path.size() - 1) {
+      if (path.getBlock(pathIndex)->parent == mainKF &&
+          path.getBlock(pathIndex) != current->parent) {
+        auto dismantled = dismantle(current->parent, {path.getBlock(pathIndex)});
+        for (auto &blockpair : dismantled) {
+          inits.insert(std::make_pair(
+            blockpair.first == current->parent ? current :blockpair.first->instructions[0],
+            Target(blockpair.second, false)));
+          if (blockpair.second->getKBlockType() == KBlockType::Call) {
             KFunction* f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
             if (f) {
-              inits.insert(std::make_pair(blockpair.second->instructions[0], Target(f->entryKBlock,false)));
+              inits.insert(std::make_pair(blockpair.second->instructions[0],
+                                          Target(f->entryKBlock,false)));
             }
           }
         }
       }
     }
   }
-  for (auto fn : visited) {
-    dismantled_fns.insert(fn);
-    auto dismantled = dismantle(fn->entryKBlock, fn->returnKBlocks);
+  for (auto kf : visited) {
+    dismantledKFunctions.insert(kf);
+    auto dismantled = dismantle(kf->entryKBlock, kf->returnKBlocks);
     for (auto blockpair : dismantled) {
       bool atReturn =
-          std::find(fn->returnKBlocks.begin(), fn->returnKBlocks.end(),
-                    blockpair.second) != fn->returnKBlocks.end();
+          std::find(kf->returnKBlocks.begin(), kf->returnKBlocks.end(),
+                    blockpair.second) != kf->returnKBlocks.end();
 
       inits.insert(std::make_pair(blockpair.first->instructions[0],
                                   Target(blockpair.second, atReturn)));
 
       if (blockpair.second->getKBlockType() == KBlockType::Call) {
-        KFunction *f =
-            dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
+        KFunction *f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
         if (f) {
           inits.insert(std::make_pair(blockpair.second->instructions[0],
                                       Target(f->entryKBlock, false)));
@@ -107,13 +111,13 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
       }
     }
   }
-  inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(b, false)));
+  inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(target, false)));
 
   std::map<KInstruction *, std::set<Target>> ret;
   if (DebugInitializer) {
     llvm::errs() << "Initialization of entry points and targets: \n";
   }
-  for (auto init : inits) {
+  for (auto &init : inits) {
     if (!initialized[init.first].count(init.second) &&
         !(!init.second.atReturn && init.first->parent == init.second.targetBlock)) {
       if (DebugInitializer) {
@@ -128,8 +132,8 @@ void ValidityCoreInitializer::addValidityCoreInit(std::pair<Path, SolverQueryMet
   if (DebugInitializer) {
     llvm::errs() << "\n";
   }
-  for(auto i : ret) {
-    validityCoreInits.push(i);
+  for (auto &init : ret) {
+    conflictCoreInits.push(init);
   }
 }
 

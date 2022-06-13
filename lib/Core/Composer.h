@@ -49,7 +49,7 @@ public:
   static bool tryRebuild(const ProofObligation &,
                          ExecutionState &,
                          ProofObligation &,
-                         SolverQueryMetaData &,
+                         Conflict::core_ty &,
                          ExprHashMap<ref<Expr>> &);
 };
 

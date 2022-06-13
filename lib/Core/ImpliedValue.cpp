@@ -221,20 +221,19 @@ void ImpliedValue::checkForImpliedValues(Solver *S, ref<Expr> e,
     ReadExpr *re = i->get();
     assumption.push_back(UltExpr::create(re->index, 
                                          ConstantExpr::alloc(re->updates.root->size, 
-                                                             Context::get().getPointerWidth())), nullptr);
+                                                             Context::get().getPointerWidth())));
   }
 
   for (const auto &var : reads) {
     ref<ConstantExpr> possible;
-    SolverQueryMetaData metaData;
-    bool success = S->getValue(Query(assumption, var), possible, metaData);
+    bool success = S->getValue(Query(assumption, var), possible);
     (void)success;
-    assert(success && "FIXME: Unhandled solver failure");    
+    assert(success && "FIXME: Unhandled solver failure");
     std::map<ref<ReadExpr>, ref<ConstantExpr> >::iterator it = found.find(var);
     bool res;
     success =
-        S->mustBeTrue(Query(assumption, EqExpr::create(var, possible)), res, metaData);
-    assert(success && "FIXME: Unhandled solver failure");    
+        S->mustBeTrue(Query(assumption, EqExpr::create(var, possible)), res);
+    assert(success && "FIXME: Unhandled solver failure");
     if (res) {
       if (it != found.end()) {
         assert(possible == it->second && "Invalid ImpliedValue!");

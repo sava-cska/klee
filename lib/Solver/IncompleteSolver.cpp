@@ -69,7 +69,7 @@ StagedSolverImpl::~StagedSolverImpl() {
   delete secondary;
 }
 
-bool StagedSolverImpl::computeTruth(const Query& query, bool &isValid, SolverQueryMetaData &metaData) {
+bool StagedSolverImpl::computeTruth(const Query& query, bool &isValid) {
   IncompleteSolver::PartialValidity trueResult = primary->computeTruth(query); 
   
   if (trueResult != IncompleteSolver::None) {
@@ -77,12 +77,11 @@ bool StagedSolverImpl::computeTruth(const Query& query, bool &isValid, SolverQue
     return true;
   } 
 
-  return secondary->impl->computeTruth(query, isValid, metaData);
+  return secondary->impl->computeTruth(query, isValid);
 }
 
 bool StagedSolverImpl::computeValidity(const Query& query,
-                                       Solver::Validity &result,
-                                      SolverQueryMetaData &metaData) {
+                                       Solver::Validity &result) {
   bool tmp;
 
   switch(primary->computeValidity(query)) {
@@ -96,17 +95,17 @@ bool StagedSolverImpl::computeValidity(const Query& query,
     result = Solver::Unknown;
     break;
   case IncompleteSolver::MayBeTrue:
-    if (!secondary->impl->computeTruth(query, tmp, metaData))
+    if (!secondary->impl->computeTruth(query, tmp))
       return false;
     result = tmp ? Solver::True : Solver::Unknown;
     break;
   case IncompleteSolver::MayBeFalse:
-    if (!secondary->impl->computeTruth(query.negateExpr(), tmp, metaData))
+    if (!secondary->impl->computeTruth(query.negateExpr(), tmp))
       return false;
     result = tmp ? Solver::False : Solver::Unknown;
     break;
   default:
-    if (!secondary->impl->computeValidity(query, result, metaData))
+    if (!secondary->impl->computeValidity(query, result))
       return false;
     break;
   }
@@ -115,24 +114,23 @@ bool StagedSolverImpl::computeValidity(const Query& query,
 }
 
 bool StagedSolverImpl::computeValue(const Query& query,
-                                    ref<Expr> &result,
-                                    SolverQueryMetaData &metaData) {
+                                    ref<Expr> &result) {
   if (primary->computeValue(query, result))
     return true;
 
-  return secondary->impl->computeValue(query, result, metaData);
+  return secondary->impl->computeValue(query, result);
 }
 
 bool 
 StagedSolverImpl::computeInitialValues(const Query& query,
                                        const std::vector<const Array*> &objects,
                                        std::vector< std::vector<unsigned char> > &values,
-                                       bool &hasSolution, SolverQueryMetaData &metaData) {
+                                       bool &hasSolution) {
   if (primary->computeInitialValues(query, objects, values, hasSolution))
     return true;
   
   return secondary->impl->computeInitialValues(query, objects, values,
-                                               hasSolution, metaData);
+                                               hasSolution);
 }
 
 SolverImpl::SolverRunStatus StagedSolverImpl::getOperationStatusCode() {
@@ -147,3 +145,6 @@ void StagedSolverImpl::setCoreSolverTimeout(time::Span timeout) {
   secondary->impl->setCoreSolverTimeout(timeout);
 }
 
+void StagedSolverImpl::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
+  secondary->impl->getLastQueryCore(queryCore);
+}

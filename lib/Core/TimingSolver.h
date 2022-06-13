@@ -45,19 +45,24 @@ public:
   }
 
   bool evaluate(const ConstraintSet &, ref<Expr>, Solver::Validity &result,
-                SolverQueryMetaData &metaData);
+                SolverQueryMetaData &metaData,
+                std::vector<ref<Expr>> *validityCore = nullptr);
 
   bool mustBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
-                  SolverQueryMetaData &metaData);
+                  SolverQueryMetaData &metaData,
+                std::vector<ref<Expr>> *validityCore = nullptr);
 
   bool mustBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
-                   SolverQueryMetaData &metaData);
+                   SolverQueryMetaData &metaData,
+                   std::vector<ref<Expr>> *validityCore = nullptr);
 
   bool mayBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
-                 SolverQueryMetaData &metaData);
+                 SolverQueryMetaData &metaData,
+                 std::vector<ref<Expr>> *validityCore = nullptr);
 
   bool mayBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
-                  SolverQueryMetaData &metaData);
+                  SolverQueryMetaData &metaData,
+                  std::vector<ref<Expr>> *validityCore = nullptr);
 
   bool getValue(const ConstraintSet &, ref<Expr> expr,
                 ref<ConstantExpr> &result, SolverQueryMetaData &metaData);

@@ -25,41 +25,38 @@ public:
   AssignmentValidatingSolver(Solver *_solver) : solver(_solver) {}
   ~AssignmentValidatingSolver() { delete solver; }
 
-  bool computeValidity(const Query &, Solver::Validity &result, SolverQueryMetaData &metaData);
-  bool computeTruth(const Query &, bool &isValid, SolverQueryMetaData &metaData);
-  bool computeValue(const Query &, ref<Expr> &result, SolverQueryMetaData &metaData);
+  bool computeValidity(const Query &, Solver::Validity &result);
+  bool computeTruth(const Query &, bool &isValid);
+  bool computeValue(const Query &query, ref<Expr> &result);
   bool computeInitialValues(const Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
-                            bool &hasSolution, SolverQueryMetaData &metaData);
+                            bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query &);
   void setCoreSolverTimeout(time::Span timeout);
+  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
 };
 
 // TODO: use computeInitialValues for all queries for more stress testing
 bool AssignmentValidatingSolver::computeValidity(const Query &query,
-                                                 Solver::Validity &result,
-                                                SolverQueryMetaData &metaData) {
-  return solver->impl->computeValidity(query, result, metaData);
+                                                 Solver::Validity &result) {
+  return solver->impl->computeValidity(query, result);
 }
 bool AssignmentValidatingSolver::computeTruth(const Query &query,
-                                              bool &isValid,
-                                              SolverQueryMetaData &metaData) {
-  return solver->impl->computeTruth(query, isValid, metaData);
+                                              bool &isValid) {
+  return solver->impl->computeTruth(query, isValid);
 }
 bool AssignmentValidatingSolver::computeValue(const Query &query,
-                                              ref<Expr> &result,
-                                              SolverQueryMetaData &metaData) {
-  return solver->impl->computeValue(query, result, metaData);
+                                              ref<Expr> &result) {
+  return solver->impl->computeValue(query, result);
 }
 
 bool AssignmentValidatingSolver::computeInitialValues(
     const Query &query, const std::vector<const Array *> &objects,
-    std::vector<std::vector<unsigned char> > &values, bool &hasSolution,
-    SolverQueryMetaData &metaData) {
+    std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   bool success =
-      solver->impl->computeInitialValues(query, objects, values, hasSolution, metaData);
+      solver->impl->computeInitialValues(query, objects, values, hasSolution);
   if (!hasSolution)
     return success;
 
@@ -129,7 +126,7 @@ void AssignmentValidatingSolver::dumpAssignmentQuery(
 
   // Add Constraints from `query`
   for (const auto &constraint : query.constraints)
-    constraints.push_back(constraint, query.constraints.get_location(constraint));
+    constraints.push_back(constraint);
 
   Query augmentedQuery(constraints, query.expr);
 
@@ -150,6 +147,11 @@ char *AssignmentValidatingSolver::getConstraintLog(const Query &query) {
 
 void AssignmentValidatingSolver::setCoreSolverTimeout(time::Span timeout) {
   return solver->impl->setCoreSolverTimeout(timeout);
+}
+
+
+void AssignmentValidatingSolver::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
+   solver->impl->getLastQueryCore(queryCore);
 }
 
 Solver *createAssignmentValidatingSolver(Solver *s) {

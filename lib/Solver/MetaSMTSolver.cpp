@@ -90,14 +90,13 @@ public:
   char *getConstraintLog(const Query &);
   void setCoreSolverTimeout(time::Span timeout) { _timeout = timeout; }
 
-  bool computeTruth(const Query &, bool &isValid, SolverQueryMetaData &metaData);
-  bool computeValue(const Query &, ref<Expr> &result, SolverQueryMetaData &metaData);
+  bool computeTruth(const Query &, bool &isValid);
+  bool computeValue(const Query &, ref<Expr> &result);
 
   bool computeInitialValues(const Query &query,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
-                            bool &hasSolution,
-                            SolverQueryMetaData &metaData);
+                            bool &hasSolution);
 
   SolverImpl::SolverRunStatus
   runAndGetCex(const Query &query, const std::vector<const Array *> &objects,
@@ -147,15 +146,14 @@ char *MetaSMTSolverImpl<SolverContext>::getConstraintLog(const Query &) {
 
 template <typename SolverContext>
 bool MetaSMTSolverImpl<SolverContext>::computeTruth(const Query &query,
-                                                    bool &isValid,
-                                                    SolverQueryMetaData &metaData) {
+                                                    bool &isValid) {
 
   bool success = false;
   std::vector<const Array *> objects;
   std::vector<std::vector<unsigned char> > values;
   bool hasSolution;
 
-  if (computeInitialValues(query, objects, values, hasSolution, metaData)) {
+  if (computeInitialValues(query, objects, values, hasSolution)) {
     // query.expr is valid iff !query.expr is not satisfiable
     isValid = !hasSolution;
     success = true;
@@ -166,8 +164,7 @@ bool MetaSMTSolverImpl<SolverContext>::computeTruth(const Query &query,
 
 template <typename SolverContext>
 bool MetaSMTSolverImpl<SolverContext>::computeValue(const Query &query,
-                                                    ref<Expr> &result,
-                                                    SolverQueryMetaData &metaData) {
+                                                    ref<Expr> &result) {
 
   bool success = false;
   std::vector<const Array *> objects;
@@ -176,7 +173,7 @@ bool MetaSMTSolverImpl<SolverContext>::computeValue(const Query &query,
 
   // Find the object used in the expression, and compute an assignment for them.
   findSymbolicObjects(query.expr, objects);
-  if (computeInitialValues(query.withFalse(), objects, values, hasSolution, metaData)) {
+  if (computeInitialValues(query.withFalse(), objects, values, hasSolution)) {
     assert(hasSolution && "state has invalid constraint set");
     // Evaluate the expression with the computed assignment.
     Assignment a(objects, values);
@@ -190,8 +187,7 @@ bool MetaSMTSolverImpl<SolverContext>::computeValue(const Query &query,
 template <typename SolverContext>
 bool MetaSMTSolverImpl<SolverContext>::computeInitialValues(
     const Query &query, const std::vector<const Array *> &objects,
-    std::vector<std::vector<unsigned char> > &values, bool &hasSolution,
-    SolverQueryMetaData &metaData) {
+    std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
 
   _runStatusCode = SOLVER_RUN_STATUS_FAILURE;
 

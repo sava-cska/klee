@@ -201,7 +201,7 @@ private:
 
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
-  std::optional<ForwardResult::ValidityCore> validityCore;
+  std::optional<TargetedConflict> targetedConflict;
   
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
@@ -296,6 +296,11 @@ public:
 
   ExecutionManager *emanager;
   ExecutionState *initialState;
+  static void makeConflictCore(const ExecutionState &state,
+                               const std::vector<ref<Expr>> &unsatCore,
+                               ref<Expr> condition,
+                               KInstruction *location,
+                               Conflict::core_ty &core);
 
 private:
 
@@ -430,7 +435,8 @@ private:
   // Fork current and return states in which condition holds / does
   // not hold, respectively. One of the states is necessarily the
   // current state, and one of the states may be null.
-  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
+  StatePair fork(ExecutionState &current, ref<Expr> condition,
+                 bool isInternal, std::vector<ref<Expr>> *conflict = nullptr);
 
   /// Add the given (boolean) condition as a constraint on state. This
   /// function is a wrapper around the state's addConstraint function
@@ -519,7 +525,6 @@ private:
 
   bool shouldExitOn(enum TerminateReason termReason);
 
-// private:
   // remove state from queue and delete
   void terminateState(ExecutionState &state);
   // call exit handler and terminate state

@@ -9,8 +9,8 @@
 #pragma once
 #include "BackwardSearcher.h"
 #include "Executor.h"
-#include "Initializer.h"
 #include "SearcherUtil.h"
+#include "Initializer.h"
 #include "ProofObligation.h"
 #include "ForwardSearcher.h"
 #include "klee/Module/KModule.h"
@@ -49,7 +49,7 @@ private:
   GuidedSearcher *forward;
   GuidedSearcher *branch;
   RecencyRankedSearcher *backward;
-  ValidityCoreInitializer *initializer;
+  ConflictCoreInitializer *initializer;
 
   std::vector<ProofObligation *> pobs;
 

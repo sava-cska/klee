@@ -1,6 +1,7 @@
 #include "Summary.h"
 #include "CoreStats.h"
 #include "Path.h"
+#include "SearcherUtil.h"
 #include "klee/ADT/Ref.h"
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprBuilder.h"
@@ -29,12 +30,9 @@ llvm::cl::opt<bool> DebugSummary(
 #define divider(n) std::string(n, '-') + "\n"
 #endif
 
-void Summary::summarize(const Path& path, ProofObligation *pob,
-                        const SolverQueryMetaData &metaData,
-                        ExprHashMap<ref<Expr>> &rebuildMap) {
-  if(!metaData.queryValidityCore) {
-    return;
-  }
+void Summary::summarize(const ProofObligation *pob,
+                        const Conflict &conflict,
+                        const ExprHashMap<ref<Expr>> &rebuildMap) {
   std::string label;
   llvm::raw_string_ostream label_stream(label);
 
@@ -46,17 +44,20 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
                          : pob->location->getLastInstruction()->getSourceLocation())
                  << "\n";
 
-  auto core = *metaData.queryValidityCore;
+  const Conflict::core_ty &core = conflict.core;
+  const Path &path = conflict.path;
   auto &locationLemmas = locationMap[pob->location];
   if (locationLemmas.empty())
     ++stats::summarizedLocationCount;
-  Lemma* l = new Lemma(path);
+  Lemma *newLemma = new Lemma(path);
   label_stream << "Constraints are:\n";
-  for(auto &constraint : core) {
-    if(rebuildMap.count(constraint.first)) {
-      auto expr = Expr::createIsZero(rebuildMap.at(constraint.first));
-      l->constraints.insert(expr);
-      label_stream << expr->toString() << "\n";
+
+  for (auto &constraint : core) {
+    ref<Expr> condition = constraint.first;
+    if (rebuildMap.count(condition)) {
+      ref<Expr> lemmaExpr = Expr::createIsZero(rebuildMap.at(condition));
+      newLemma->constraints.insert(lemmaExpr);
+      label_stream << lemmaExpr->toString() << "\n";
     }
   }
 
@@ -69,26 +70,27 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
   (*summaryFile) << label_stream.str();
 
   bool exists = false;
-  for(auto lemma : pathMap[path]) {
-    if(*lemma == *l) {
+
+  for (auto lemma : pathMap[path]) {
+    if (*lemma == *newLemma) {
       exists = true;
       break;
     }
   }
 
   if (!exists) {
-    pathMap[path].insert(l);
-    locationMap[path.getFinalBlock()].insert(l);
-    lemmas.insert(l);
+    pathMap[path].insert(newLemma);
+    locationMap[path.getFinalBlock()].insert(newLemma);
+    lemmas.insert(newLemma);
 
     if (DebugSummary) {
       llvm::errs() << label_stream.str();
       llvm::errs() << "Summary for pob at " << pob->location->getIRLocation() << "\n";
       llvm::errs() << "Paths:\n";
-      llvm::errs() << l->path.toString() << "\n";
+      llvm::errs() << newLemma->path.toString() << "\n";
 
       ExprHashSet summary;
-      for (auto &expr : l->constraints) {
+      for (auto &expr : newLemma->constraints) {
         summary.insert(expr);
       }
       llvm::errs() << "Lemma:\n";
@@ -102,7 +104,7 @@ void Summary::summarize(const Path& path, ProofObligation *pob,
       llvm::errs() << "\n";
     }
   } else {
-    delete l;
+    delete newLemma;
   }
 }
 

@@ -81,12 +81,11 @@ void testOperation(Solver &solver,
     ref<Expr> queryExpr = EqExpr::create(fullySymbolicExpr, 
                                          partiallyConstantExpr);
 
-    ConstraintSet constraints;
+    Constraints constraints;
     ConstraintManager cm(constraints);
     cm.addConstraint(expr, nullptr);
     bool res;
-    SolverQueryMetaData metaData;
-    bool success = solver.mustBeTrue(Query(constraints, queryExpr), res, metaData);
+    bool success = solver.mustBeTrue(Query(constraints, queryExpr), res);
     EXPECT_EQ(true, success) << "Constraint solving failed";
 
     if (success) {

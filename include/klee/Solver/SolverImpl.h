@@ -60,7 +60,7 @@ namespace klee {
     /// Solver::Unknown
     ///
     /// \return True on success
-    virtual bool computeValidity(const Query& query, Solver::Validity &result, SolverQueryMetaData &metaData);
+    virtual bool computeValidity(const Query& query, Solver::Validity &result);
     
     /// computeTruth - Determine whether the given query expression is provably true
     /// given the constraints.
@@ -77,21 +77,20 @@ namespace klee {
     ///
     /// \param [out] isValid - On success, true iff the logical formula is true.
     /// \return True on success
-    virtual bool computeTruth(const Query& query, bool &isValid, SolverQueryMetaData &metaData) = 0;
+    virtual bool computeTruth(const Query& query, bool &isValid) = 0;
 
     /// computeValue - Compute a feasible value for the expression.
     ///
     /// The query expression is guaranteed to be non-constant.
     ///
     /// \return True on success
-    virtual bool computeValue(const Query& query, ref<Expr> &result, SolverQueryMetaData &metaData) = 0;
-    
+    virtual bool computeValue(const Query& query, ref<Expr> &result) = 0;
+
     /// \sa Solver::getInitialValues()
     virtual bool computeInitialValues(const Query& query,
                                       const std::vector<const Array*> &objects,
                                       std::vector< std::vector<unsigned char> > &values,
-                                      bool &hasSolution,
-                                      SolverQueryMetaData &metaData) = 0;
+                                      bool &hasSolution) = 0;
     
     /// getOperationStatusCode - get the status of the last solver operation
     virtual SolverRunStatus getOperationStatusCode() = 0;
@@ -104,6 +103,8 @@ namespace klee {
         // dummy
         return nullptr;
     }
+
+    virtual void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
 
     virtual void setCoreSolverTimeout(time::Span timeout) {};
   };

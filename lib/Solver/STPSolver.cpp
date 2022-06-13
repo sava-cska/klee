@@ -79,13 +79,12 @@ public:
   char *getConstraintLog(const Query &) override;
   void setCoreSolverTimeout(time::Span timeout) override { this->timeout = timeout; }
 
-  bool computeTruth(const Query &, bool &isValid, SolverQueryMetaData &metaData) override;
-  bool computeValue(const Query &, ref<Expr> &result, SolverQueryMetaData &metaData) override;
+  bool computeTruth(const Query &, bool &isValid) override;
+  bool computeValue(const Query &, ref<Expr> &result) override;
   bool computeInitialValues(const Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char>> &values,
-                            bool &hasSolution,
-                            SolverQueryMetaData &metaData) override;
+                            bool &hasSolution) override;
   SolverRunStatus getOperationStatusCode() override;
 };
 
@@ -150,19 +149,19 @@ char *STPSolverImpl::getConstraintLog(const Query &query) {
   return buffer;
 }
 
-bool STPSolverImpl::computeTruth(const Query &query, bool &isValid, SolverQueryMetaData &metaData) {
+bool STPSolverImpl::computeTruth(const Query &query, bool &isValid) {
   std::vector<const Array *> objects;
   std::vector<std::vector<unsigned char>> values;
   bool hasSolution;
 
-  if (!computeInitialValues(query, objects, values, hasSolution, metaData))
+  if (!computeInitialValues(query, objects, values, hasSolution))
     return false;
 
   isValid = !hasSolution;
   return true;
 }
 
-bool STPSolverImpl::computeValue(const Query &query, ref<Expr> &result, SolverQueryMetaData &metaData) {
+bool STPSolverImpl::computeValue(const Query &query, ref<Expr> &result) {
   std::vector<const Array *> objects;
   std::vector<std::vector<unsigned char>> values;
   bool hasSolution;
@@ -170,7 +169,7 @@ bool STPSolverImpl::computeValue(const Query &query, ref<Expr> &result, SolverQu
   // Find the object used in the expression, and compute an assignment
   // for them.
   findSymbolicObjects(query.expr, objects);
-  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution, metaData))
+  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
     return false;
   assert(hasSolution && "state has invalid constraint set");
 
@@ -318,8 +317,7 @@ runAndGetCexForked(::VC vc, STPBuilder *builder, ::VCExpr q,
 
 bool STPSolverImpl::computeInitialValues(
     const Query &query, const std::vector<const Array *> &objects,
-    std::vector<std::vector<unsigned char>> &values, bool &hasSolution,
-    SolverQueryMetaData &metaData) {
+    std::vector<std::vector<unsigned char>> &values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 

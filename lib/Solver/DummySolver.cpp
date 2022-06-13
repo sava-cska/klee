@@ -17,32 +17,32 @@ class DummySolverImpl : public SolverImpl {
 public:
   DummySolverImpl();
 
-  bool computeValidity(const Query &, Solver::Validity &result, SolverQueryMetaData &metaData);
-  bool computeTruth(const Query &, bool &isValid, SolverQueryMetaData &metaData);
-  bool computeValue(const Query &, ref<Expr> &result, SolverQueryMetaData &metaData);
+  bool computeTruth(const Query&, bool &isValid);
+  bool computeValidity(const Query&, Solver::Validity &result);
+  bool computeValue(const Query &, ref<Expr> &result);
   bool computeInitialValues(const Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
-                            bool &hasSolution,
-                            SolverQueryMetaData &metaData);
+                            bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
+  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
 };
 
 DummySolverImpl::DummySolverImpl() {}
 
-bool DummySolverImpl::computeValidity(const Query &, Solver::Validity &result, SolverQueryMetaData &metaData) {
+bool DummySolverImpl::computeValidity(const Query &, Solver::Validity &result) {
   ++stats::queries;
   // FIXME: We should have stats::queriesFail;
   return false;
 }
 
-bool DummySolverImpl::computeTruth(const Query &, bool &isValid, SolverQueryMetaData &metaData) {
+bool DummySolverImpl::computeTruth(const Query &, bool &isValid) {
   ++stats::queries;
   // FIXME: We should have stats::queriesFail;
   return false;
 }
 
-bool DummySolverImpl::computeValue(const Query &, ref<Expr> &result, SolverQueryMetaData &metaData) {
+bool DummySolverImpl::computeValue(const Query &, ref<Expr> &result) {
   ++stats::queries;
   ++stats::queryCounterexamples;
   return false;
@@ -50,8 +50,7 @@ bool DummySolverImpl::computeValue(const Query &, ref<Expr> &result, SolverQuery
 
 bool DummySolverImpl::computeInitialValues(
     const Query &, const std::vector<const Array *> &objects,
-    std::vector<std::vector<unsigned char> > &values, bool &hasSolution,
-    SolverQueryMetaData &metaData) {
+    std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   ++stats::queries;
   ++stats::queryCounterexamples;
   return false;
@@ -60,6 +59,8 @@ bool DummySolverImpl::computeInitialValues(
 SolverImpl::SolverRunStatus DummySolverImpl::getOperationStatusCode() {
   return SOLVER_RUN_STATUS_FAILURE;
 }
+
+void DummySolverImpl::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {}
 
 Solver *createDummySolver() { return new Solver(new DummySolverImpl()); }
 }

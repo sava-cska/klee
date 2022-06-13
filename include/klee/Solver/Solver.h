@@ -30,29 +30,32 @@ namespace klee {
   /// independent of the actual constraints but can be used as a two-way
   /// communication between solver and context of query.
   struct SolverQueryMetaData {
-    using core_ty = std::vector<std::pair<ref<Expr>, KInstruction *>>;
     /// @brief Costs for all queries issued for this state
     time::Span queryCost;
-    std::optional<core_ty> queryValidityCore{std::nullopt};
   };
 
   struct Query {
   public:
     const ConstraintSet &constraints;
     ref<Expr> expr;
+    bool produceQueryCore = false;
 
     Query(const ConstraintSet& _constraints, ref<Expr> _expr)
       : constraints(_constraints), expr(_expr) {
     }
 
+    Query(const ConstraintSet& _constraints, ref<Expr> _expr, bool _produceQueryCore)
+      : constraints(_constraints), expr(_expr), produceQueryCore(_produceQueryCore) {
+    }
+
     /// withExpr - Return a copy of the query with the given expression.
     Query withExpr(ref<Expr> _expr) const {
-      return Query(constraints, _expr);
+      return Query(constraints, _expr, produceQueryCore);
     }
 
     /// withFalse - Return a copy of the query with a false expression.
     Query withFalse() const {
-      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool));
+      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool), produceQueryCore);
     }
 
     /// negateExpr - Return a copy of the query with the expression negated.
@@ -100,7 +103,7 @@ namespace klee {
     /// Solver::Unknown
     ///
     /// \return True on success.
-    bool evaluate(const Query&, Validity &result, SolverQueryMetaData &metaData);
+    bool evaluate(const Query&, Validity &result);
   
     /// mustBeTrue - Determine if the expression is provably true.
     /// 
@@ -118,7 +121,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula is true
     ///
     /// \return True on success.
-    bool mustBeTrue(const Query&, bool &result, SolverQueryMetaData &metaData);
+    bool mustBeTrue(const Query&, bool &result);
 
     /// mustBeFalse - Determine if the expression is provably false.
     ///
@@ -136,7 +139,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula is false
     ///
     /// \return True on success.
-    bool mustBeFalse(const Query&, bool &result, SolverQueryMetaData &metaData);
+    bool mustBeFalse(const Query&, bool &result);
 
     /// mayBeTrue - Determine if there is a valid assignment for the given state
     /// in which the expression evaluates to true.
@@ -155,7 +158,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula may be true
     ///
     /// \return True on success.
-    bool mayBeTrue(const Query&, bool &result, SolverQueryMetaData &metaData);
+    bool mayBeTrue(const Query&, bool &result);
 
     /// mayBeFalse - Determine if there is a valid assignment for the given
     /// state in which the expression evaluates to false.
@@ -174,7 +177,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula may be false
     ///
     /// \return True on success.
-    bool mayBeFalse(const Query&, bool &result, SolverQueryMetaData &metaData);
+    bool mayBeFalse(const Query&, bool &result);
 
     /// getValue - Compute one possible value for the given expression.
     ///
@@ -182,7 +185,7 @@ namespace klee {
     /// satisfying assignment.
     ///
     /// \return True on success.
-    bool getValue(const Query&, ref<ConstantExpr> &result, SolverQueryMetaData &metaData);
+    bool getValue(const Query&, ref<ConstantExpr> &result);
 
     /// getInitialValues - Compute the initial values for a list of objects.
     ///
@@ -201,7 +204,7 @@ namespace klee {
     // they want. This also allows us to optimize the representation.
     bool getInitialValues(const Query&, 
                           const std::vector<const Array*> &objects,
-                          std::vector< std::vector<unsigned char> > &result, SolverQueryMetaData &metaData);
+                          std::vector< std::vector<unsigned char> > &result);
 
     /// getRange - Compute a tight range of possible values for a given
     /// expression.
@@ -213,10 +216,11 @@ namespace klee {
     ///       mayBeTrue(max == e))
     //
     // FIXME: This should go into a helper class, and should handle failure.
-    virtual std::pair< ref<Expr>, ref<Expr> > getRange(const Query&, SolverQueryMetaData &metaData);
+    virtual std::pair< ref<Expr>, ref<Expr> > getRange(const Query&);
     
     virtual char *getConstraintLog(const Query& query);
     virtual void setCoreSolverTimeout(time::Span timeout);
+    void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
   };
 
   /* *** */

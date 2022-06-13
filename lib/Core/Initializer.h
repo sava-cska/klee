@@ -10,33 +10,35 @@
 #include <queue>
 
 namespace klee {
+struct Conflict;
+
 class Initializer {
 public:
   virtual ~Initializer() {}
-  virtual std::pair<KInstruction*, std::set<Target>> selectAction() = 0;
+  virtual std::pair<KInstruction *, std::set<Target>> selectAction() = 0;
   virtual bool empty() = 0;
-  virtual void addPob(ProofObligation* pob) = 0;
-  virtual void removePob(ProofObligation* pob) = 0;
-  virtual void addValidityCoreInit(std::pair<Path,SolverQueryMetaData::core_ty>, KBlock*) = 0;
+  virtual void addPob(ProofObligation *pob) = 0;
+  virtual void removePob(ProofObligation *pob) = 0;
+  virtual void addConflictInit(const Conflict &, KBlock *) = 0;
 
 };
 
-class ValidityCoreInitializer: public Initializer {
+class ConflictCoreInitializer: public Initializer {
 public:
   std::pair<KInstruction *, std::set<Target>> selectAction() override;
   bool empty() override;
   void addPob(ProofObligation *pob) override;
-  void removePob(ProofObligation* pob) override;
-  void addValidityCoreInit(std::pair<Path,SolverQueryMetaData::core_ty>, KBlock*) override;
+  void removePob(ProofObligation *pob) override;
+  void addConflictInit(const Conflict &, KBlock *) override;
 
-  explicit ValidityCoreInitializer(KInstruction* initInst) : initInst(initInst) {};
-  ~ValidityCoreInitializer() override {}
+  explicit ConflictCoreInitializer(KInstruction *initInst) : initInst(initInst) {};
+  ~ConflictCoreInitializer() override {}
 
 private:
-  KInstruction* initInst;
-  std::queue<std::pair<KInstruction *, std::set<Target>>> validityCoreInits;
-  std::map<KInstruction*, std::set<Target>> initialized;
-  std::set<KFunction*> dismantled_fns;
+  KInstruction *initInst;
+  std::queue<std::pair<KInstruction *, std::set<Target>>> conflictCoreInits;
+  std::map<KInstruction *, std::set<Target>> initialized;
+  std::set<KFunction *> dismantledKFunctions;
 };
 
 };

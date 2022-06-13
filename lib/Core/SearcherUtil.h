@@ -2,7 +2,6 @@
 #pragma once
 
 #include "ExecutionState.h"
-#include "Initializer.h"
 #include "Path.h"
 #include "ProofObligation.h"
 #include "klee/Module/KInstruction.h"
@@ -96,27 +95,35 @@ struct SearcherConfig {
   Executor *executor;
 };
 
+struct Conflict {
+  using constraint_ty = std::pair<ref<Expr>, KInstruction *>;
+  using core_ty = std::vector<constraint_ty>;
+
+  Path path;
+  core_ty core;
+
+  Conflict() = default;
+  Conflict(const Path &_path, const core_ty &_core) :
+    path(_path), core(_core) {}
+};
+
+struct TargetedConflict {
+  Conflict conflict;
+  KBlock *target;
+
+  TargetedConflict(Conflict &_conflict, KBlock *_target) :
+    conflict(_conflict), target(_target) {}
+};
+
 struct ForwardResult {
   ExecutionState *current;
   const std::vector<ExecutionState *> &addedStates;
   const std::vector<ExecutionState *> &removedStates;
-
-  struct ValidityCore {
-    std::pair<Path, SolverQueryMetaData::core_ty> core;
-    KBlock *target;
-
-    ValidityCore(std::pair<Path, SolverQueryMetaData::core_ty> core, KBlock* target) :
-      core(core), target(target) {}
-
-    ValidityCore(Path path, SolverQueryMetaData::core_ty core, KBlock* target) :
-      core(std::make_pair(path,core)), target(target) {}
-  };
-
-  std::optional<ValidityCore> validityCore;
+  std::optional<TargetedConflict> targetedConflict;
 
   ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
                 const std::vector<ExecutionState *> &r)
-    : current(_s), addedStates(a), removedStates(r), validityCore(std::nullopt) {};
+    : current(_s), addedStates(a), removedStates(r), targetedConflict(std::nullopt) {};
 };
 
 struct BranchResult {

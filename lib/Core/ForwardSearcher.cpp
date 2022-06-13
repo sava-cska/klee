@@ -582,7 +582,7 @@ RandomPathSearcher::RandomPathSearcher(PForest &processForest, RNG &rng)
     idBitMask{processForest.getNextId()} {};
 
 ExecutionState &RandomPathSearcher::selectState() {
-  unsigned flips=0, bits=0, range=theRNG.getInt32();
+  unsigned flips=0, bits=0, range=0;
   PTreeNodePtr *root = nullptr;
   while (!root || !IS_OUR_NODE_VALID(*root))
     root = &processForest.trees[range++ % processForest.trees.size() + 1]->root;

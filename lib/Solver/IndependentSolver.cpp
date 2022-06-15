@@ -101,7 +101,7 @@ public:
   typedef std::map<const Array*, ::DenseSet<unsigned> > elements_ty;
   elements_ty elements;                 // Represents individual elements of array accesses (arr[1])
   std::set<const Array*> wholeObjects;  // Represents symbolically accessed arrays (arr[x])
-  ConstraintSet exprs;        // All expressions that are associated with this factor
+  std::vector<ref<Expr>> exprs;         // All expressions that are associated with this factor
                                         // Although order doesn't matter, we use a vector to match
                                         // the ConstraintManager constructor that will eventually
                                         // be invoked.
@@ -319,7 +319,7 @@ getAllIndependentConstraintsSets(const Query &query) {
 
 static 
 IndependentElementSet getIndependentConstraints(const Query& query,
-                                                ConstraintSet &result) {
+                                                std::vector< ref<Expr> > &result) {
   IndependentElementSet eltsClosure(query.expr);
   std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
 
@@ -410,29 +410,32 @@ public:
 
 bool IndependentSolver::computeValidity(const Query& query,
                                         Solver::Validity &result) {
-  ConstraintSet required;
+  std::vector<ref<Expr>> required;
   IndependentElementSet eltsClosure =
     getIndependentConstraints(query, required);
+  ConstraintSet tmp(required);
   return solver->impl->computeValidity(
-    Query(required, query.expr, query.produceQueryCore), result);
+    Query(tmp, query.expr, query.produceQueryCore), result);
 }
 
 bool IndependentSolver::computeTruth(const Query& query,
                                      bool &isValid) {
-  ConstraintSet required;
+  std::vector<ref<Expr>> required;
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
+  ConstraintSet tmp(required);
   return solver->impl->computeTruth(
-    Query(required, query.expr, query.produceQueryCore), isValid);
+    Query(tmp, query.expr, query.produceQueryCore), isValid);
 }
 
 bool IndependentSolver::computeValue(const Query& query,
                                      ref<Expr> &result) {
-  ConstraintSet required;
+  std::vector<ref<Expr>> required;
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
+  ConstraintSet tmp(required);
   return solver->impl->computeValue(
-    Query(required, query.expr, query.produceQueryCore), result);
+    Query(tmp, query.expr, query.produceQueryCore), result);
 }
 
 // Helper function used only for assertions to make sure point created

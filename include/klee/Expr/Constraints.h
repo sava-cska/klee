@@ -109,20 +109,17 @@ private:
 #define divider(n) std::string(n, '-') + "\n"
 #endif
 
-inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const ConstraintSet &constraints)
-{
-    if(!constraints.empty())
-    {
-        os << "\n" << divider(30);
-        for(const auto &expr: constraints)
-        {
-            os << divider(30);
-            os << expr << "\n";
-            os << divider(30);
-        }
-        os << divider(30);
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const ConstraintSet &constraints) {
+  if (!constraints.empty()) {
+    os << "\n" << divider(30);
+    for(const auto &expr: constraints) {
+      os << divider(30);
+      os << expr << "\n";
+      os << divider(30);
     }
-    return os;
+    os << divider(30);
+  }
+  return os;
 }
 
 } // namespace klee

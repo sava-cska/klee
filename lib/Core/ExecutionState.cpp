@@ -416,13 +416,13 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
-  Constraints oldConstraintInfos = constraintInfos;
-  constraintInfos = Constraints();
-
-  ConstraintManager m(constraintInfos);
+  Constraints mergedConstraintInfos;
+  ConstraintManager m(mergedConstraintInfos);
   for (const auto &constraint : commonConstraints)
-    m.addConstraint(constraint, oldConstraintInfos.getLocation(constraint));
+    m.addConstraint(constraint, constraintInfos.getLocation(constraint));
   m.addConstraint(OrExpr::create(inA, inB), nullptr);
+
+  constraintInfos = mergedConstraintInfos;
 
   return true;
 }

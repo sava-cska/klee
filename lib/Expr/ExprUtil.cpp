@@ -39,6 +39,8 @@ void klee::findReads(ref<Expr> e,
       // We memoized so can just add to list without worrying about
       // repeats.
       results.push_back(re);
+      if (re->updates.root && !re->updates.root->liSource.isNull())
+        stack.push_back(re->updates.root->liSource);
 
       if (!isa<ConstantExpr>(re->index) &&
           visited.insert(re->index).second)

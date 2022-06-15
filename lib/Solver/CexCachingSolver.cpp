@@ -280,6 +280,11 @@ bool CexCachingSolver::computeValidity(const Query& query,
     return false;
   assert(a && "computeValidity() must have assignment");
   ref<Expr> q = a->evaluate(query.expr);
+
+  if (!isa<ConstantExpr>(q) &&
+      solver->impl->computeValue(query, q))
+    return false;
+
   assert(isa<ConstantExpr>(q) && 
          "assignment evaluation did not result in constant");
 
@@ -292,7 +297,7 @@ bool CexCachingSolver::computeValidity(const Query& query,
       return false;
     result = !a ? Solver::False : Solver::Unknown;
   }
-  
+
   return true;
 }
 
@@ -331,7 +336,12 @@ bool CexCachingSolver::computeValue(const Query& query,
   if (!getAssignment(query.withFalse(), a))
     return false;
   assert(a && "computeValue() must have assignment");
-  result = a->evaluate(query.expr);  
+  result = a->evaluate(query.expr);
+
+  if (!isa<ConstantExpr>(result) &&
+      solver->impl->computeValue(query, result))
+    return false;
+
   assert(isa<ConstantExpr>(result) && 
          "assignment evaluation did not result in constant");
   return true;

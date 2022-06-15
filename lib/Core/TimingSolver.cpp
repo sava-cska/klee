@@ -63,6 +63,7 @@ bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
   bool success = solver->mustBeTrue(Query(constraints, expr, validityCore != nullptr), result);
+
   if (validityCore)
     solver->getLastQueryCore(*validityCore);
 

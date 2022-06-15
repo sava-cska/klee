@@ -394,14 +394,9 @@ void GuidedSearcher::update(ExecutionState *current,
   std::map<Target, std::vector<ExecutionState *>> removedTStates;
   std::set<Target> targets;
 
-  unsigned int size = targetedSearchers.size();
-  for (unsigned int n = 0; n < size; ++n) {
-    auto it = targetedSearchers.begin();
-    std::advance(it, n);
-    it->second->update(nullptr, {}, {});
-  }
+  for (auto &targetSearcher : targetedSearchers)
+    targetSearcher.second->update(nullptr, {}, {});
 
-  
   for (const auto state : addedStates) {
     for (auto i : state->targets) {
       targets.insert(i);

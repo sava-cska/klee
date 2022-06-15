@@ -5576,7 +5576,8 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   } else {
     newPob->detachParent();
     delete newPob;
-    summary->summarize(pob, makeConflict(*state, conflictCore), rebuildMap);
+    if (conflictCore.size())
+      summary->summarize(pob, makeConflict(*state, conflictCore), rebuildMap);
     return BackwardResult({}, pob);
   }
 }

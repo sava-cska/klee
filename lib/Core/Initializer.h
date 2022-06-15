@@ -36,6 +36,8 @@ public:
 
 private:
   KInstruction *initInst;
+  std::map<KInstruction *, std::set<Target>> mapInitLocationToTargets;
+  std::map<Target, std::vector<KInstruction *>> mapTargetToInitLocations;
   std::queue<std::pair<KInstruction *, std::set<Target>>> conflictCoreInits;
   std::map<KInstruction *, std::set<Target>> initialized;
   std::set<KFunction *> dismantledKFunctions;

@@ -27,16 +27,38 @@ namespace klee {
 
 std::pair<KInstruction *, std::set<Target>>
 ConflictCoreInitializer::selectAction() {
-  auto v = conflictCoreInits.front();
+  auto action = conflictCoreInits.front();
   conflictCoreInits.pop();
-  return std::make_pair(v.first, v.second);
+  return action;
 }
 
 bool ConflictCoreInitializer::empty() {
   return conflictCoreInits.empty();
 }
 
-void ConflictCoreInitializer::addPob(ProofObligation *pob) {}
+void ConflictCoreInitializer::addPob(ProofObligation *pob) {
+  Target target(pob->location, pob->atReturn);
+  if (mapTargetToInitLocations.count(target)) {
+    for (auto &init : mapTargetToInitLocations[target]) {
+      if (!mapInitLocationToTargets.count(init))
+        continue;
+
+      conflictCoreInits.push(std::make_pair(init, mapInitLocationToTargets[init]));
+      for (auto &sideTarget : mapInitLocationToTargets[init]) {
+        if (sideTarget == target)
+          continue;
+
+        auto initPos =  std::find(
+          mapTargetToInitLocations[sideTarget].begin(),
+          mapTargetToInitLocations[sideTarget].end(),
+          init);
+        mapTargetToInitLocations[sideTarget].erase(initPos);
+      }
+      mapInitLocationToTargets.erase(init);
+    }
+    mapTargetToInitLocations.erase(target);
+  }
+}
 
 void ConflictCoreInitializer::removePob(ProofObligation *pob) {}
 
@@ -132,8 +154,11 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   if (DebugInitializer) {
     llvm::errs() << "\n";
   }
-  for (auto &init : ret) {
-    conflictCoreInits.push(init);
+  for (auto &initTargets : ret) {
+    mapInitLocationToTargets[initTargets.first] = initTargets.second;
+    for (auto &target : initTargets.second) {
+      mapTargetToInitLocations[target].push_back(initTargets.first);
+    }
   }
 }
 

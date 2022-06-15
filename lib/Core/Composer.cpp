@@ -107,11 +107,10 @@ bool Composer::tryRebuild(const ProofObligation &old,
                           ExprHashMap<ref<Expr>> &rebuildMap) {
   bool success = true;
   Composer composer(state);
-  for(auto& constraint : old.condition) {
+  for (auto &constraint : old.condition) {
     auto loc = old.condition.getLocation(constraint);
     ref<Expr> rebuiltConstraint;
     success = composer.tryRebuild(constraint, rebuiltConstraint);
-    rebuildMap[rebuiltConstraint] = constraint;
     bool mayBeTrue = true;
     std::vector<ref<Expr>> unsatCore;
     time::Span timeout = executor->getSolverTimeout();
@@ -125,14 +124,18 @@ bool Composer::tryRebuild(const ProofObligation &old,
         composer.copy.queryMetaData,
         &unsatCore
       );
-      success = success && mayBeTrue;
-      if (!success && unsatCore.size()) {
+      if (success && !mayBeTrue &&
+           // confclitCore needs for summarizing and should be non empty for that.
+           // It means that unsatCore sould be non empty
+           // or rebuilt constraint should be constant.
+          (unsatCore.size() || isa<ConstantExpr>(rebuiltConstraint))) {
         Executor::makeConflictCore(composer.copy, unsatCore, rebuiltConstraint, loc, conflictCore);
       }
     }
-    if (success) {
+    if (success && mayBeTrue) {
       composer.copy.addConstraint(rebuiltConstraint, loc, &success);
     } else {
+      success = false;
       break;
     }
   }

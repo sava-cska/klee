@@ -5543,10 +5543,10 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
          it != std::prev(state->stack.rend()) && !newPob->stack.empty(); it++) {
       newPob->stack.pop_back();
     }
-    std::vector<ProofObligation*> newPobs;
+    std::vector<ProofObligation *> newPobs;
     // If the state initial location is a "right after call" location,
     // the proof obligation is transferred to every return point of the call.
-    if(state->initPC->parent->getKBlockType() == KBlockType::Call &&
+    if (state->initPC->parent->getKBlockType() == KBlockType::Call &&
        state->initPC->inst->getOpcode() == Instruction::Br) {
       KCallBlock* b = dyn_cast<KCallBlock>(state->initPC->parent);
       KFunction* kf = kmodule->functionMap[b->calledFunction];

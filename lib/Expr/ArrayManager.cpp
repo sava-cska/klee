@@ -11,9 +11,9 @@ ArrayManager::~ArrayManager() {
 
 const Array *
 ArrayManager::CreateArray(const std::string &_name, uint64_t _size,
-                        const ref<ConstantExpr> *constantValuesBegin,
-                        const ref<ConstantExpr> *constantValuesEnd,
-                        Expr::Width _domain, Expr::Width _range) {
+                          const ref<ConstantExpr> *constantValuesBegin,
+                          const ref<ConstantExpr> *constantValuesEnd,
+                          Expr::Width _domain, Expr::Width _range) {
   return arrayCache->CreateArray(_name, _size, constantValuesBegin, constantValuesEnd, _domain, _range);
 }
 

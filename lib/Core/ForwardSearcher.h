@@ -170,7 +170,7 @@ namespace klee {
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
 
-    std::map<Target,std::unordered_set<ExecutionState *>> collectAndClearReached();
+    std::map<Target, std::unordered_set<ExecutionState *>> collectAndClearReached();
 
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;

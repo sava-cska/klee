@@ -292,6 +292,9 @@ private:
 
   std::vector<Symbolic> *symbolics;
 
+  std::unordered_set<Transition, TransitionHash> successTransitions;
+  std::unordered_multiset<Transition, TransitionHash> failedTransitions;
+
 public:
 
   ExecutionManager *emanager;

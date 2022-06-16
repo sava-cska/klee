@@ -36,6 +36,13 @@ llvm::cl::opt<bool> DebugBidirectionalSearcher(
     llvm::cl::desc(""),
     llvm::cl::init(false),
     llvm::cl::cat(klee::DebugCat));
+
+llvm::cl::opt<unsigned> MaxCycles(
+    "max-cycles",
+    llvm::cl::desc("stop execution after visiting some basic block this amount of times (default=0)."),
+    llvm::cl::init(0),
+    llvm::cl::cat(klee::TerminationCat));
+
 }
 
 namespace klee {
@@ -210,7 +217,7 @@ bool BidirectionalSearcher::isStuck(ExecutionState& state) {
   KInstruction *prevKI = state.prevPC;
   return prevKI->inst->isTerminator() &&
          state.targets.empty() &&
-         state.multilevel.count(state.getPCBlock()) > 0;
+         state.multilevel.count(state.getPCBlock()) > MaxCycles;
 }
 
 

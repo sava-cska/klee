@@ -107,7 +107,7 @@ using namespace klee;
 
 namespace klee {
 cl::OptionCategory ExecCat("Execution option",
-                              "This opntions control kind of execution");
+                           "This opntions control kind of execution");
 
 cl::OptionCategory DebugCat("Debugging options",
                             "These are debugging options.");
@@ -134,18 +134,6 @@ cl::opt<std::string> MaxTime(
     cl::init("0s"),
     cl::cat(TerminationCat));
 
-cl::opt<std::string>
-  SummaryDB("summaryDB",
-              cl::init(""),
-              cl::desc("Summary DB path"),
-              cl::cat(TerminationCat));
-
-cl::opt<unsigned long long> MaxCycles(
-    "max-cycles",
-    cl::desc("stop execution after visiting some basic block this amount of times (default=1)."),
-    cl::init(1),
-    cl::cat(TerminationCat));
-
 cl::opt<bool> UseGEPExpr(
     "use-gep-expr",
     cl::init(true),
@@ -157,6 +145,18 @@ cl::opt<bool> LazyInstantiation(
      cl::init(true),
      cl::desc("Enable lazy instantiation (default=true)"),
      cl::cat(ExecCat));
+
+llvm::cl::opt<unsigned> MaxFailedBranchings(
+    "max-failed-branchings",
+    llvm::cl::desc("start bidirectional execution after failing during some branching this amount of times (default=1)."),
+    llvm::cl::init(1),
+    llvm::cl::cat(ExecCat));
+
+cl::opt<std::string> SummaryDB(
+    "summary-db",
+    cl::init(""),
+    cl::desc("Summary DB path"),
+    cl::cat(ExecCat));
 
 } // namespace klee
 
@@ -2266,8 +2266,13 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           llvm::errs() << "\n";
         }
 
-        targetedConflict = std::make_optional<TargetedConflict>(
-          makeTargetedConflict(state, conflict, lastCondition, target));
+        Transition failedTransition = std::make_pair(bi->getParent(), target->basicBlock);
+        failedTransitions.insert(failedTransition);
+        if (!successTransitions.count(failedTransition) &&
+            failedTransitions.count(failedTransition) > MaxFailedBranchings) {
+          targetedConflict = std::make_optional<TargetedConflict>(
+            makeTargetedConflict(state, conflict, lastCondition, target));
+        }
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
       // requires that we still be in the context of the branch
@@ -2275,6 +2280,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // up with convenient instruction specific data.
       if (statsTracker && !state.isIsolated() && state.stack.back().kf->trackCoverage)
         statsTracker->markBranchVisited(branches.first, branches.second);
+
+
+      if (branches.first)
+        successTransitions.insert(std::make_pair(bi->getParent(), bi->getSuccessor(0)));
+      if (branches.second)
+        successTransitions.insert(std::make_pair(bi->getParent(), bi->getSuccessor(1)));
 
       if (branches.first)
         transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), *branches.first);

@@ -50,7 +50,7 @@ namespace klee {
     virtual ~KInstruction();
     std::string getSourceLocation() const;
     std::string getIRLocation() const;
-    std::string toString() const;
+    std::string toRegisterString() const;
     bool isCallOrInvokeInst();
 
   };

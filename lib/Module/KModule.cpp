@@ -572,7 +572,7 @@ KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki) {
 
 /***/
 
-std::string KInstruction::toString() const {
+std::string KInstruction::toRegisterString() const {
   std::string repr = parent->parent->function->getName().str();
   std::string label;
   llvm::raw_string_ostream label_stream(label);

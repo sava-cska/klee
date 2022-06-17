@@ -4702,7 +4702,7 @@ void Executor::prepareSymbolicValue(ExecutionState &state, const KInstruction *t
   Instruction *allocSite = target->inst;
   uint64_t size = kmodule->targetData->getTypeStoreSize(allocSite->getType());
   uint64_t width = kmodule->targetData->getTypeSizeInBits(allocSite->getType());
-  std::string name = allocSite ? target->toString() : "symbolic_value";
+  std::string name = allocSite ? target->toRegisterString() : "symbolic_value";
   ref<Expr> result = makeSymbolicValue(allocSite, state, size, width, name);
   bindLocal(target, state, result);
 

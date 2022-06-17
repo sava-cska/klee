@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/Casting.h"
+#include <functional>
 #define DEBUG_TYPE "KModule"
 
 #include "Passes.h"
@@ -22,6 +23,7 @@
 #include "klee/Support/Debug.h"
 #include "klee/Support/ErrorHandling.h"
 #include "klee/Support/ModuleUtil.h"
+#include "klee/Support/Hashing.h"
 
 #if LLVM_VERSION_CODE >= LLVM_VERSION(4, 0)
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -266,6 +268,14 @@ void KModule::calculateDistance(KFunction *kf) {
   }
 }
 
+size_t KModule::functionHash(KFunction* kf) {
+  if (!functionHashMap.count(kf)) {
+    std::hash<KFunction> hasher;
+    functionHashMap[kf] = hasher(*kf);
+  }
+  return functionHashMap[kf];
+}
+
 bool KModule::link(std::vector<std::unique_ptr<llvm::Module>> &modules,
                    const std::string &entryPoint) {
   auto numRemainingModules = modules.size();
@@ -438,6 +448,7 @@ void KModule::manifest(InterpreterHandler *ih, bool forceSourceOutput) {
     }
 
     functionMap.insert(std::make_pair(&Function, kf.get()));
+    functionNameMap.insert(std::make_pair(kf.get()->function->getName(), kf.get()));
     functions.push_back(std::move(kf));
   }
 
@@ -582,6 +593,17 @@ std::string KInstruction::toRegisterString() const {
   return repr;
 }
 
+std::string KInstruction::toString() const {
+  std::string repr;
+  llvm::raw_string_ostream repr_stream(repr);
+  repr_stream << *inst;
+  size_t k = 0;
+  while(repr[k] == ' ') {
+    ++k;
+  }
+  return repr.substr(k);
+}
+
 static int getOperandNum(Value *v,
                          std::map<Instruction*, unsigned> &registerMap,
                          KModule *km,
@@ -681,6 +703,7 @@ KFunction::KFunction(llvm::Function *_function,
     }
     blockMap[&*bbit] = kb;
     blocks.push_back(std::unique_ptr<KBlock>(kb));
+    labelMap[kb->getLabel()] = kb;
     if (isa<ReturnInst>(kb->instructions[kb->numInstructions - 1]->inst) ||
         isa<UnreachableInst>(kb->instructions[kb->numInstructions - 1]->inst)) {
       finalKBlocks.push_back(kb);
@@ -839,6 +862,13 @@ std::string KBlock::getIRLocation() const {
   repr += " in function ";
   repr += parent->function->getName();
   return repr;
+}
+
+std::string KBlock::getLabel() const {
+  std::string label;
+  llvm::raw_string_ostream label_stream(label);
+  basicBlock->printAsOperand(label_stream);
+  return label_stream.str().erase(0, 6);
 }
 
 KCallBlock::KCallBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,

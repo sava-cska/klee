@@ -21,6 +21,7 @@
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Intrinsics.h"
 
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <set>
@@ -85,6 +86,7 @@ namespace klee {
     KInstruction * getFirstInstruction() const noexcept { return instructions[0]; }
     KInstruction * getLastInstruction() const noexcept { return instructions[numInstructions - 1]; }
     std::string getIRLocation() const;
+    std::string getLabel() const;
   };
 
   struct KFunction {
@@ -105,6 +107,7 @@ namespace klee {
     std::vector<KBlock *> finalKBlocks;
     std::vector<KBlock *> returnKBlocks;
     std::vector<KCallBlock *> kCallBlocks;
+    std::map<std::string, KBlock *> labelMap;
 
     /// Whether instructions in this function should count as
     /// "coverable" for statistics and search heuristics.
@@ -161,6 +164,7 @@ namespace klee {
     // Our shadow versions of LLVM structures.
     std::vector<std::unique_ptr<KFunction>> functions;
     std::map<llvm::Function *, KFunction *> functionMap;
+    std::map<std::string, KFunction *> functionNameMap;
     std::map<llvm::Function *, std::set<llvm::Function *>> callMap;
 
     // Functions which escape (may be called indirectly)
@@ -185,6 +189,7 @@ namespace klee {
       std::pair<KFunction *, unsigned int>>> sortedDistance;
     std::map<KFunction *, std::vector<
       std::pair<KFunction *, unsigned int>>> sortedBackwardDistance;
+    std::map<KFunction*, size_t> functionHashMap;
 
     // Mark function with functionName as part of the KLEE runtime
     void addInternalFunction(const char* functionName);
@@ -223,6 +228,8 @@ namespace klee {
     /// changed
     bool link(std::vector<std::unique_ptr<llvm::Module>> &modules,
               const std::string &entryPoint);
+
+    size_t functionHash(KFunction* kf);
 
     void instrument(const Interpreter::ModuleOptions &opts);
 

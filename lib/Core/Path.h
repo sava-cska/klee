@@ -3,6 +3,7 @@
 #include "klee/Module/KModule.h"
 #include "llvm/IR/Instructions.h"
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,10 +39,19 @@ public:
     return path.empty();
   }
 
+  std::set<KFunction *> getFunctionsInPath() const;
+
   std::string toString() const;
 
   friend bool operator==(const Path& lhs, const Path& rhs) {
     return lhs.path == rhs.path;
+  }
+  friend bool operator!=(const Path& lhs, const Path& rhs) {
+    return lhs.path != rhs.path;
+  }
+
+  friend bool operator<(const Path& lhs, const Path& rhs) {
+    return lhs.path < rhs.path;
   }
 
   Path() = default;
@@ -53,4 +63,6 @@ private:
 
 Path concat(const Path& lhs, const Path& rhs);
 
+std::optional<Path> parse(std::string str, KModule *m,
+                          const std::map<std::string, size_t> &DBHashMap);
 };

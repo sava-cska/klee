@@ -80,7 +80,7 @@ bool loadFile(const std::string &libraryName, llvm::LLVMContext &context,
               std::vector<std::unique_ptr<llvm::Module>> &modules,
               std::string &errorMsg);
 
-std::vector<std::pair<KBlock *, KBlock *>>
+std::set<std::pair<KBlock *, KBlock *>>
 dismantle(KBlock *from, std::vector<KBlock *> to);
 
 }

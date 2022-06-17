@@ -544,39 +544,34 @@ bool klee::loadFile(const std::string &fileName, LLVMContext &context,
   return true;
 }
 
-std::vector<std::pair<KBlock *, KBlock *>>
-  klee::dismantle(KBlock *from, std::vector<KBlock*> to) {
-  for(auto block : to) {
-  assert(from->parent == block->parent &&
-         "to and from KBlocks are from different functions.");
+std::set<std::pair<KBlock *, KBlock *>>
+klee::dismantle(KBlock *from, std::vector<KBlock *> to) {
+  for (auto block : to) {
+    assert(from->parent == block->parent &&
+          "to and from KBlocks are from different functions.");
   }
   auto kf = from->parent;
 
   auto distance = kf->getDistance(from);
-  std::vector<std::pair<KBlock *, KBlock*>> dismantled;
+  std::set<std::pair<KBlock *, KBlock *>> dismantled;
   std::queue<KBlock *> queue;
-  std::unordered_set<llvm::BasicBlock *> used;
-  for(auto block : to) {
-    used.insert(block->basicBlock);
+  std::unordered_set<KBlock *> used;
+  for (auto block : to) {
+    used.insert(block);
     queue.push(block);
   }
-  while(!queue.empty()) {
+  while (!queue.empty()) {
     auto block = queue.front();
     queue.pop();
-    bool linked = false;
-    for(auto const &pred : predecessors(block->basicBlock)) {
+    for (auto const &pred : predecessors(block->basicBlock)) {
       auto nearest = kf->getNearestJoinOrCallBlock(kf->blockMap[pred]);
       if (distance.count(nearest)) {
-        if(!used.count(nearest->basicBlock)) {
-          used.insert(nearest->basicBlock);
+        if (!used.count(nearest)) {
+          used.insert(nearest);
           queue.push(nearest);
         }
-        linked = true;
-        dismantled.push_back(std::make_pair(nearest, block));
+        dismantled.insert(std::make_pair(nearest, block));
       }
-    }
-    if(!linked && from != block) {
-      dismantled.push_back(std::make_pair(from, block));
     }
   }
   return dismantled;

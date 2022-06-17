@@ -115,7 +115,12 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   }
   for (auto kf : visited) {
     dismantledKFunctions.insert(kf);
-    auto dismantled = dismantle(kf->entryKBlock, kf->returnKBlocks);
+    std::vector<KBlock *> to = kf->returnKBlocks;
+
+    if (kf == path.getFinalBlock()->parent)
+      to.push_back(path.getFinalBlock());
+
+    auto dismantled = dismantle(kf->entryKBlock, to);
     for (auto blockpair : dismantled) {
       bool atReturn =
           std::find(kf->returnKBlocks.begin(), kf->returnKBlocks.end(),

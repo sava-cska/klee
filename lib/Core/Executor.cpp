@@ -508,7 +508,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
       replayKTest(0), replayPath(0), usingSeeds(0),
       atMemoryLimit(false), inhibitForking(false), haltExecution(false),
       ivcEnabled(false), arrayManager(new ArrayCache()), debugLogBuffer(debugBufferString),
-      symbolics(new std::vector<Symbolic>()), emanager(new ExecutionManager) {
+      symbolics(new std::vector<Symbolic>()) {
 
   const time::Span maxTime{MaxTime};
   if (maxTime) timers.add(
@@ -4866,7 +4866,6 @@ void Executor::runFunctionAsMain(Function *f,
   processForest = nullptr;
 
   delete symbolics;
-  delete emanager;
 
   // hack to clear memory objects
   memory = std::make_unique<MemoryManager>(nullptr);
@@ -5212,8 +5211,6 @@ ArrayManager *Executor::getArrayManager() { return &arrayManager; }
 
 MemoryManager *Executor::getMemoryManager() { return memory.get(); }
 
-ExecutionManager *Executor::getExecutionManager() { return emanager; }
-
 ExprOptimizer *Executor::getOptimizer() { return &optimizer; }
 
 void Executor::dumpPForest() {
@@ -5555,21 +5552,18 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
       newPob->stack.pop_back();
     }
     std::vector<ProofObligation *> newPobs;
+    newPobs.push_back(newPob);
     // If the state initial location is a "right after call" location,
     // the proof obligation is transferred to every return point of the call.
     if (state->initPC->parent->getKBlockType() == KBlockType::Call &&
        state->initPC->inst->getOpcode() == Instruction::Br) {
       KCallBlock* b = dyn_cast<KCallBlock>(state->initPC->parent);
       KFunction* kf = kmodule->functionMap[b->calledFunction];
-      for(auto i : kf->returnKBlocks) {
+      for (auto i : kf->returnKBlocks) {
         ProofObligation *callPob = propagateToReturn(
             newPob, state->initPC->parent->instructions[0], i);
         newPobs.push_back(callPob);
       }
-      newPob->detachParent();
-      delete newPob;
-    } else {
-      newPobs.push_back(newPob);
     }
     if (DebugExecutor) {
       llvm::errs() << "Propagated pobs\n";

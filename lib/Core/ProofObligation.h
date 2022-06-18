@@ -53,7 +53,7 @@ public:
   }
 
   explicit ProofObligation(ProofObligation *pob)
-      : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
+      : id(counter++), parent(pob), root(pob->root), stack(pob->stack),
         propagationCount(pob->propagationCount),
         location(pob->location), condition(pob->condition),
         atReturn(pob->atReturn), path(pob->path) {

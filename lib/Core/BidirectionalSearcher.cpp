@@ -135,6 +135,13 @@ void BidirectionalSearcher::update(ActionResult r) {
     auto fr = std::get<ForwardResult>(r);
     forward->update(fr.current, fr.addedStates, fr.removedStates);
 
+    if (fr.current && fr.current->getPrevPCBlock() != fr.current->getPCBlock())
+      backward->addState(Target(fr.current->pc->parent, false), fr.current);
+    for (auto &state : fr.addedStates) {
+      if (state->getPrevPCBlock() != state->getPCBlock())
+        backward->addState(Target(state->pc->parent, false), state);
+    }
+
     if (fr.targetedConflict) {
       initializer->addConflictInit(fr.targetedConflict->conflict, fr.targetedConflict->target);
       if (!mainLocs.count(fr.targetedConflict->target->basicBlock)) {
@@ -163,7 +170,7 @@ void BidirectionalSearcher::update(ActionResult r) {
           llvm::errs() << "Constraints:\n" << state->constraints;
           llvm::errs() << "\n";
         }
-        ex->emanager->insert(targetStates.first, *state->copy());
+        backward->addState(targetStates.first, state->copy());
       }
     }
   } else if (std::holds_alternative<BackwardResult>(r)) {
@@ -183,7 +190,7 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   forward->update(nullptr,{cfg.initial_state},{});
   branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new RecencyRankedSearcher(ex->emanager);
+  backward = new RecencyRankedSearcher();
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
 

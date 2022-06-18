@@ -39,9 +39,11 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
 
 
 bool RecencyRankedSearcher::empty() {
+  if (!fromEntryPoint.empty())
+    return false;
   for (auto pob : pobs) {
     Target t(pob->location, pob->atReturn);
-    std::unordered_set<ExecutionState *> &states = emanager->at(t);
+    std::unordered_set<ExecutionState *> &states = emanager.at(t);
     for (auto state : states) {
       if (!used.count(std::make_pair(pob, state)) && checkStack(state, pob)) {
         return false;
@@ -57,20 +59,26 @@ void RecencyRankedSearcher::update(ProofObligation* pob) {
 
 std::pair<ProofObligation *, ExecutionState *>
 RecencyRankedSearcher::selectAction() {
+  if (!fromEntryPoint.empty()) {
+    auto action = fromEntryPoint.front();
+    fromEntryPoint.pop();
+    return action;
+  }
+
   for (auto pob : pobs) {
     Target t(pob->location, pob->atReturn);
-    std::unordered_set<ExecutionState *> &states = emanager->at(t);
+    std::unordered_set<ExecutionState *> &states = emanager.at(t);
     unsigned least_used_count = UINT_MAX;
     ExecutionState *least_used_state = nullptr;
     for (auto state : states) {
       if (!used.count(std::make_pair(pob,state)) && checkStack(state, pob)) {
-        if(pob->propagationCount[state] < least_used_count) {
+        if (pob->propagationCount[state] < least_used_count) {
           least_used_count = pob->propagationCount[state];
           least_used_state = state;
         }
       }
     }
-    if(least_used_state) {
+    if (least_used_state) {
       used.insert(std::make_pair(pob, least_used_state));
       return std::make_pair(pob, least_used_state);
     }
@@ -78,9 +86,22 @@ RecencyRankedSearcher::selectAction() {
   return std::make_pair(nullptr, nullptr);
 }
 
+
+void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
+  if (state->isIsolated())
+    emanager.insert(target, *state);
+  else {
+    for (auto pob : pobs) {
+      Target pobsTarget(pob->location, pob->atReturn);
+      if (target == pobsTarget)
+        fromEntryPoint.push(std::make_pair(pob, state));
+    }
+  }
+}
+
 void RecencyRankedSearcher::removePob(ProofObligation* pob) {
   auto pos = std::find(pobs.begin(), pobs.end(), pob);
-  if(pos != pobs.end()) {
+  if (pos != pobs.end()) {
     pobs.erase(pos);
   }
 }

@@ -2136,12 +2136,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     if (state.stack.size() <= 1) {
       assert(!caller && "caller set on initial stack frame");
-      --state.stackBalance;
+      state.popFrame();
+      state.addLevel(state.getPrevPCBlock(), state.getPrevPCBlock());
       if (state.isIsolated()) {
-        bindLocal(ki, state, result);
+        state.returnValue = result;
         state.pc = state.prevPC;
       } else {
-        state.addLevel(state.getPrevPCBlock(), state.getPrevPCBlock());
         terminateStateOnExit(state);
       }
     } else {
@@ -5458,7 +5458,7 @@ void Executor::run(ExecutionState &state) {
             replayState->symbolics.push_back(symbolic);
           }
 
-          replayState->targets.insert(Target(pob->root->location, false));
+          replayState->targets.insert(Target(pob->root->location));
           states.insert(replayState);
           processForest->addRoot(replayState);
           updateResult(ForwardResult(nullptr, {replayState}, {}));

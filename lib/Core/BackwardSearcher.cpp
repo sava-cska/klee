@@ -42,7 +42,7 @@ bool RecencyRankedSearcher::empty() {
   if (!fromEntryPoint.empty())
     return false;
   for (auto pob : pobs) {
-    Target t(pob->location, pob->atReturn);
+    Target t(pob->location);
     std::unordered_set<ExecutionState *> &states = emanager.at(t);
     for (auto state : states) {
       if (!used.count(std::make_pair(pob, state)) && checkStack(state, pob)) {
@@ -66,7 +66,7 @@ RecencyRankedSearcher::selectAction() {
   }
 
   for (auto pob : pobs) {
-    Target t(pob->location, pob->atReturn);
+    Target t(pob->location);
     std::unordered_set<ExecutionState *> &states = emanager.at(t);
     unsigned least_used_count = UINT_MAX;
     ExecutionState *least_used_state = nullptr;
@@ -92,7 +92,7 @@ void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
     emanager.insert(target, *state);
   else {
     for (auto pob : pobs) {
-      Target pobsTarget(pob->location, pob->atReturn);
+      Target pobsTarget(pob->location);
       if (target == pobsTarget)
         fromEntryPoint.push(std::make_pair(pob, state));
     }

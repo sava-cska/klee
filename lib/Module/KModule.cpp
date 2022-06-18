@@ -683,19 +683,22 @@ KFunction::KFunction(llvm::Function *_function,
   for (llvm::Function::iterator bbit = function->begin(),
          bbie = function->end(); bbit != bbie; ++bbit) {
     KBlock *kb;
-    Instruction *it = &*(*bbit).begin();
-    if (it->getOpcode() == Instruction::Call || it->getOpcode() == Instruction::Invoke) {
+    Instruction *firstit = &*(*bbit).begin();
+    Instruction *lastit = &*(--(*bbit).end());
+    if (isa<CallInst>(firstit) || isa<InvokeInst>(firstit)) {
 #if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
-      const CallBase &cs = cast<CallBase>(*it);
+      const CallBase &cs = cast<CallBase>(*firstit);
       Value *fp = cs.getCalledOperand();
 #else
-      CallSite cs(it);
+      CallSite cs(firstit);
       Value *fp = cs.getCalledValue();
 #endif
       Function *f = getTargetFunction(fp);
       KCallBlock *ckb = new KCallBlock(this, &*bbit, parent, registerMap, reg2inst, f, &instructions[n]);
       kCallBlocks.push_back(ckb);
       kb = ckb;
+    } else if (isa<ReturnInst>(lastit)) {
+      kb = new KReturnBlock(this, &*bbit, parent, registerMap, reg2inst, &instructions[n]);
     } else
       kb = new KBlock(this, &*bbit, parent, registerMap, reg2inst, &instructions[n]);
     for (unsigned i = 0; i < kb->numInstructions; i++, n++) {
@@ -704,10 +707,10 @@ KFunction::KFunction(llvm::Function *_function,
     blockMap[&*bbit] = kb;
     blocks.push_back(std::unique_ptr<KBlock>(kb));
     labelMap[kb->getLabel()] = kb;
-    if (isa<ReturnInst>(kb->instructions[kb->numInstructions - 1]->inst) ||
+    if (isa<KReturnBlock>(kb) ||
         isa<UnreachableInst>(kb->instructions[kb->numInstructions - 1]->inst)) {
       finalKBlocks.push_back(kb);
-      if (isa<ReturnInst>(kb->instructions[kb->numInstructions - 1]->inst)) {
+      if (isa<KReturnBlock>(kb)) {
         returnKBlocks.push_back(kb);
       }
     }
@@ -877,3 +880,9 @@ KCallBlock::KCallBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *
   : KBlock::KBlock(_kfunction, block, km, registerMap, reg2inst, instructionsKF),
     kcallInstruction(this->instructions[0]),
     calledFunction(_calledFunction) {}
+
+KReturnBlock::KReturnBlock(KFunction *_kfunction, llvm::BasicBlock *block, KModule *km,
+               std::map<Instruction*, unsigned> &registerMap,
+               std::map<unsigned, KInstruction*> &reg2inst,
+               KInstruction **instructionsKF)
+  : KBlock::KBlock(_kfunction, block, km, registerMap, reg2inst, instructionsKF) {}

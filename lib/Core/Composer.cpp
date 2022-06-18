@@ -254,7 +254,7 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     if (!allocSite)
       return nullptr;
 
-    if (array->index == -1) {
+    if (array->index == -1 && state.stack.empty()) {
       assert(isa<CallInst>(allocSite) || isa<InvokeInst>(allocSite));
       const Instruction *inst = cast<Instruction>(allocSite);
       const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
@@ -263,7 +263,7 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
         isa<CallInst>(inst) ?
           dyn_cast<CallInst>(inst)->getCalledFunction() :
           dyn_cast<InvokeInst>(inst)->getCalledFunction();
-      KFunction *lastkf = state.stack.back().kf;
+      KFunction *lastkf = state.pc->parent->parent;
       KBlock *pckb = lastkf->blockMap[state.getPCBlock()];
       bool isFinalPCKB = std::find(lastkf->finalKBlocks.begin(),
                                     lastkf->finalKBlocks.end(),

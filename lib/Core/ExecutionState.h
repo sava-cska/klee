@@ -166,28 +166,25 @@ struct TransitionHash {
 typedef std::pair<ref<const MemoryObject>, const Array *> Symbolic;
 
 struct Target {
-  KBlock* targetBlock;
-  bool atReturn;
+  KBlock *block;
 
-  Target(KBlock* targetBlock, bool atReturn) :
-    targetBlock(targetBlock), atReturn(atReturn) {}
+  explicit Target(KBlock *_block) :
+    block(_block) {}
 
-  bool operator<(const Target& other) const {
-    if (targetBlock == other.targetBlock) {
-      return atReturn < other.atReturn;
-    } else {
-      return targetBlock < other.targetBlock;
-    }
+  bool operator<(const Target &other) const {
+    return block < other.block;
   }
 
-  bool operator==(const Target& other) const {
-    return targetBlock == other.targetBlock && atReturn == other.atReturn;
+  bool operator==(const Target &other) const {
+    return block == other.block;
   }
+
+  bool atReturn() const { return isa<KReturnBlock>(block); } 
 
   std::string print() const {
     std::string repr = "Target: ";
-    repr += targetBlock->getIRLocation();
-    if(atReturn) {
+    repr += block->getIRLocation();
+    if (atReturn()) {
       repr += " (at the end)";
     }
     return repr;
@@ -312,6 +309,8 @@ public:
 
   /// @brief Index of current symbolic in case of pre-loaded symbolics.
   size_t symbolicCounter;
+
+  ref<Expr> returnValue;
 
 public:
   #ifdef KLEE_UNITTEST

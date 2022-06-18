@@ -82,7 +82,7 @@ Action &BidirectionalSearcher::selectAction() {
       if (isStuck(state)) {
         KBlock *target = ex->calculateTargetByTransitionHistory(state);
         if (target) {
-          state.targets.insert(Target(target, false));
+          state.targets.insert(Target(target));
           forward->update(&state, {}, {});
           action = new ForwardAction(&state);
         } else {
@@ -136,10 +136,10 @@ void BidirectionalSearcher::update(ActionResult r) {
     forward->update(fr.current, fr.addedStates, fr.removedStates);
 
     if (fr.current && fr.current->getPrevPCBlock() != fr.current->getPCBlock())
-      backward->addState(Target(fr.current->pc->parent, false), fr.current);
+      backward->addState(Target(fr.current->pc->parent), fr.current);
     for (auto &state : fr.addedStates) {
       if (state->getPrevPCBlock() != state->getPCBlock())
-        backward->addState(Target(state->pc->parent, false), state);
+        backward->addState(Target(state->pc->parent), state);
     }
 
     if (fr.targetedConflict) {

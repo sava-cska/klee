@@ -56,6 +56,7 @@ namespace klee {
   enum KBlockType {
     Base,
     Call,
+    Return
   };
 
   struct KBlock : Indexer<KBlock>, IndexToMemMapper<KBlock> {
@@ -70,10 +71,10 @@ namespace klee {
     bool trackCoverage;
 
   public:
-    explicit KBlock(KFunction*, llvm::BasicBlock*, KModule*,
-                    std::map<llvm::Instruction*, unsigned> &,
-                    std::map<unsigned, KInstruction*> &,
-                    KInstruction **);
+    KBlock(KFunction *, llvm::BasicBlock *, KModule *,
+           std::map<llvm::Instruction *, unsigned> &,
+           std::map<unsigned, KInstruction *> &,
+           KInstruction **);
     KBlock(const KBlock &) = delete;
     KBlock &operator=(const KBlock &) = delete;
     virtual ~KBlock() = default;
@@ -252,9 +253,9 @@ namespace klee {
     llvm::Function *calledFunction;
 
   public:
-    explicit KCallBlock(KFunction *, llvm::BasicBlock *, KModule *,
-                    std::map<llvm::Instruction *, unsigned>&, std::map<unsigned, KInstruction *>&,
-                    llvm::Function *, KInstruction **);
+    KCallBlock(KFunction *, llvm::BasicBlock *, KModule *,
+               std::map<llvm::Instruction *, unsigned>&, std::map<unsigned, KInstruction *>&,
+               llvm::Function *, KInstruction **);
     static bool classof(const KCallBlock *) { return true; }
     static bool classof(const KBlock *E) {
       return E->getKBlockType() == KBlockType::Call;
@@ -269,6 +270,19 @@ namespace klee {
     KFunction* getKFunction() const {
       return parent->parent->functionMap[calledFunction];
     }
+  };
+
+  struct KReturnBlock : KBlock {
+  public:
+    KReturnBlock(KFunction *, llvm::BasicBlock *, KModule *,
+                 std::map<llvm::Instruction *, unsigned> &,
+                 std::map<unsigned, KInstruction *> &,
+                 KInstruction **);
+    static bool classof(const KReturnBlock *) { return true; }
+    static bool classof(const KBlock *E) {
+      return E->getKBlockType() == KBlockType::Return;
+    }
+    KBlockType getKBlockType() const override { return KBlockType::Return; };
   };
 } // End klee namespace
 

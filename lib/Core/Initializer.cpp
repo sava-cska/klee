@@ -37,7 +37,7 @@ bool ConflictCoreInitializer::empty() {
 }
 
 void ConflictCoreInitializer::addPob(ProofObligation *pob) {
-  Target target(pob->location, pob->atReturn);
+  Target target(pob->location);
   if (mapTargetToInitLocations.count(target)) {
     for (auto &init : mapTargetToInitLocations[target]) {
       if (!mapInitLocationToTargets.count(init))
@@ -66,9 +66,9 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   const Conflict::core_ty &core = conflict.core;
   assert(!core.empty());
   const Path &path = conflict.path;
-  std::set<std::pair<KInstruction*, Target>> inits;
+  std::set<std::pair<KInstruction *, Target>> inits;
   KFunction *mainKF = initInst->parent->parent;
-  KInstruction* current = initInst;
+  KInstruction *current = initInst;
   std::set<KFunction *> visited;
   for (size_t pathIndex = 1; pathIndex < path.size(); pathIndex++) {
     if (path.getBlock(pathIndex)->parent != path.getBlock(pathIndex - 1)->parent) {
@@ -76,17 +76,17 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
         auto dismantled = dismantle(current->parent, {path.getBlock(pathIndex - 1)});
         for (auto &blockpair : dismantled) {
           inits.insert(std::make_pair(blockpair.first == current->parent ? current : blockpair.first->instructions[0],
-                                      Target(blockpair.second, false)));
+                                      Target(blockpair.second)));
           if (blockpair.second->getKBlockType() == KBlockType::Call) {
             KFunction* f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
             if (f) {
-              inits.insert(std::make_pair(blockpair.second->instructions[0], 
-                                          Target(f->entryKBlock, false)));
+              inits.insert(std::make_pair(blockpair.second->instructions[0],
+                                          Target(f->entryKBlock)));
             }
           }
         }
-        inits.insert(std::make_pair(path.getBlock(pathIndex-1)->instructions[0],
-                                    Target(path.getBlock(pathIndex), false)));
+        inits.insert(std::make_pair(path.getBlock(pathIndex - 1)->instructions[0],
+                                    Target(path.getBlock(pathIndex))));
         current = path.getBlock(pathIndex - 1)->instructions[1];
       }
       if (path.getBlock(pathIndex)->parent != mainKF &&
@@ -100,13 +100,13 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
         auto dismantled = dismantle(current->parent, {path.getBlock(pathIndex)});
         for (auto &blockpair : dismantled) {
           inits.insert(std::make_pair(
-            blockpair.first == current->parent ? current :blockpair.first->instructions[0],
-            Target(blockpair.second, false)));
+            blockpair.first == current->parent ? current : blockpair.first->instructions[0],
+            Target(blockpair.second)));
           if (blockpair.second->getKBlockType() == KBlockType::Call) {
-            KFunction* f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
+            KFunction *f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
             if (f) {
               inits.insert(std::make_pair(blockpair.second->instructions[0],
-                                          Target(f->entryKBlock,false)));
+                                          Target(f->entryKBlock)));
             }
           }
         }
@@ -122,23 +122,20 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
 
     auto dismantled = dismantle(kf->entryKBlock, to);
     for (auto blockpair : dismantled) {
-      bool atReturn =
-          std::find(kf->returnKBlocks.begin(), kf->returnKBlocks.end(),
-                    blockpair.second) != kf->returnKBlocks.end();
 
       inits.insert(std::make_pair(blockpair.first->instructions[0],
-                                  Target(blockpair.second, atReturn)));
+                                  Target(blockpair.second)));
 
       if (blockpair.second->getKBlockType() == KBlockType::Call) {
         KFunction *f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
         if (f) {
           inits.insert(std::make_pair(blockpair.second->instructions[0],
-                                      Target(f->entryKBlock, false)));
+                                      Target(f->entryKBlock)));
         }
       }
     }
   }
-  inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(target, false)));
+  inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(target)));
 
   std::map<KInstruction *, std::set<Target>> ret;
   if (DebugInitializer) {
@@ -146,10 +143,10 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   }
   for (auto &init : inits) {
     if (!initialized[init.first].count(init.second) &&
-        !(!init.second.atReturn && init.first->parent == init.second.targetBlock)) {
+        !(!isa<KReturnBlock>(init.second.block) && init.first->parent == init.second.block)) {
       if (DebugInitializer) {
         llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
-        llvm::errs() << init.second.print() << "\n" << init.second.targetBlock->instructions[0]->getSourceLocation();
+        llvm::errs() << init.second.print() << "\n" << init.second.block->instructions[0]->getSourceLocation();
         llvm::errs() << "\n";
       }
       ret[init.first].insert(init.second);

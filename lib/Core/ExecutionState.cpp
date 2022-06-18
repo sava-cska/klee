@@ -172,7 +172,8 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     isolated(state.isolated),
     targets(state.targets),
     path(state.path),
-    symbolicCounter(state.symbolicCounter)
+    symbolicCounter(state.symbolicCounter),
+    returnValue(state.returnValue)
 {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);

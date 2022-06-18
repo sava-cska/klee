@@ -126,8 +126,7 @@ namespace klee {
     std::unique_ptr<DiscretePDF<ExecutionState *, ExecutionStateIDCompare>>
         states;
 
-    KBlock* target;
-    bool atReturn;
+    Target target;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
     std::vector<ExecutionState *> reachedOnLastUpdate;
 
@@ -140,7 +139,7 @@ namespace klee {
 
   public:
     std::unordered_set<ExecutionState *> states_set;
-    TargetedSearcher(KBlock *target, bool atReturn = false);
+    TargetedSearcher(Target target);
     ~TargetedSearcher() override;
 
     ExecutionState &selectState() override;

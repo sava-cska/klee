@@ -10,20 +10,9 @@
 namespace klee {
 
 bool checkStack(ExecutionState *state, ProofObligation *pob) {
-  size_t range = std::min(state->stack.size() - 1, pob->stack.size());
+  size_t range = std::min(state->stack.size(), pob->stack.size());
   auto state_it = state->stack.rbegin();
   auto pob_it = pob->stack.rbegin();
-
-  // TODO: should improve correspondence between Target and stack
-  if (pob->atReturn && state->stackBalance >= 0) {
-    KInstruction *state_inst = state->prevPC;
-    KInstruction *pob_inst = *pob_it;
-    if (state_inst != pob_inst) {
-      return false;
-    }
-    pob_it++;
-    range = std::min(range, pob->stack.size() - 1);
-  }
 
   for (size_t i = 0; i < range; ++i) {
     KInstruction *state_inst = state_it->caller;
@@ -93,8 +82,10 @@ void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
   else {
     for (auto pob : pobs) {
       Target pobsTarget(pob->location);
-      if (target == pobsTarget)
-        fromEntryPoint.push(std::make_pair(pob, state));
+      if (target == pobsTarget && checkStack(state, pob)) {
+         assert(state->path.getFinalBlock() == pob->path.getInitialBlock() && "Paths are not compatible.");
+         fromEntryPoint.push(std::make_pair(pob, state->copy()));
+      }
     }
   }
 }

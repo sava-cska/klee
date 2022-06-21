@@ -1692,10 +1692,11 @@ void Executor::unwindToNextLandingpad(ExecutionState &state) {
             kmodule->module->getFunction("_klee_eh_cxx_personality");
         KFunction *kf = kmodule->functionMap[personality_fn];
 
-        state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
-        // state.path.append(state.pc->parent);
         state.pushFrame(state.prevPC, kf);
         state.pc = kf->instructions;
+        state.increaseLevel();
+        state.path.append(kf->blockMap[state.getPCBlock()]);
+
         bindArgument(kf, 0, state, sui->exceptionObject);
         bindArgument(kf, 1, state, clauses_mo->getSizeExpr());
         bindArgument(kf, 2, state, clauses_mo->getBaseExpr());
@@ -2066,15 +2067,14 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
 
   KFunction *kf = state.stack.back().kf;
   state.pc = kf->blockMap[dst]->instructions;
-  if (state.prevPC->inst->isTerminator()) {
-    state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
-    // state.path.append(state.pc->parent);
-  }
+  state.increaseLevel();
   if (state.pc->inst->getOpcode() == Instruction::PHI) {
-    PHINode *first = static_cast<PHINode*>(state.pc->inst);
+    PHINode *first = static_cast<PHINode *>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
   }
-  state.path.append(kf->blockMap[dst]); // Why not just here?
+  if (!isa<KReturnBlock>(state.prevPC->parent)) {
+    state.path.append(kf->blockMap[dst]);
+  }
 }
 
 void Executor::makeConflictCore(const ExecutionState &state,
@@ -2137,13 +2137,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     if (state.stack.size() <= 1) {
       assert(!caller && "caller set on initial stack frame");
       state.popFrame();
-      state.addLevel(state.getPrevPCBlock(), state.getPrevPCBlock());
+      state.pc = state.prevPC;
+      state.increaseLevel();
       if (state.isIsolated()) {
         state.returnValue = result;
-        state.pc = state.prevPC;
-      } else {
-        terminateStateOnExit(state);
       }
+      terminateStateOnExit(state);
     } else {
       state.popFrame();
 
@@ -2155,7 +2154,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       } else {
         state.pc = kcaller;
         ++state.pc;
-        state.addLevel(state.getPrevPCBlock(), state.getPCBlock());
+        state.increaseLevel();
       }
 
       if (ri->getFunction()->getName() == "_klee_eh_cxx_personality") {
@@ -2257,7 +2256,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           llvm::errs() << "Path: " << state.path.toString() << "\n";
           llvm::errs() << "Constraint:" << state.constraints;
         }
-        KBlock* target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
+        KBlock *target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
         ref<Expr> lastCondition = (branches.first ? Expr::createIsZero(cond) : cond);
 
         if (DebugExecutor) {
@@ -5539,7 +5538,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   Conflict::core_ty conflictCore;
   ExprHashMap<ref<Expr>> rebuildMap;
 
-  ProofObligation *newPob = new ProofObligation(state->initPC->parent, pob, 0);
+  ProofObligation *newPob = new ProofObligation(state->initPC->parent, pob);
   bool success = Composer::tryRebuild(*pob, *state, *newPob, conflictCore, rebuildMap);
   timers.invoke();
 
@@ -5552,7 +5551,6 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
       newPob->stack.pop_back();
     }
     std::vector<ProofObligation *> newPobs;
-    newPobs.push_back(newPob);
     // If the state initial location is a "right after call" location,
     // the proof obligation is transferred to every return point of the call.
     if (state->initPC->parent->getKBlockType() == KBlockType::Call &&
@@ -5564,6 +5562,10 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
             newPob, state->initPC->parent->instructions[0], i);
         newPobs.push_back(callPob);
       }
+      newPob->detachParent();
+      delete newPob;
+    } else {
+      newPobs.push_back(newPob);
     }
     if (DebugExecutor) {
       llvm::errs() << "Propagated pobs\n";
@@ -5581,7 +5583,7 @@ BackwardResult Executor::goBackward(BackwardAction &action) {
   } else {
     newPob->detachParent();
     delete newPob;
-    if (conflictCore.size())
+    if (state->isIsolated() && conflictCore.size())
       summary->summarize(pob, makeConflict(*state, conflictCore), rebuildMap);
     return BackwardResult({}, pob);
   }

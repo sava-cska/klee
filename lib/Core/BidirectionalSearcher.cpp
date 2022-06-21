@@ -21,8 +21,11 @@
 #include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
 #include "klee/Support/OptionCategories.h"
+
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Instructions.h"
+
 #include <iostream>
-#include <llvm/ADT/StringExtras.h>
 #include <memory>
 #include <unordered_set>
 #include <variant>
@@ -135,18 +138,31 @@ void BidirectionalSearcher::update(ActionResult r) {
     auto fr = std::get<ForwardResult>(r);
     forward->update(fr.current, fr.addedStates, fr.removedStates);
 
-    if (fr.current && fr.current->getPrevPCBlock() != fr.current->getPCBlock())
-      backward->addState(Target(fr.current->pc->parent), fr.current);
+
+    if (fr.current && fr.current->getPrevPCBlock() != fr.current->getPCBlock()) {
+      Target target =
+        isa<KReturnBlock>(fr.current->prevPC->parent) ?
+          Target(fr.current->prevPC->parent) :
+          Target(fr.current->pc->parent);
+      backward->addState(target, fr.current);
+    }
     for (auto &state : fr.addedStates) {
-      if (state->getPrevPCBlock() != state->getPCBlock())
-        backward->addState(Target(state->pc->parent), state);
+      if (state->getPrevPCBlock() != state->getPCBlock()) {
+        Target target =
+          isa<KReturnBlock>(state->prevPC->parent) ?
+            Target(state->prevPC->parent) :
+            Target(state->pc->parent);
+        backward->addState(target, state);
+      }
     }
 
     if (fr.targetedConflict) {
-      initializer->addConflictInit(fr.targetedConflict->conflict, fr.targetedConflict->target);
-      if (!mainLocs.count(fr.targetedConflict->target->basicBlock)) {
-          mainLocs.insert(fr.targetedConflict->target->basicBlock);
-          ProofObligation* pob = new ProofObligation(fr.targetedConflict->target, nullptr, false);
+      if (!rootBlocks.count(fr.targetedConflict->target->basicBlock) &&
+          !reachableBlocks.count(fr.targetedConflict->target->basicBlock)) {
+        rootBlocks.insert(fr.targetedConflict->target->basicBlock);
+        initializer->addConflictInit(fr.targetedConflict->conflict, fr.targetedConflict->target);
+        ProofObligation* pob = new ProofObligation(fr.targetedConflict->target);
+
         if (DebugBidirectionalSearcher) {
           llvm::errs() << "Add new proof obligation.\n";
           llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
@@ -175,7 +191,7 @@ void BidirectionalSearcher::update(ActionResult r) {
     }
   } else if (std::holds_alternative<BackwardResult>(r)) {
     auto br = std::get<BackwardResult>(r);
-    for(auto pob : br.newPobs) {
+    for (auto pob : br.newPobs) {
       addPob(pob);
     }
   } else if (std::holds_alternative<InitializeResult>(r)) {
@@ -205,20 +221,20 @@ BidirectionalSearcher::~BidirectionalSearcher() {
   delete initializer;
 }
 
-void BidirectionalSearcher::closeProofObligation(ProofObligation* pob) {
-  removePob(pob);
-  for(auto child : pob->children) {
-    child->parent = nullptr;
-    closeProofObligation(child);
-  }
-  ProofObligation *parent = pob->parent;
-  pob->detachParent();
-  delete pob;
-  if (parent) {
-    closeProofObligation(parent);
+void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
+  answerPob(pob);
+  std::queue<ProofObligation *> pobs;
+  pobs.push(pob->root ? pob->root : pob);
+  while (pobs.size()) {
+    ProofObligation *currPob = pobs.front();
+    pobs.pop();
+    for (auto child : currPob->children) {
+      pobs.push(child);
+    }
+    removePob(currPob);
+    delete currPob;
   }
 }
-
 
 bool BidirectionalSearcher::isStuck(ExecutionState& state) {
   KInstruction *prevKI = state.prevPC;
@@ -226,7 +242,6 @@ bool BidirectionalSearcher::isStuck(ExecutionState& state) {
          state.targets.empty() &&
          state.multilevel.count(state.getPCBlock()) > MaxCycles;
 }
-
 
 void BidirectionalSearcher::addPob(ProofObligation *pob) {
   pobs.push_back(pob);
@@ -236,11 +251,18 @@ void BidirectionalSearcher::addPob(ProofObligation *pob) {
 
 void BidirectionalSearcher::removePob(ProofObligation *pob) {
   auto pos = std::find(pobs.begin(), pobs.end(), pob);
-  if(pos != pobs.end()) {
+  if (pos != pobs.end()) {
     pobs.erase(pos);
   }
   backward->removePob(pob);
   initializer->removePob(pob);
+}
+
+void BidirectionalSearcher::answerPob(ProofObligation *pob) {
+  while (pob) {
+    reachableBlocks.insert(pob->location->basicBlock);
+    pob = pob->parent;
+  }
 }
 
 bool BidirectionalSearcher::empty() {

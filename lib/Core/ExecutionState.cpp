@@ -542,11 +542,15 @@ BasicBlock *ExecutionState::getPCBlock() const {
   return pc->inst->getParent();
 }
 
-void ExecutionState::addLevel(BasicBlock *srcbb, BasicBlock *dstbb) {
-  multilevel.insert(srcbb);
-  if (multilevel.count(srcbb) > maxLevel)
-    maxLevel = multilevel.count(srcbb);
-  level.insert(srcbb);
+void ExecutionState::increaseLevel() {
+  llvm::BasicBlock *srcbb = getPrevPCBlock();
+  llvm::BasicBlock *dstbb = getPCBlock();
+  if (prevPC->inst->isTerminator()) {
+    multilevel.insert(srcbb);
+    if (multilevel.count(srcbb) > maxLevel)
+      maxLevel = multilevel.count(srcbb);
+    level.insert(srcbb);
+  }
   transitionLevel.insert(std::make_pair(srcbb, dstbb));
 }
 

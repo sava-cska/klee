@@ -56,11 +56,13 @@ private:
   Ticker ticker;
 
   // Temporary _-_
-  std::unordered_set<llvm::BasicBlock *> mainLocs;
+  std::unordered_set<llvm::BasicBlock *> rootBlocks;
+  std::unordered_set<llvm::BasicBlock *> reachableBlocks;
 
   StepKind selectStep();
   void addPob(ProofObligation *);
   void removePob(ProofObligation *);
+  void answerPob(ProofObligation *);
   bool isStuck(ExecutionState &);
 };
 

@@ -333,9 +333,13 @@ void TargetedSearcher::update(ExecutionState *current,
 
   // remove states
   for (const auto state : removedStates) {
-    state->targets.erase(target);
-    states->remove(state);
-    states_set.erase(state);
+    if (target.atReturn() && state->prevPC == target.block->getLastInstruction())
+      reachedOnLastUpdate.push_back(state);
+    else {
+      state->targets.erase(target);
+      states->remove(state);
+      states_set.erase(state);
+    }
   }
 }
 

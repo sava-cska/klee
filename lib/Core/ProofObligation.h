@@ -33,30 +33,24 @@ public:
 
   KBlock *location;
   Constraints condition;
-
-  // Indicates that this proof obligation was pushed from the outer stack frame, and so,
-  // it is actually at the return statement of the current basic block.
-  bool atReturn;
-
   Path path;
 
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> sourcedSymbolics;
 
-  ProofObligation(KBlock *_location, ProofObligation *_parent,
-                  bool atReturn = false)
+  ProofObligation(KBlock *_location, ProofObligation *_parent = nullptr)
       : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
-        location(_location), atReturn(atReturn), path({_location}) {
+        location(_location), path({_location}) {
     if (parent) {
       parent->children.insert(this);
     }
   }
 
   explicit ProofObligation(ProofObligation *pob)
-      : id(counter++), parent(pob), root(pob->root), stack(pob->stack),
+      : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
         propagationCount(pob->propagationCount),
         location(pob->location), condition(pob->condition),
-        atReturn(pob->atReturn), path(pob->path) {
+        path(pob->path) {
     if (parent) {
       parent->children.insert(this);
     }
@@ -76,6 +70,7 @@ public:
   bool isOriginPob() const noexcept { return !parent; }
   void addCondition(ref<Expr> e, KInstruction *loc, bool *sat = 0);
   void detachParent();
+  bool atReturn() const { return isa<KReturnBlock>(location); }
   std::string print() const;
 };
 

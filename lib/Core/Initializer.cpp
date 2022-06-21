@@ -9,6 +9,8 @@
 #include "klee/Support/ModuleUtil.h"
 #include "klee/Support/OptionCategories.h"
 
+#include "llvm/IR/Instructions.h"
+
 #include <algorithm>
 #include <iostream>
 #include <set>
@@ -87,7 +89,10 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
         }
         inits.insert(std::make_pair(path.getBlock(pathIndex - 1)->instructions[0],
                                     Target(path.getBlock(pathIndex))));
-        current = path.getBlock(pathIndex - 1)->instructions[1];
+        current =
+          isa<llvm::CallInst>(path.getBlock(pathIndex - 1)->instructions[0]->inst) ?
+            path.getBlock(pathIndex - 1)->instructions[1] :
+            path.getBlock(pathIndex)->instructions[0];
       }
       if (path.getBlock(pathIndex)->parent != mainKF &&
           !dismantledKFunctions.count(path.getBlock(pathIndex)->parent)) {

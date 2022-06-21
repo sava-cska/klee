@@ -351,7 +351,7 @@ public:
   llvm::BasicBlock *getPrevPCBlock() const;
   llvm::BasicBlock *getPCBlock() const;
 
-  void addLevel(llvm::BasicBlock *srcbb, llvm::BasicBlock *dstbb);
+  void increaseLevel();
   bool isEmpty() const;
   bool isCriticalPC() const;
   bool isIsolated() const;

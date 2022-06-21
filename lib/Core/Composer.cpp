@@ -266,11 +266,12 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
       KFunction *lastkf = state.pc->parent->parent;
       KBlock *pckb = lastkf->blockMap[state.getPCBlock()];
       bool isFinalPCKB = std::find(lastkf->finalKBlocks.begin(),
-                                    lastkf->finalKBlocks.end(),
-                                    pckb) != lastkf->finalKBlocks.end();
+                                   lastkf->finalKBlocks.end(),
+                                   pckb) != lastkf->finalKBlocks.end();
       assert(isFinalPCKB && calledf == lastkf->function);
-      prevVal = caller.executor->getDestCell(state, state.prevPC).value;
+      prevVal = state.returnValue;
     } else {
+      assert(!state.stack.empty());
       StackFrame &frame = state.stack.at(state.stack.size() - array->index - 1);
       KFunction *framekf = frame.kf;
 

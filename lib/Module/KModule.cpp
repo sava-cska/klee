@@ -792,9 +792,15 @@ std::vector<std::pair<KBlock *, unsigned int>>& KFunction::getSortedBackwardDist
 KBlock *KFunction::getNearestJoinBlock(KBlock *kb) {
   KFunction *kf = kb->parent;
   for (auto &kbd : kf->getSortedBackwardDistance(kb)) {
+#if LLVM_VERSION_CODE >= LLVM_VERSION(9, 0)
     if (kbd.first->basicBlock->hasNPredecessorsOrMore(2) ||
         kbd.first->basicBlock->hasNPredecessors(0))
       return kbd.first;
+#else
+    if (kbd.first->basicBlock->hasNUsesOrMore(2) ||
+        kbd.first->basicBlock->hasNUses(0))
+      return kbd.first;
+#endif
   }
   return nullptr;
 }
@@ -803,12 +809,21 @@ KBlock *KFunction::getNearestJoinBlock(KBlock *kb) {
 KBlock *KFunction::getNearestJoinOrCallBlock(KBlock *kb) {
   KFunction *kf = kb->parent;
   for (auto &kbd : kf->getSortedBackwardDistance(kb)) {
+#if LLVM_VERSION_CODE >= LLVM_VERSION(9, 0)
     if (kbd.first->basicBlock->hasNPredecessorsOrMore(2) ||
         kbd.first->basicBlock->hasNPredecessors(0) ||
         (kbd.first->getKBlockType() == KBlockType::Call &&
          dyn_cast<KCallBlock>(kbd.first)->internal() &&
          !dyn_cast<KCallBlock>(kbd.first)->intrinsic()))
       return kbd.first;
+#else
+    if (kbd.first->basicBlock->hasNUsesOrMore(2) ||
+        kbd.first->basicBlock->hasNUses(0) ||
+        (kbd.first->getKBlockType() == KBlockType::Call &&
+         dyn_cast<KCallBlock>(kbd.first)->internal() &&
+         !dyn_cast<KCallBlock>(kbd.first)->intrinsic()))
+      return kbd.first;
+#endif
   }
   return nullptr;
 }

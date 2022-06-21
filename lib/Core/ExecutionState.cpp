@@ -561,11 +561,19 @@ bool ExecutionState::isEmpty() const {
 bool ExecutionState::isCriticalPC() const {
   KInstruction *ki = pc;
   KInstruction *prevKI = prevPC;
+#if LLVM_VERSION_CODE >= LLVM_VERSION(9, 0)
   return ((this->getPCBlock()->hasNPredecessors(0) && (!this->isIsolated() || stack.size() > 1)) ||
           (prevKI->inst->isTerminator() && prevKI != ki &&
             (this->getPCBlock()->hasNPredecessorsOrMore(2) ||
              prevKI->parent->getKBlockType() == KBlockType::Call ||
              ki->parent->getKBlockType() == KBlockType::Call)));
+#else
+  return ((this->getPCBlock()->hasNUsesOrMore(0) && (!this->isIsolated() || stack.size() > 1)) ||
+          (prevKI->inst->isTerminator() && prevKI != ki &&
+            (this->getPCBlock()->hasNUsesOrMore(2) ||
+             prevKI->parent->getKBlockType() == KBlockType::Call ||
+             ki->parent->getKBlockType() == KBlockType::Call)));
+#endif
 }
 
 bool ExecutionState::isIsolated() const {

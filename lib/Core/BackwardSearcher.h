@@ -6,6 +6,7 @@
 #include "SearcherUtil.h"
 
 #include <queue>
+#include <map>
 #include <unordered_set>
 
 namespace klee {
@@ -26,7 +27,9 @@ class RecencyRankedSearcher : public BackwardSearcher {
 private:
   std::vector<ProofObligation *> pobs;
   std::set<std::pair<ProofObligation *, ExecutionState *>> used;
-  std::queue<std::pair<ProofObligation *, ExecutionState *>> fromEntryPoint;
+  std::map<ProofObligation *,
+          std::set<ExecutionState *, ExecutionStateIDCompare>,
+          ProofObligationIDCompare> propagatePobToStates;
   ExecutionManager emanager;
 
 public:

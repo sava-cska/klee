@@ -5534,6 +5534,9 @@ ForwardResult Executor::goForward(ForwardAction &action) {
 BackwardResult Executor::goBackward(BackwardAction &action) {
   ExecutionState *state = action.state;
   ProofObligation *pob = action.pob;
+  std::unique_ptr<ExecutionState> useState;
+  if (!state->isIsolated())
+    useState = std::unique_ptr<ExecutionState>(state);
 
   Conflict::core_ty conflictCore;
   ExprHashMap<ref<Expr>> rebuildMap;

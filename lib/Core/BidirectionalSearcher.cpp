@@ -186,7 +186,7 @@ void BidirectionalSearcher::update(ActionResult r) {
           llvm::errs() << "Constraints:\n" << state->constraints;
           llvm::errs() << "\n";
         }
-        backward->addState(targetStates.first, state->copy());
+        backward->addState(targetStates.first, state);
       }
     }
   } else if (std::holds_alternative<BackwardResult>(r)) {

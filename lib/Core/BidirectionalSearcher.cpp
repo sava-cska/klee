@@ -28,7 +28,6 @@
 #include <iostream>
 #include <memory>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
 #include <cstdlib>
@@ -98,8 +97,8 @@ Action &BidirectionalSearcher::selectAction() {
       break;
     }
 
-    case StepKind::Branch : {
-      auto& state = branch->selectState();
+    case StepKind::Branch: {
+      auto &state = branch->selectState();
       if (ex->initialState->getInitPCBlock() != state.getInitPCBlock() &&
           state.maxLevel > 1) {
         branch->update(nullptr, {}, {&state});
@@ -133,20 +132,20 @@ Action &BidirectionalSearcher::selectAction() {
   return *action;
 }
 
-void BidirectionalSearcher::update(ActionResult r) {
-  if (std::holds_alternative<ForwardResult>(r)) {
-    auto fr = std::get<ForwardResult>(r);
-    forward->update(fr.current, fr.addedStates, fr.removedStates);
+void BidirectionalSearcher::update(ActionResult *r) {
+  if (r->getKind() == ActionResult::Kind::Forward) {
+    auto fr = cast<ForwardResult>(r);
+    forward->update(fr->current, fr->addedStates, fr->removedStates);
 
 
-    if (fr.current && fr.current->getPrevPCBlock() != fr.current->getPCBlock()) {
+    if (fr->current && fr->current->getPrevPCBlock() != fr->current->getPCBlock()) {
       Target target =
-        isa<KReturnBlock>(fr.current->prevPC->parent) ?
-          Target(fr.current->prevPC->parent) :
-          Target(fr.current->pc->parent);
-      backward->addState(target, fr.current);
+        isa<KReturnBlock>(fr->current->prevPC->parent) ?
+          Target(fr->current->prevPC->parent) :
+          Target(fr->current->pc->parent);
+      backward->addState(target, fr->current);
     }
-    for (auto &state : fr.addedStates) {
+    for (auto &state : fr->addedStates) {
       if (state->getPrevPCBlock() != state->getPCBlock()) {
         Target target =
           isa<KReturnBlock>(state->prevPC->parent) ?
@@ -156,12 +155,13 @@ void BidirectionalSearcher::update(ActionResult r) {
       }
     }
 
-    if (fr.targetedConflict) {
-      if (!rootBlocks.count(fr.targetedConflict->target->basicBlock) &&
-          !reachableBlocks.count(fr.targetedConflict->target->basicBlock)) {
-        rootBlocks.insert(fr.targetedConflict->target->basicBlock);
-        initializer->addConflictInit(fr.targetedConflict->conflict, fr.targetedConflict->target);
-        ProofObligation* pob = new ProofObligation(fr.targetedConflict->target);
+    if (fr->targetedConflict) {
+      if (!rootBlocks.count(fr->targetedConflict->target->basicBlock) &&
+          !reachableBlocks.count(fr->targetedConflict->target->basicBlock)) {
+        rootBlocks.insert(fr->targetedConflict->target->basicBlock);
+        initializer->addConflictInit(fr->targetedConflict->conflict, fr->targetedConflict->target);
+        ProofObligation* pob = new ProofObligation(fr->targetedConflict->target);
+
 
         if (DebugBidirectionalSearcher) {
           llvm::errs() << "Add new proof obligation.\n";
@@ -172,9 +172,10 @@ void BidirectionalSearcher::update(ActionResult r) {
       }
     }
 
-  } else if (std::holds_alternative<BranchResult>(r)) {
-    auto br = std::get<BranchResult>(r);
-    branch->update(br.current, br.addedStates, br.removedStates);
+
+  } else if (r->getKind() == ActionResult::Kind::Branch) {
+    auto br = cast<BranchResult>(r);
+    branch->update(br->current, br->addedStates, br->removedStates);
 
     auto reached = branch->collectAndClearReached();
     for (auto &targetStates : reached) {
@@ -189,14 +190,15 @@ void BidirectionalSearcher::update(ActionResult r) {
         backward->addState(targetStates.first, state);
       }
     }
-  } else if (std::holds_alternative<BackwardResult>(r)) {
-    auto br = std::get<BackwardResult>(r);
-    for (auto pob : br.newPobs) {
+
+  } else if (r->getKind() == ActionResult::Kind::Backward) {
+    auto br = cast<BackwardResult>(r);
+    for (auto pob : br->newPobs) {
       addPob(pob);
     }
-  } else if (std::holds_alternative<InitializeResult>(r)) {
-    auto ir = std::get<InitializeResult>(r);
-    branch->update(nullptr, {&ir.state}, {});
+  } else if (r->getKind() == ActionResult::Kind::Initialize) {
+    auto ir = cast<InitializeResult>(r);
+    branch->update(nullptr, {&ir->state}, {});
   }
 }
 

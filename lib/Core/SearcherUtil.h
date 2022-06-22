@@ -9,7 +9,6 @@
 #include <optional>
 #include <unordered_set>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace klee {
@@ -95,6 +94,7 @@ struct SearcherConfig {
   Executor *executor;
 };
 
+
 struct Conflict {
   using constraint_ty = std::pair<ref<Expr>, KInstruction *>;
   using core_ty = std::vector<constraint_ty>;
@@ -115,7 +115,19 @@ struct TargetedConflict {
     conflict(_conflict), target(_target) {}
 };
 
-struct ForwardResult {
+
+struct ActionResult {
+  enum class Kind { Initialize, Forward, Branch, Backward, Terminate };
+
+  ActionResult() = default;
+  virtual ~ActionResult() = default;
+
+  virtual Kind getKind() const = 0;
+
+  static bool classof(const ActionResult *) { return true; }
+};
+
+struct ForwardResult : ActionResult {
   ExecutionState *current;
   const std::vector<ExecutionState *> &addedStates;
   const std::vector<ExecutionState *> &removedStates;
@@ -123,10 +135,17 @@ struct ForwardResult {
 
   ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
                 const std::vector<ExecutionState *> &r)
+
     : current(_s), addedStates(a), removedStates(r), targetedConflict(std::nullopt) {};
+
+  Kind getKind() const { return Kind::Forward; }
+  static bool classof(const ActionResult *A) {
+    return A->getKind() == Kind::Forward;
+  }
+  static bool classof(const ForwardResult *) { return true; }
 };
 
-struct BranchResult {
+struct BranchResult : ActionResult {
   ExecutionState *current;
   const std::vector<ExecutionState *> &addedStates;
   const std::vector<ExecutionState *> &removedStates;
@@ -134,27 +153,49 @@ struct BranchResult {
   BranchResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
                const std::vector<ExecutionState *> &r)
     : current(_s), addedStates(a), removedStates(r) {};
+
+  Kind getKind() const { return Kind::Branch; }
+  static bool classof(const ActionResult *A) {
+    return A->getKind() == Kind::Branch;
+  }
+  static bool classof(const BranchResult *) { return true; }
 };
 
-struct BackwardResult {
+struct BackwardResult : ActionResult {
   std::vector<ProofObligation*> newPobs;
   ProofObligation *oldPob;
 
   BackwardResult(std::vector<ProofObligation*> _newPobs, ProofObligation *_oldPob)
     : newPobs(_newPobs), oldPob(_oldPob) {}
+
+  Kind getKind() const { return Kind::Backward; }
+  static bool classof(const ActionResult *A) {
+    return A->getKind() == Kind::Backward;
+  }
+  static bool classof(const BackwardResult *) { return true; }
 };
 
-struct InitializeResult {
+struct InitializeResult : ActionResult {
   KInstruction *location;
   ExecutionState &state;
 
   InitializeResult(KInstruction *_loc, ExecutionState &es) :
     location(_loc), state(es) {}
+
+  Kind getKind() const { return Kind::Initialize; }
+  static bool classof(const ActionResult *A) {
+    return A->getKind() == Kind::Initialize;
+  }
+  static bool classof(const InitializeResult *) { return true; }
 };
 
-struct TerminateResult {};
-
-using ActionResult = std::variant<ForwardResult, BranchResult, BackwardResult, InitializeResult, TerminateResult>;
+struct TerminateResult : ActionResult {
+  Kind getKind() const { return Kind::Terminate; }
+  static bool classof(const ActionResult *A) {
+    return A->getKind() == Kind::Terminate;
+  }
+  static bool classof(const TerminateResult *) { return true; }
+};
 
 class Ticker {
   std::vector<unsigned> ticks;

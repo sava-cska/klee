@@ -329,7 +329,7 @@ private:
 
   void stepInstruction(ExecutionState &state);
 
-  void updateResult(ActionResult);
+  void updateResult(ActionResult *);
   void removeState(ExecutionState *state);
   void removeIsolatedState(ExecutionState *state);
 
@@ -715,11 +715,11 @@ public:
   void pauseRedundantState(ExecutionState &state);
   void unpauseState(ExecutionState &state);
 
-  InitializeResult initBranch(InitializeAction &action);
-  ForwardResult goForward(ForwardAction &action);
-  BackwardResult goBackward(BackwardAction &action);
+  InitializeResult *initBranch(InitializeAction &action);
+  ForwardResult *goForward(ForwardAction &action);
+  BackwardResult *goBackward(BackwardAction &action);
 
-  ActionResult executeAction(Action &action);
+  ActionResult *executeAction(Action &action);
 
   KBlock *getStartLocation(const ExecutionState &state);
   KBlock *getLastExecutedLocation(const ExecutionState &state);

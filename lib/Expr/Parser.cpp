@@ -27,7 +27,6 @@
 #include <map>
 #include <cstring>
 #include <string>
-#include <variant>
 
 using namespace llvm;
 using namespace klee;
@@ -106,12 +105,54 @@ namespace {
 
   /// ParserImpl - Parser implementation.
   class ParserImpl : public Parser {
+
+    struct ArrayIdentifier {
+      enum class Type { Identifier, Expr, Null };
+      Type type;
+      const Identifier* identifier;
+      ref<Expr> expr;
+
+      ArrayIdentifier(const Identifier* _identifier)
+          : type(Type::Identifier), identifier(_identifier) {}
+
+      ArrayIdentifier(ref<Expr> _expr)
+          : type(Type::Expr), expr(_expr) {}
+
+      ArrayIdentifier() : type(Type::Null) {}
+
+      void setNull() {
+        type = Type::Null;
+      }
+
+      bool isNull() const {
+        return type == Type::Null;
+      }
+      bool isIdentifier() const {
+        return type == Type::Identifier;
+
+      }
+
+      bool operator<(const ArrayIdentifier& other) const {
+        if (type != other.type) {
+          return type < other.type;
+        }
+        switch (type) {
+        case Type::Identifier:
+          return identifier < other.identifier;
+        case Type::Expr:
+          return expr < other.expr;
+        case Type::Null:
+          return false;
+        }
+      }
+    };
+
     typedef std::map<const std::string, const Identifier*> IdentifierTabTy;
     typedef std::map<const Identifier*, ExprHandle> ExprSymTabTy;
-    typedef std::variant<const Identifier*, ref<Expr>, std::monostate> ArrayIdentifier;
     typedef ArrayIdentifier VersionIdentifier;
     typedef std::map<VersionIdentifier, VersionHandle> VersionSymTabTy;
     typedef std::map<ArrayIdentifier, const ArrayDecl*> ArraySymTabTy;
+
 
     const std::string Filename;
     const MemoryBuffer *TheMemoryBuffer;
@@ -1399,7 +1440,7 @@ VersionResult ParserImpl::ParseVersionSpecifier() {
     ConsumeToken();
     if (VersionSymTab.count(Label)) {
       Error("duplicate update list label definition.", LTok);
-      Label = std::monostate();
+      Label.setNull();
     }
   }
 
@@ -1411,7 +1452,7 @@ VersionResult ParserImpl::ParseVersionSpecifier() {
         VersionResult(true, UpdateList(TheArrayCache->CreateArray("", 0), NULL));
   }
 
-  if (!std::holds_alternative<std::monostate>(Label))
+  if (!Label.isNull())
     VersionSymTab.insert(std::make_pair(Label, Res.get()));
   return Res;
 }
@@ -1696,8 +1737,8 @@ ParserImpl::~ParserImpl() {
                                  pe = VersionSymTab.end();
        pi != pe; ++pi) {
     VersionIdentifier id = pi->first;
-    if (freedNodes.insert(id).second && std::holds_alternative<const Identifier*>(id))
-      delete std::get<const Identifier*>(id);
+    if (freedNodes.insert(id).second && id.isIdentifier())
+      delete id.identifier;
   }
 }
 

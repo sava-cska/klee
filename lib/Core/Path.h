@@ -1,5 +1,6 @@
 // -*- C++ -*-
 #pragma once
+#include "klee/ADT/Ref.h"
 #include "klee/Module/KModule.h"
 #include "llvm/IR/Instructions.h"
 #include <functional>
@@ -11,6 +12,11 @@ namespace klee {
 
 struct Path {
   friend Path concat(const Path& lhs, const Path& rhs);
+  friend class ref<Path>;
+
+private:
+  /// @brief Required by klee::ref-managed objects
+  class ReferenceCounter _refCount;
 
 public:
   KBlock *getInitialBlock() const;
@@ -61,6 +67,6 @@ private:
 
 Path concat(const Path& lhs, const Path& rhs);
 
-std::optional<Path> parse(std::string str, KModule *m,
+ref<Path> parse(std::string str, KModule *m,
                           const std::map<std::string, size_t> &DBHashMap);
 };

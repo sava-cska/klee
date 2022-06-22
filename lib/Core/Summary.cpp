@@ -198,7 +198,7 @@ void Summary::loadAllFromDB() {
   auto DBLemmas = db->lemmas_retrieve();
   auto DBHashMap = db->functionhash_retrieve();
   for (const auto &lemma : DBLemmas) {
-    std::optional<Path> path = parse(lemma.second.path, module, DBHashMap);
+    ref<Path> path = parse(lemma.second.path, module, DBHashMap);
     if (!path) {
       db->lemma_delete(lemma.first);
       continue;

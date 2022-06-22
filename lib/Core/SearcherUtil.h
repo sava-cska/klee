@@ -123,6 +123,13 @@ struct Conflict {
 };
 
 struct TargetedConflict {
+friend class ref<TargetedConflict>;
+private:
+  /// @brief Required by klee::ref-managed objects
+  class ReferenceCounter _refCount;
+
+public:
+
   Conflict conflict;
   KBlock *target;
 
@@ -153,11 +160,11 @@ struct ForwardResult : ActionResult {
   ExecutionState *current;
   const std::vector<ExecutionState *> &addedStates;
   const std::vector<ExecutionState *> &removedStates;
-  std::optional<TargetedConflict> targetedConflict;
+  ref<TargetedConflict> targetedConflict;
 
   ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &_a,
                 const std::vector<ExecutionState *> &_r,
-                std::optional<TargetedConflict> _c = std::nullopt)
+                ref<TargetedConflict> _c = ref<TargetedConflict>())
     : current(_s), addedStates(_a), removedStates(_r), targetedConflict(_c) {};
 
   Kind getKind() const { return Kind::Forward; }

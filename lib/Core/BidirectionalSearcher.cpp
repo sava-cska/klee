@@ -133,7 +133,7 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
 void BidirectionalSearcher::updateForward(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates,
-    std::optional<TargetedConflict> targetedConflict) {
+    ref<TargetedConflict> targetedConflict) {
 
   forward->update(current, addedStates, removedStates);
 

@@ -2110,13 +2110,13 @@ Conflict makeConflict(const ExecutionState &state,
   return Conflict(state.path, conflictCore);
 }
 
-TargetedConflict
+ref<TargetedConflict>
 makeTargetedConflict(const ExecutionState &state,
                      const std::vector<ref<Expr>> &unsatCore,
                      ref<Expr> condition,
                      KBlock *target) {
   Conflict conflilct = makeConflict(state, unsatCore, condition);
-  return TargetedConflict(conflilct, target);
+  return new TargetedConflict(conflilct, target);
 }
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
@@ -2268,8 +2268,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         failedTransitions.insert(failedTransition);
         if (!successTransitions.count(failedTransition) &&
             failedTransitions.count(failedTransition) > MaxFailedBranchings) {
-          targetedConflict = std::make_optional<TargetedConflict>(
-            makeTargetedConflict(state, conflict, lastCondition, target));
+          targetedConflict = 
+            makeTargetedConflict(state, conflict, lastCondition, target);
         }
       }
       // NOTE: There is a hidden dependency here, markBranchVisited
@@ -5524,7 +5524,7 @@ ref<ForwardResult> Executor::goForward(ref<ForwardAction> action) {
   if (::dumpPForest) dumpPForest();
 
   ref<ForwardResult> ret = new ForwardResult(state, addedStates, removedStates, targetedConflict);
-  targetedConflict = std::nullopt;
+  targetedConflict = ref<TargetedConflict>();
   return ret;
 }
 

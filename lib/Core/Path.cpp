@@ -70,7 +70,7 @@ Path klee::concat(const Path& lhs, const Path& rhs) {
   return Path(std::move(path));
 }
 
-std::optional<Path>
+ref<Path>
 klee::parse(std::string str, KModule *m,
             const std::map<std::string, size_t> &DBHashMap) {
   std::stack<KFunction *> functionStack;
@@ -90,11 +90,11 @@ klee::parse(std::string str, KModule *m,
         ++index;
       }
       if (!m->functionNameMap.count(functionName)) {
-        return std::nullopt;
+        return ref<Path>();
       }
       auto function = m->functionNameMap.at(functionName);
       if (m->functionHash(function) != DBHashMap.at(functionName)) {
-        return std::nullopt;
+        return ref<Path>();
       }
       functionStack.push(m->functionNameMap[functionName]);
       ++index;
@@ -111,7 +111,7 @@ klee::parse(std::string str, KModule *m,
       path.push_back(functionStack.top()->labelMap[label]);
     }
   }
-  return Path(path);
+  return new Path(path);
 }
 
 std::set<KFunction *> Path::getFunctionsInPath() const {

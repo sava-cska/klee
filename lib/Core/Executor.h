@@ -201,7 +201,7 @@ private:
 
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
-  std::optional<TargetedConflict> targetedConflict;
+  ref<TargetedConflict> targetedConflict;
   
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order

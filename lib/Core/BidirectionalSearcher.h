@@ -62,7 +62,7 @@ private:
   void updateForward(ExecutionState *current,
                      const std::vector<ExecutionState *> &addedStates,
                      const std::vector<ExecutionState *> &removedStates,
-                     std::optional<TargetedConflict> targetedConflict);
+                     ref<TargetedConflict> targetedConflict);
   void updateBranch(ExecutionState *current,
                     const std::vector<ExecutionState *> &addedStates,
                     const std::vector<ExecutionState *> &removedStates);

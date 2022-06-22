@@ -37,10 +37,9 @@ int UpdateNode::compare(const UpdateNode &b) const {
 }
 
 unsigned UpdateNode::computeHash() {
-  hashValue = index->hash() * Expr::MAGIC_HASH_CONSTANT;
-  hashValue ^= value->hash() * Expr::MAGIC_HASH_CONSTANT;
+  hashValue = index->hash() ^ value->hash();
   if (next)
-    hashValue ^= next->hash() * Expr::MAGIC_HASH_CONSTANT;
+    hashValue ^= next->hash();
   return hashValue;
 }
 
@@ -87,8 +86,8 @@ int UpdateList::compare(const UpdateList &b) const {
 
 unsigned UpdateList::hash() const {
   unsigned res = 0;
-  res = root->hash() * Expr::MAGIC_HASH_CONSTANT;
+  res = root->hash();
   if (head)
-    res ^= head->hash() * Expr::MAGIC_HASH_CONSTANT;
+    res ^= head->hash();
   return res;
 }

@@ -566,10 +566,11 @@ unsigned Array::computeHash() {
   unsigned res = 0;
   if (liSource.get())
     res = liSource->hash();
+  if (index)
+    res = (res * Expr::MAGIC_HASH_CONSTANT) + index;
   for (unsigned i = 0, e = name.size(); i != e; ++i)
     res = (res * Expr::MAGIC_HASH_CONSTANT) + name[i];
   res = (res * Expr::MAGIC_HASH_CONSTANT) + size;
-  res = (res * Expr::MAGIC_HASH_CONSTANT) + index;
   hashValue = res;
   return hashValue; 
 }

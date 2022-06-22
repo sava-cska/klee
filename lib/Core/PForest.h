@@ -20,15 +20,16 @@ namespace klee {
   class PForest {
     // Number of registered ID
     int registeredIds = 0;
+    std::map<uint32_t, PTree *> trees;
 
   public:
-    std::map<uint32_t, std::unique_ptr<PTree>> trees;
     PForest() = default;
     ~PForest() = default;
     void addRoot(ExecutionState *initialState);
     void attach(PTreeNode *node, ExecutionState *leftState,
                 ExecutionState *rightState);
     void remove(PTreeNode *node);
+    const std::map<uint32_t, PTree *> &getPTrees() { return trees; }
     void dump(llvm::raw_ostream &os);
     std::uint8_t getNextId() {
       std::uint8_t id = 1 << registeredIds++;

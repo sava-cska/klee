@@ -579,7 +579,7 @@ ExecutionState &RandomPathSearcher::selectState() {
   unsigned flips=0, bits=0, range=0;
   PTreeNodePtr *root = nullptr;
   while (!root || !IS_OUR_NODE_VALID(*root))
-    root = &processForest.trees[range++ % processForest.trees.size() + 1]->root;
+    root = &processForest.getPTrees().at(range++ % processForest.getPTrees().size() + 1)->root;
   assert(root->getInt() & idBitMask && "Root should belong to the searcher");
   PTreeNode *n = root->getPointer();
   while (!n->state) {
@@ -610,7 +610,7 @@ void RandomPathSearcher::update(ExecutionState *current,
   // insert states
   for (auto &es : addedStates) {
     PTreeNode *pnode = es->ptreeNode, *parent = pnode->parent;
-    PTreeNodePtr &root = processForest.trees[pnode->getTreeID()]->root;
+    PTreeNodePtr &root = processForest.getPTrees().at(pnode->getTreeID())->root;
     PTreeNodePtr *childPtr;
 
     childPtr = parent ? ((parent->left.getPointer() == pnode) ? &parent->left
@@ -632,7 +632,7 @@ void RandomPathSearcher::update(ExecutionState *current,
   // remove states
   for (auto &es : removedStates) {
     PTreeNode *pnode = es->ptreeNode, *parent = pnode->parent;
-    PTreeNodePtr &root = processForest.trees[pnode->getTreeID()]->root;
+    PTreeNodePtr &root = processForest.getPTrees().at(pnode->getTreeID())->root;
 
     while (pnode && !IS_OUR_NODE_VALID(pnode->left) &&
            !IS_OUR_NODE_VALID(pnode->right)) {
@@ -651,7 +651,7 @@ void RandomPathSearcher::update(ExecutionState *current,
 
 bool RandomPathSearcher::empty() {
   bool res = true;
-  for (auto &ntree : processForest.trees)
+  for (const auto &ntree : processForest.getPTrees())
     res = res && !IS_OUR_NODE_VALID(ntree.second->root);
   return res;
 }

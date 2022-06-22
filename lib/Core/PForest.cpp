@@ -23,7 +23,7 @@ using namespace llvm;
 
 void PForest::addRoot(ExecutionState *initialState) {
   PTree *tree = new PTree(initialState);
-  trees[tree->getID()] = std::unique_ptr<PTree>(tree);
+  trees[tree->getID()] = tree;
 }
 
 void PForest::attach(PTreeNode *node, ExecutionState *leftState,

@@ -27,7 +27,7 @@ TEST(SearcherTest, RandomPath) {
 
   PForest processForest = PForest();
   processForest.addRoot(&es);
-  es.ptreeNode = processForest.trees[es.ptreeNode->getTreeID()]->root.getPointer();
+  es.ptreeNode = processForest.getPTrees().at(es.ptreeNode->getTreeID())->root.getPointer();
 
   RNG rng;
   RandomPathSearcher rp(processForest, rng);
@@ -68,7 +68,7 @@ TEST(SearcherTest, TwoRandomPath) {
   ExecutionState root;
   PForest processForest = PForest();
   processForest.addRoot(&root);
-  root.ptreeNode = processForest.trees[root.ptreeNode->getTreeID()]->root.getPointer();
+  root.ptreeNode = processForest.getPTrees().at(root.ptreeNode->getTreeID())->root.getPointer();
 
   ExecutionState es(root);
   processForest.attach(root.ptreeNode, &es, &root);
@@ -127,7 +127,7 @@ TEST(SearcherTest, TwoRandomPathDot) {
   ExecutionState root;
   PForest processForest = PForest();
   processForest.addRoot(&root);
-  root.ptreeNode = processForest.trees[root.ptreeNode->getTreeID()]->root.getPointer();
+  root.ptreeNode = processForest.getPTrees().at(root.ptreeNode->getTreeID())->root.getPointer();
   rootPNode = root.ptreeNode;
 
   ExecutionState es(root);
@@ -210,7 +210,7 @@ TEST(SearcherDeathTest, TooManyRandomPaths) {
   ExecutionState es;
   PForest processForest = PForest();
   processForest.addRoot(&es);
-  es.ptreeNode = processForest.trees[es.ptreeNode->getTreeID()]->root.getPointer();
+  es.ptreeNode = processForest.getPTrees().at(es.ptreeNode->getTreeID())->root.getPointer();
   processForest.remove(es.ptreeNode); // Need to remove to avoid leaks
 
   RNG rng;

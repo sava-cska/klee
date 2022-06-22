@@ -107,8 +107,13 @@ namespace {
   class ParserImpl : public Parser {
 
     struct ArrayIdentifier {
+    public:
       enum class Type { Identifier, Expr, Null };
+
+    private:
       Type type;
+
+    public:
       const Identifier* identifier;
       ref<Expr> expr;
 
@@ -152,7 +157,6 @@ namespace {
     typedef ArrayIdentifier VersionIdentifier;
     typedef std::map<VersionIdentifier, VersionHandle> VersionSymTabTy;
     typedef std::map<ArrayIdentifier, const ArrayDecl*> ArraySymTabTy;
-
 
     const std::string Filename;
     const MemoryBuffer *TheMemoryBuffer;

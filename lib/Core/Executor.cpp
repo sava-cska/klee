@@ -3443,18 +3443,18 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
-void Executor::updateResult(ActionResult *r) {
+void Executor::updateResult(ref<ActionResult> r) {
   if (searcher) {
     searcher->update(r);
   }
 
-  if (r->getKind() == ActionResult::Kind::Forward) {
+  if (isa<ForwardResult>(r)) {
     auto fr = cast<ForwardResult>(r);
     states.insert(fr->addedStates.begin(), fr->addedStates.end());
     for (const auto state : fr->removedStates) {
       removeState(state);
     }
-  } else if (r->getKind() == ActionResult::Kind::Branch) {
+  } else if (isa<BranchResult>(r)) {
     auto br = cast<BranchResult>(r);
     isolatedStates.insert(br->addedStates.begin(), br->addedStates.end());
     for (const auto state : br->removedStates) {
@@ -3615,15 +3615,11 @@ void Executor::doDumpStates() {
   for (const auto &state : states) {
     terminateStateEarly(*state, "Execution halting.");
   }
-  auto result = new ForwardResult(nullptr, addedStates, removedStates);
-  updateResult(result);
-  delete result;
+  updateResult(new ForwardResult(nullptr, addedStates, removedStates));
   for (const auto state : isolatedStates) {
     terminateStateEarly(*state, "Execution halting.");
   }
-  auto brresult = new BranchResult(nullptr, addedStates, removedStates);
-  updateResult(brresult);
-  delete brresult;
+  updateResult(new BranchResult(nullptr, addedStates, removedStates));
 }
 
 void Executor::seed(ExecutionState &initialState) {
@@ -3655,9 +3651,7 @@ void Executor::seed(ExecutionState &initialState) {
     timers.invoke();
     if (::dumpStates) dumpStates();
     if (::dumpPForest) dumpPForest();
-    auto result = new ForwardResult(&state, addedStates, removedStates);
-    updateResult(result);
-    delete result;
+    updateResult(new ForwardResult(&state, addedStates, removedStates));
 
     if ((stats::instructions % 1000) == 0) {
       int numSeeds = 0, numStates = 0;
@@ -3702,15 +3696,11 @@ void Executor::executeStep(ExecutionState &state) {
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
 
-  auto result = new ForwardResult(&state, addedStates, removedStates);
-  updateResult(result);
-  delete result;
+  updateResult(new ForwardResult(&state, addedStates, removedStates));
 
   if (!checkMemoryUsage()) {
     // update searchers when states were terminated early due to memory pressure
-    auto result = new ForwardResult(nullptr, addedStates, removedStates);
-    updateResult(result);
-    delete result;
+    updateResult(new ForwardResult(nullptr, addedStates, removedStates));
   }
 }
 
@@ -5294,21 +5284,19 @@ void Executor::addHistoryResult(ExecutionState &state) {
   }
 }
 
-ActionResult *Executor::executeAction(Action &action) {
-  switch (action.getKind()) {
-  case Action::Kind::Forward:
+ref<ActionResult> Executor::executeAction(ref<BidirectionalAction> action) {
+  switch (action->getKind()) {
+  case BidirectionalAction::Kind::Forward:
     return goForward(cast<ForwardAction>(action));
-  case Action::Kind::Branch: {
-    ForwardResult *result = goForward(cast<ForwardAction>(action));
-    BranchResult *res = new BranchResult(result->current, result->addedStates, result->removedStates);
-    delete result;
-    return res;
+  case BidirectionalAction::Kind::Branch: {
+    ref<ForwardResult> result = goForward(cast<ForwardAction>(action));
+    return new BranchResult(result->current, result->addedStates, result->removedStates);
   }
-  case Action::Kind::Backward:
+  case BidirectionalAction::Kind::Backward:
     return goBackward(cast<BackwardAction>(action));
-  case Action::Kind::Initialize:
+  case BidirectionalAction::Kind::Initialize:
     return initBranch(cast<InitializeAction>(action));
-  case Action::Kind::Terminate:
+  case BidirectionalAction::Kind::Terminate:
   default: {
     haltExecution = true;
     return new TerminateResult();
@@ -5449,12 +5437,11 @@ void Executor::run(ExecutionState &state) {
   summary->loadAllFromDB();
 
   while (!haltExecution) {
-    auto &action = searcher->selectAction();
+    auto action = searcher->selectAction();
     auto result = executeAction(action);
-    delete &action;
     updateResult(result);
 
-    if (result->getKind() == ActionResult::Kind::Backward) {
+    if (isa<BackwardResult>(result)) {
       auto br = cast<BackwardResult>(result);
       for (auto pob : br->newPobs) {
         if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
@@ -5473,14 +5460,11 @@ void Executor::run(ExecutionState &state) {
           processForest->addRoot(replayState);
           std::vector<ExecutionState *> v = {replayState};
           std::vector<ExecutionState *> toRemove = {};
-          auto replay = new ForwardResult(nullptr, v, toRemove);
-          updateResult(replay);
-          delete replay;
+          updateResult(new ForwardResult(nullptr, v, toRemove));
           searcher->closeProofObligation(pob);
         }
       }
     }
-    delete result;
   }
 
   doDumpStates();
@@ -5504,9 +5488,9 @@ void Executor::actionBeforeStateTerminating(ExecutionState &state, TerminateReas
 }
 
 
-InitializeResult *Executor::initBranch(InitializeAction &action) {
-  KInstruction *loc = action.location;
-  std::set<Target> &targets = action.targets;
+ref<InitializeResult> Executor::initBranch(ref<InitializeAction> action) {
+  KInstruction *loc = action->location;
+  std::set<Target> &targets = action->targets;
 
   ExecutionState* state = nullptr;
   if (loc == initialState->initPC) {
@@ -5525,8 +5509,8 @@ InitializeResult *Executor::initBranch(InitializeAction &action) {
   return new InitializeResult(loc, *state);
 }
 
-ForwardResult *Executor::goForward(ForwardAction &action) {
-  ExecutionState* state = action.state;
+ref<ForwardResult> Executor::goForward(ref<ForwardAction> action) {
+  ExecutionState* state = action->state;
   KInstruction *prevKI = state->prevPC;
   if (prevKI->inst->isTerminator())
     addHistoryResult(*state);
@@ -5539,18 +5523,14 @@ ForwardResult *Executor::goForward(ForwardAction &action) {
   if (::dumpStates) dumpStates();
   if (::dumpPForest) dumpPForest();
 
-  ForwardResult *ret = new ForwardResult(state, addedStates, removedStates);
-  if (targetedConflict) {
-    ret->targetedConflict = targetedConflict;
-    targetedConflict = std::nullopt;
-
-  }
+  ref<ForwardResult> ret = new ForwardResult(state, addedStates, removedStates, targetedConflict);
+  targetedConflict = std::nullopt;
   return ret;
 }
 
-BackwardResult *Executor::goBackward(BackwardAction &action) {
-  ExecutionState *state = action.state;
-  ProofObligation *pob = action.pob;
+ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
+  ExecutionState *state = action->state;
+  ProofObligation *pob = action->pob;
   std::unique_ptr<ExecutionState> useState;
   if (!state->isIsolated())
     useState = std::unique_ptr<ExecutionState>(state);

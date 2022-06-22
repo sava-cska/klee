@@ -8,14 +8,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "BidirectionalSearcher.h"
-#include "SearcherUtil.h"
 #include "BackwardSearcher.h"
-#include "Executor.h"
 #include "ExecutionState.h"
+#include "Executor.h"
 #include "ForwardSearcher.h"
 #include "Initializer.h"
 #include "MergeHandler.h"
 #include "ProofObligation.h"
+#include "SearcherUtil.h"
 #include "UserSearcher.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Module/KModule.h"
@@ -33,37 +33,39 @@
 #include <cstdlib>
 
 namespace {
-llvm::cl::opt<bool> DebugBidirectionalSearcher(
-    "debug-bidirectional-searcher",
-    llvm::cl::desc(""),
-    llvm::cl::init(false),
-    llvm::cl::cat(klee::DebugCat));
+llvm::cl::opt<bool> DebugBidirectionalSearcher("debug-bidirectional-searcher",
+                                               llvm::cl::desc(""),
+                                               llvm::cl::init(false),
+                                               llvm::cl::cat(klee::DebugCat));
 
-llvm::cl::opt<unsigned> MaxCycles(
-    "max-cycles",
-    llvm::cl::desc("stop execution after visiting some basic block this amount of times (default=0)."),
-    llvm::cl::init(0),
-    llvm::cl::cat(klee::TerminationCat));
+llvm::cl::opt<unsigned>
+    MaxCycles("max-cycles",
+              llvm::cl::desc("stop execution after visiting some basic block "
+                             "this amount of times (default=0)."),
+              llvm::cl::init(0), llvm::cl::cat(klee::TerminationCat));
 
-}
+} // namespace
 
 namespace klee {
 
-BidirectionalSearcher::StepKind
-BidirectionalSearcher::selectStep() {
+BidirectionalSearcher::StepKind BidirectionalSearcher::selectStep() {
   size_t initial_choice = ticker.getCurrent();
   size_t choice = initial_choice;
 
   do {
     switch (choice) {
     case 0:
-      if(!forward->empty()) return StepKind::Forward;
+      if (!forward->empty())
+        return StepKind::Forward;
     case 1:
-      if(!branch->empty()) return StepKind::Branch;
+      if (!branch->empty())
+        return StepKind::Branch;
     case 2:
-      if(!backward->empty()) return StepKind::Backward;
+      if (!backward->empty())
+        return StepKind::Backward;
     case 3:
-      if(!initializer->empty()) return StepKind::Initialize;
+      if (!initializer->empty())
+        return StepKind::Initialize;
     }
     ticker.moveToNext();
     choice = ticker.getCurrent();
@@ -72,11 +74,9 @@ BidirectionalSearcher::selectStep() {
   return StepKind::Terminate;
 }
 
-Action &BidirectionalSearcher::selectAction() {
-  Action *action;
-  bool actionWasSelected = false;
-  while (!actionWasSelected) {
-    actionWasSelected = true;
+ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
+  ref<BidirectionalAction> action;
+  while (action.isNull()) {
     switch (selectStep()) {
 
     case StepKind::Forward: {
@@ -90,7 +90,6 @@ Action &BidirectionalSearcher::selectAction() {
         } else {
           forward->update(nullptr, {}, {&state});
           ex->pauseState(state);
-          actionWasSelected = false;
         }
       } else
         action = new ForwardAction(&state);
@@ -103,7 +102,6 @@ Action &BidirectionalSearcher::selectAction() {
           state.maxLevel > 1) {
         branch->update(nullptr, {}, {&state});
         ex->pauseState(state);
-        actionWasSelected = false;
       } else {
         action = new BranchAction(&state);
       }
@@ -129,85 +127,117 @@ Action &BidirectionalSearcher::selectAction() {
     }
     }
   }
-  return *action;
+  return action;
 }
 
-void BidirectionalSearcher::update(ActionResult *r) {
-  if (r->getKind() == ActionResult::Kind::Forward) {
-    auto fr = cast<ForwardResult>(r);
-    forward->update(fr->current, fr->addedStates, fr->removedStates);
+void BidirectionalSearcher::updateForward(
+    ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
+    const std::vector<ExecutionState *> &removedStates,
+    std::optional<TargetedConflict> targetedConflict) {
 
+  forward->update(current, addedStates, removedStates);
 
-    if (fr->current && fr->current->getPrevPCBlock() != fr->current->getPCBlock()) {
-      Target target =
-        isa<KReturnBlock>(fr->current->prevPC->parent) ?
-          Target(fr->current->prevPC->parent) :
-          Target(fr->current->pc->parent);
-      backward->addState(target, fr->current);
+  if (current && current->getPrevPCBlock() != current->getPCBlock()) {
+    Target target = isa<KReturnBlock>(current->prevPC->parent)
+                        ? Target(current->prevPC->parent)
+                        : Target(current->pc->parent);
+    backward->addState(target, current);
+  }
+
+  for (auto &state : addedStates) {
+    if (state->getPrevPCBlock() != state->getPCBlock()) {
+      Target target = isa<KReturnBlock>(state->prevPC->parent)
+                          ? Target(state->prevPC->parent)
+                          : Target(state->pc->parent);
+      backward->addState(target, state);
     }
-    for (auto &state : fr->addedStates) {
-      if (state->getPrevPCBlock() != state->getPCBlock()) {
-        Target target =
-          isa<KReturnBlock>(state->prevPC->parent) ?
-            Target(state->prevPC->parent) :
-            Target(state->pc->parent);
-        backward->addState(target, state);
+  }
+
+  if (targetedConflict) {
+    if (!rootBlocks.count(targetedConflict->target->basicBlock) &&
+        !reachableBlocks.count(targetedConflict->target->basicBlock)) {
+      rootBlocks.insert(targetedConflict->target->basicBlock);
+      initializer->addConflictInit(targetedConflict->conflict,
+                                   targetedConflict->target);
+      ProofObligation *pob = new ProofObligation(targetedConflict->target);
+
+      if (DebugBidirectionalSearcher) {
+        llvm::errs() << "Add new proof obligation.\n";
+        llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
+        llvm::errs() << "\n";
       }
-    }
-
-    if (fr->targetedConflict) {
-      if (!rootBlocks.count(fr->targetedConflict->target->basicBlock) &&
-          !reachableBlocks.count(fr->targetedConflict->target->basicBlock)) {
-        rootBlocks.insert(fr->targetedConflict->target->basicBlock);
-        initializer->addConflictInit(fr->targetedConflict->conflict, fr->targetedConflict->target);
-        ProofObligation* pob = new ProofObligation(fr->targetedConflict->target);
-
-
-        if (DebugBidirectionalSearcher) {
-          llvm::errs() << "Add new proof obligation.\n";
-          llvm::errs() << "At: " << pob->location->getIRLocation() << "\n";
-          llvm::errs() << "\n";
-        }
-        addPob(pob);
-      }
-    }
-
-
-  } else if (r->getKind() == ActionResult::Kind::Branch) {
-    auto br = cast<BranchResult>(r);
-    branch->update(br->current, br->addedStates, br->removedStates);
-
-    auto reached = branch->collectAndClearReached();
-    for (auto &targetStates : reached) {
-      for (auto state : targetStates.second) {
-        if (DebugBidirectionalSearcher) {
-          llvm::errs() << "New isolated state.\n";
-          llvm::errs() << "Id: " << state->id << "\n";
-          llvm::errs() << "Path: " << state->path.toString() << "\n";
-          llvm::errs() << "Constraints:\n" << state->constraints;
-          llvm::errs() << "\n";
-        }
-        backward->addState(targetStates.first, state);
-      }
-    }
-
-  } else if (r->getKind() == ActionResult::Kind::Backward) {
-    auto br = cast<BackwardResult>(r);
-    for (auto pob : br->newPobs) {
       addPob(pob);
     }
-  } else if (r->getKind() == ActionResult::Kind::Initialize) {
+  }
+}
+
+void BidirectionalSearcher::updateBranch(
+    ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
+    const std::vector<ExecutionState *> &removedStates) {
+  branch->update(current, addedStates, removedStates);
+
+  auto reached = branch->collectAndClearReached();
+  for (auto &targetStates : reached) {
+    for (auto state : targetStates.second) {
+      if (DebugBidirectionalSearcher) {
+        llvm::errs() << "New isolated state.\n";
+        llvm::errs() << "Id: " << state->id << "\n";
+        llvm::errs() << "Path: " << state->path.toString() << "\n";
+        llvm::errs() << "Constraints:\n" << state->constraints;
+        llvm::errs() << "\n";
+      }
+      backward->addState(targetStates.first, state);
+    }
+  }
+}
+
+void BidirectionalSearcher::updateBackward(
+    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob) {
+  for (auto pob : newPobs) {
+    addPob(pob);
+  }
+}
+
+void BidirectionalSearcher::updateInitialize(KInstruction *location,
+                                             ExecutionState &state) {
+  branch->update(nullptr, {&state}, {});
+}
+
+void BidirectionalSearcher::update(ref<ActionResult> r) {
+  switch (r->getKind()) {
+  case ActionResult::Kind::Forward: {
+    auto fr = cast<ForwardResult>(r);
+    updateForward(fr->current, fr->addedStates, fr->removedStates,
+                  fr->targetedConflict);
+    break;
+  }
+  case ActionResult::Kind::Branch: {
+    auto brr = cast<BranchResult>(r);
+    updateBranch(brr->current, brr->addedStates, brr->removedStates);
+    break;
+  }
+  case ActionResult::Kind::Backward: {
+    auto bckr = cast<BackwardResult>(r);
+    updateBackward(bckr->newPobs, bckr->oldPob);
+    break;
+  }
+  case ActionResult::Kind::Initialize: {
     auto ir = cast<InitializeResult>(r);
-    branch->update(nullptr, {&ir->state}, {});
+    updateInitialize(ir->location, ir->state);
+    break;
+  }
+  default:
+    break;
   }
 }
 
 BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
-    : ticker({80,10,5,5}) {
+    : ticker({80, 10, 5, 5}) {
   ex = cfg.executor;
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
-  forward->update(nullptr,{cfg.initial_state},{});
-  branch = new GuidedSearcher(std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
+  forward->update(nullptr, {cfg.initial_state}, {});
+  branch = new GuidedSearcher(
+      std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new RecencyRankedSearcher();
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
@@ -238,10 +268,9 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
   }
 }
 
-bool BidirectionalSearcher::isStuck(ExecutionState& state) {
+bool BidirectionalSearcher::isStuck(ExecutionState &state) {
   KInstruction *prevKI = state.prevPC;
-  return prevKI->inst->isTerminator() &&
-         state.targets.empty() &&
+  return prevKI->inst->isTerminator() && state.targets.empty() &&
          state.multilevel.count(state.getPCBlock()) > MaxCycles;
 }
 

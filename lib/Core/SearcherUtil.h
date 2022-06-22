@@ -16,52 +16,65 @@ namespace klee {
 class ExecutionState;
 class Executor;
 
-struct Action {
+struct BidirectionalAction {
+friend class ref<BidirectionalAction>;
+protected:
+  /// @brief Required by klee::ref-managed objects
+  class ReferenceCounter _refCount;
+public:
   enum class Kind { Initialize, Forward, Branch, Backward, Terminate };
 
-  Action() = default;
-  virtual ~Action() = default;
+  BidirectionalAction() = default;
+  virtual ~BidirectionalAction() = default;
 
   virtual Kind getKind() const = 0;
 
-  static bool classof(const Action *) { return true; }
+  static bool classof(const BidirectionalAction *) { return true; }
 };
 
-struct TerminateAction : public Action {
+struct TerminateAction : public BidirectionalAction {
+  friend class ref<TerminateAction>;
+
   TerminateAction() {}
 
   Kind getKind() const { return Kind::Terminate; }
-  static bool classof(const Action *A) {
+  static bool classof(const BidirectionalAction *A) {
     return A->getKind() == Kind::Terminate;
   }
   static bool classof(const TerminateAction *) { return true; }
 };
 
-struct ForwardAction : public Action {
+struct ForwardAction : public BidirectionalAction {
+  friend class ref<ForwardAction>;
+
   ExecutionState *state;
 
   ForwardAction(ExecutionState *_state) : state(_state) {}
 
   Kind getKind() const { return Kind::Forward; }
-  static bool classof(const Action *A) {
+  static bool classof(const BidirectionalAction *A) {
     return A->getKind() == Kind::Forward || A->getKind() == Kind::Branch;
   }
   static bool classof(const ForwardAction *) { return true; }
 };
 
 struct BranchAction : public ForwardAction {
+  friend class ref<BranchAction>;
+
   ExecutionState *state;
 
   BranchAction(ExecutionState *_state) : ForwardAction(_state) {}
 
   Kind getKind() const { return Kind::Branch; }
-  static bool classof(const Action *A) {
+  static bool classof(const BidirectionalAction *A) {
     return A->getKind() == Kind::Branch;
   }
   static bool classof(const BranchAction *) { return true; }
 };
 
-struct BackwardAction : public Action {
+struct BackwardAction : public BidirectionalAction {
+  friend class ref<BackwardAction>;
+
   ExecutionState *state;
   ProofObligation *pob;
 
@@ -69,13 +82,15 @@ struct BackwardAction : public Action {
     : state(_state), pob(_pob) {}
 
   Kind getKind() const { return Kind::Backward; }
-  static bool classof(const Action *A) {
+  static bool classof(const BidirectionalAction *A) {
     return A->getKind() == Kind::Backward;
   }
   static bool classof(const BackwardAction *) { return true; }
 };
 
-struct InitializeAction : public Action {
+struct InitializeAction : public BidirectionalAction {
+  friend class ref<InitializeAction>;
+
   KInstruction *location;
   std::set<Target> targets;
 
@@ -83,7 +98,7 @@ struct InitializeAction : public Action {
     : location(_location), targets(_targets) {}
 
   Kind getKind() const { return Kind::Initialize; }
-  static bool classof(const Action *A) {
+  static bool classof(const BidirectionalAction *A) {
     return A->getKind() == Kind::Initialize;
   }
   static bool classof(const InitializeAction *) { return true; }
@@ -117,6 +132,11 @@ struct TargetedConflict {
 
 
 struct ActionResult {
+  friend class ref<ActionResult>;
+protected:
+  /// @brief Required by klee::ref-managed objects
+  class ReferenceCounter _refCount;
+public:
   enum class Kind { Initialize, Forward, Branch, Backward, Terminate };
 
   ActionResult() = default;
@@ -128,15 +148,17 @@ struct ActionResult {
 };
 
 struct ForwardResult : ActionResult {
+  friend class ref<ForwardResult>;
+
   ExecutionState *current;
   const std::vector<ExecutionState *> &addedStates;
   const std::vector<ExecutionState *> &removedStates;
   std::optional<TargetedConflict> targetedConflict;
 
-  ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &a,
-                const std::vector<ExecutionState *> &r)
-
-    : current(_s), addedStates(a), removedStates(r), targetedConflict(std::nullopt) {};
+  ForwardResult(ExecutionState *_s, const std::vector<ExecutionState *> &_a,
+                const std::vector<ExecutionState *> &_r,
+                std::optional<TargetedConflict> _c = std::nullopt)
+    : current(_s), addedStates(_a), removedStates(_r), targetedConflict(_c) {};
 
   Kind getKind() const { return Kind::Forward; }
   static bool classof(const ActionResult *A) {
@@ -146,6 +168,8 @@ struct ForwardResult : ActionResult {
 };
 
 struct BranchResult : ActionResult {
+  friend class ref<BranchResult>;
+
   ExecutionState *current;
   const std::vector<ExecutionState *> &addedStates;
   const std::vector<ExecutionState *> &removedStates;
@@ -162,6 +186,8 @@ struct BranchResult : ActionResult {
 };
 
 struct BackwardResult : ActionResult {
+  friend class ref<BackwardResult>;
+
   std::vector<ProofObligation*> newPobs;
   ProofObligation *oldPob;
 
@@ -176,6 +202,8 @@ struct BackwardResult : ActionResult {
 };
 
 struct InitializeResult : ActionResult {
+  friend class ref<InitializeResult>;
+
   KInstruction *location;
   ExecutionState &state;
 
@@ -190,6 +218,8 @@ struct InitializeResult : ActionResult {
 };
 
 struct TerminateResult : ActionResult {
+  friend class ref<TerminateResult>;
+
   Kind getKind() const { return Kind::Terminate; }
   static bool classof(const ActionResult *A) {
     return A->getKind() == Kind::Terminate;

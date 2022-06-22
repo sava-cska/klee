@@ -386,8 +386,8 @@ ExecutionState &GuidedSearcher::selectState() {
 
 
 void GuidedSearcher::update(ExecutionState *current,
-                              const std::vector<ExecutionState *> &addedStates,
-                              const std::vector<ExecutionState *> &removedStates) {
+                            const std::vector<ExecutionState *> &addedStates,
+                            const std::vector<ExecutionState *> &removedStates) {
   
   std::map<Target, std::vector<ExecutionState *>> addedTStates;
   std::map<Target, std::vector<ExecutionState *>> removedTStates;

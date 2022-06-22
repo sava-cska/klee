@@ -23,8 +23,8 @@ namespace klee {
 
 class IBidirectionalSearcher {
 public:
-  virtual Action &selectAction() = 0;
-  virtual void update(ActionResult *) = 0;
+  virtual ref<BidirectionalAction> selectAction() = 0;
+  virtual void update(ref<ActionResult>) = 0;
   virtual void closeProofObligation(ProofObligation *) = 0;
   virtual bool empty() = 0;
   virtual ~IBidirectionalSearcher() {}
@@ -33,8 +33,8 @@ public:
 
 class BidirectionalSearcher : public IBidirectionalSearcher {
 public:
-  Action &selectAction() override;
-  void update(ActionResult *) override;
+  ref<BidirectionalAction> selectAction() override;
+  void update(ref<ActionResult>) override;
   void closeProofObligation(ProofObligation *) override;
   bool empty() override;
   explicit BidirectionalSearcher(const SearcherConfig &);
@@ -59,6 +59,16 @@ private:
   std::unordered_set<llvm::BasicBlock *> reachableBlocks;
 
   StepKind selectStep();
+  void updateForward(ExecutionState *current,
+                     const std::vector<ExecutionState *> &addedStates,
+                     const std::vector<ExecutionState *> &removedStates,
+                     std::optional<TargetedConflict> targetedConflict);
+  void updateBranch(ExecutionState *current,
+                    const std::vector<ExecutionState *> &addedStates,
+                    const std::vector<ExecutionState *> &removedStates);
+  void updateBackward(std::vector<ProofObligation*> newPobs, ProofObligation *oldPob);
+  void updateInitialize(KInstruction *location, ExecutionState &state);
+
   void addPob(ProofObligation *);
   void removePob(ProofObligation *);
   void answerPob(ProofObligation *);

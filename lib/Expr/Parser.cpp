@@ -427,6 +427,13 @@ namespace {
       TheLexer.Reset(MB);
       Initialize();
     }
+
+    virtual void ClearArrayDecls() {
+      for (auto pi = ArraySymTab.begin(), pe = ArraySymTab.end(); pi != pe;
+           ++pi) {
+        delete pi->second;
+      }
+    }
   };
 }
 
@@ -1715,9 +1722,6 @@ ParserImpl::~ParserImpl() {
   // Note the Identifiers are not disjoint across the symbol
   // tables so we need to keep track of what has freed to
   // avoid doing a double free.
-  for (auto pi = ArraySymTab.begin(), pe = ArraySymTab.end(); pi != pe; ++pi) {
-    delete pi->second;
-  }
   std::set<VersionIdentifier> freedNodes;
   for (IdentifierTabTy::iterator pi = IdentifierTab.begin(),
                                  pe = IdentifierTab.end();

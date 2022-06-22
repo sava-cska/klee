@@ -228,6 +228,8 @@ namespace expr {
     virtual const Array *ParseSingleArray() = 0;
     virtual ExprHandle ParseSingleExpr() = 0;
 
+    virtual void ClearArrayDecls() = 0;
+
     /// CreateParser - Create a parser implementation for the given
     /// MemoryBuffer.
     ///

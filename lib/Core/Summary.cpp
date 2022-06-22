@@ -221,6 +221,8 @@ void Summary::loadAllFromDB() {
   }
   db->exprs_purge();
   db->arrays_purge();
+
+  parser->ClearArrayDecls();
   delete builder;
   delete parser;
 }

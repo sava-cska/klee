@@ -82,7 +82,7 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
     case StepKind::Forward: {
       auto &state = forward->selectState();
       if (isStuck(state)) {
-        KBlock *target = ex->calculateTargetByTransitionHistory(state);
+        KBlock *target = ex->calculateTargetByBlockHistory(state);
         if (target) {
           state.targets.insert(Target(target));
           forward->update(&state, {}, {});

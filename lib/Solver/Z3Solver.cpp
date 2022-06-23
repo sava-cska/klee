@@ -45,11 +45,6 @@ llvm::cl::opt<bool> Z3ValidateModels(
     llvm::cl::desc("When generating Z3 models validate these against the query"),
     llvm::cl::cat(klee::SolvingCat));
 
-llvm::cl::opt<bool> Z3ProduceUnsatCore(
-    "produce-unsat-core", llvm::cl::init(true),
-    llvm::cl::desc("Produce unsat core"),
-    llvm::cl::cat(klee::SolvingCat));
-
 llvm::cl::opt<unsigned>
     Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
                      llvm::cl::desc("Z3 verbosity level (default=0)"),
@@ -126,7 +121,7 @@ Z3SolverImpl::Z3SolverImpl()
   Z3_params_inc_ref(builder->ctx, solverParameters);
   timeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "timeout");
   setCoreSolverTimeout(timeout);
-  if (Z3ProduceUnsatCore) {
+  if (ProduceUnsatCore) {
     unsatCoreParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "unsat_core");
     enableUnsatCore();
   }
@@ -294,7 +289,7 @@ bool Z3SolverImpl::internalRunSolver(
 
   for (auto const &constraint : query.constraints) {
     Z3ASTHandle z3Constraint = builder->construct(constraint);
-    if (Z3ProduceUnsatCore && query.produceQueryCore) {
+    if (ProduceUnsatCore && query.produceQueryCore) {
       Z3ASTHandle p = builder->buildFreshBoolConst(constraint->toString().c_str());
       z3_ast_expr_to_klee_expr.insert({p, constraint});
       z3_ast_expr_constraints.push_back(p);
@@ -327,7 +322,7 @@ bool Z3SolverImpl::internalRunSolver(
   // negation of the equivalent i.e.
   // ∃ X Constraints(X) ∧ ¬ query(X)
   Z3ASTHandle z3NotQueryExpr = Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx);
-  if (Z3ProduceUnsatCore && query.produceQueryCore) {
+  if (ProduceUnsatCore && query.produceQueryCore) {
     std::string s = "not " + query.expr->toString();
     Z3ASTHandle p = builder->buildFreshBoolConst(s.c_str());
     Z3_solver_assert_and_track(builder->ctx, theSolver, z3NotQueryExpr, p);
@@ -347,7 +342,7 @@ bool Z3SolverImpl::internalRunSolver(
   ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, theSolver);
   runStatusCode = handleSolverResponse(theSolver, satisfiable, objects, values,
                                        hasSolution);
-  if (Z3ProduceUnsatCore &&  query.produceQueryCore && satisfiable == Z3_L_FALSE) {
+  if (ProduceUnsatCore &&  query.produceQueryCore && satisfiable == Z3_L_FALSE) {
     Z3_ast_vector unsatCore = Z3_solver_get_unsat_core(builder->ctx, theSolver);
     Z3_ast_vector_inc_ref(builder->ctx, unsatCore);
 

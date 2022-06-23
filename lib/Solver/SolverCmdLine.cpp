@@ -210,6 +210,10 @@ cl::opt<CoreSolverType> DebugCrossCheckCoreSolverWith(
                clEnumValN(NO_SOLVER, "none", "Do not crosscheck (default)")
                    KLEE_LLVM_CL_VAL_END),
     cl::init(NO_SOLVER), cl::cat(SolvingCat));
+
+llvm::cl::opt<bool> ProduceUnsatCore(
+    "produce-unsat-core", llvm::cl::init(CoreSolverToUse == Z3_SOLVER),
+    llvm::cl::desc("Produce unsat core"), llvm::cl::cat(klee::SolvingCat));
 } // namespace klee
 
 #undef STP_IS_DEFAULT_STR

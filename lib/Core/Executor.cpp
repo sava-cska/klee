@@ -157,6 +157,12 @@ cl::opt<std::string> SummaryDB(
     cl::desc("Summary DB path"),
     cl::cat(ExecCat));
 
+cl::opt<bool> ReplayStateFromProofObligation(
+    "replay-state-from-pob",
+     cl::init(false),
+     cl::desc("Replay state from proof obligation (default=false)"),
+     cl::cat(ExecCat));
+
 } // namespace klee
 
 namespace {
@@ -5431,6 +5437,27 @@ void Executor::addState(ExecutionState &state) {
   addedStates.push_back(&state);
 }
 
+
+void Executor::replayStateFromPob(ProofObligation *pob) {
+  assert(pob->location->instructions[0]->inst == emptyState->initPC->inst);
+
+  ExecutionState *replayState = initialState->copy();
+  for (const auto &constraint : pob->condition) {
+    replayState->addConstraint(
+        constraint, pob->condition.getLocation(constraint));
+  }
+  for (auto &symbolic : pob->sourcedSymbolics) {
+    replayState->symbolics.push_back(symbolic);
+  }
+
+  replayState->targets.insert(Target(pob->root->location));
+  states.insert(replayState);
+  processForest->addRoot(replayState);
+  std::vector<ExecutionState *> v = {replayState};
+  std::vector<ExecutionState *> toRemove = {};
+  updateResult(new ForwardResult(nullptr, v, toRemove));
+}
+
 void Executor::run(ExecutionState &state) {
   initialState = state.copy();
   emptyState = state.copy();
@@ -5455,23 +5482,9 @@ void Executor::run(ExecutionState &state) {
     if (isa<BackwardResult>(result)) {
       auto br = cast<BackwardResult>(result);
       for (auto pob : br->newPobs) {
-        if (pob->location->instructions[0]->inst == emptyState->initPC->inst) {
-          assert(br->newPobs.size() == 1);
-          ExecutionState *replayState = initialState->copy();
-          for (const auto &constraint : pob->condition) {
-            replayState->addConstraint(
-                constraint, pob->condition.getLocation(constraint));
-          }
-          for (auto &symbolic : pob->sourcedSymbolics) {
-            replayState->symbolics.push_back(symbolic);
-          }
-
-          replayState->targets.insert(Target(pob->root->location));
-          states.insert(replayState);
-          processForest->addRoot(replayState);
-          std::vector<ExecutionState *> v = {replayState};
-          std::vector<ExecutionState *> toRemove = {};
-          updateResult(new ForwardResult(nullptr, v, toRemove));
+        if (pob->location->getFirstInstruction() == emptyState->initPC) {
+          if (ReplayStateFromProofObligation)
+            replayStateFromPob(pob);
           searcher->closeProofObligation(pob);
         }
       }

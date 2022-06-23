@@ -589,6 +589,8 @@ private:
   void dumpStates();
   void dumpPForest();
 
+  void replayStateFromPob(ProofObligation *pob);
+
 public:
   Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
                InterpreterHandler *ie);

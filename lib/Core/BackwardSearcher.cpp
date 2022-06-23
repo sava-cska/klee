@@ -33,7 +33,7 @@ void RecencyRankedSearcher::update(ProofObligation *pob) {
   Target t(pob->location);
   std::unordered_set<ExecutionState *> &states = emanager.at(t);
   for (auto state : states) {
-    if (checkStack(state, pob)) {
+    if (pob->propagationCount[state] < 1 && checkStack(state, pob)) {
       propagatePobToStates[pob].insert(state);
     }
   }

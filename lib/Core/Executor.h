@@ -14,23 +14,22 @@
 
 #pragma once
 
-#include "SearcherUtil.h"
 #include "ExecutionState.h"
-#include "Summary.h"
-#include "UserSearcher.h"
 #include "ExternalDispatcher.h"
-#include "SpecialFunctionHandler.h"
 #include "MemoryManager.h"
+#include "SearcherUtil.h"
 #include "SeedInfo.h"
+#include "SpecialFunctionHandler.h"
 #include "StatsTracker.h"
 #include "Summary.h"
+#include "UserSearcher.h"
 
-#include "klee/ADT/RNG.h"
 #include "klee/ADT/DiscretePDF.h"
+#include "klee/ADT/RNG.h"
 #include "klee/Core/Interpreter.h"
 #include "klee/Expr/ArrayCache.h"
-#include "klee/Expr/ArrayManager.h"
 #include "klee/Expr/ArrayExprOptimizer.h"
+#include "klee/Expr/ArrayManager.h"
 #include "klee/Module/Cell.h"
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
@@ -109,7 +108,8 @@ class Executor : public Interpreter {
   friend class MergeHandler;
   friend class Composer;
   friend class ComposeVisitor;
-  friend std::unique_ptr<ForwardSearcher> klee::constructUserSearcher(Executor &Executor);
+  friend std::unique_ptr<ForwardSearcher>
+  klee::constructUserSearcher(Executor &Executor);
 
 public:
   enum MemoryOperation { Read, Write };
@@ -148,9 +148,9 @@ public:
   };
 
   typedef std::map<llvm::BasicBlock *, ExecutionBlockResult> ExecutionResult;
-  
-  typedef std::pair<ExecutionState *,ExecutionState *> StatePair;
-  
+
+  typedef std::pair<ExecutionState *, ExecutionState *> StatePair;
+
 private:
   /// The random number generator.
   RNG theRNG;
@@ -167,7 +167,7 @@ private:
   InterpreterHandler *interpreterHandler;
 
   std::unique_ptr<IBidirectionalSearcher> searcher;
-  
+
   std::unique_ptr<ExternalDispatcher> externalDispatcher;
 
   std::unique_ptr<TimingSolver> solver;
@@ -177,7 +177,7 @@ private:
   std::set<ExecutionState *, ExecutionStateIDCompare> states;
   std::set<ExecutionState *, ExecutionStateIDCompare> isolatedStates;
   std::set<ProofObligation *, ProofObligationIDCompare> pobs;
-  
+
   std::unique_ptr<StatsTracker> statsTracker;
 
   TreeStreamWriter *pathWriter, *symPathWriter;
@@ -202,7 +202,7 @@ private:
   /// Used for validity-core initialization in the same manner
   /// as addedStates and removedStates are used.
   ref<TargetedConflict> targetedConflict;
-  
+
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
   /// (outside the normal search interface) until they terminate. When
@@ -300,12 +300,10 @@ public:
 
   static void makeConflictCore(const ExecutionState &state,
                                const std::vector<ref<Expr>> &unsatCore,
-                               ref<Expr> condition,
-                               KInstruction *location,
+                               ref<Expr> condition, KInstruction *location,
                                Conflict::core_ty &core);
 
 private:
-
   /// Return the typeid corresponding to a certain `type_info`
   ref<ConstantExpr> getEhTypeidFor(ref<Expr> type_info);
 
@@ -333,8 +331,7 @@ private:
   void removeState(ExecutionState *state);
   void removeIsolatedState(ExecutionState *state);
 
-  void transferToBasicBlock(llvm::BasicBlock *dst,
-                            llvm::BasicBlock *src,
+  void transferToBasicBlock(llvm::BasicBlock *dst, llvm::BasicBlock *src,
                             ExecutionState &state);
 
   void callExternalFunction(ExecutionState &state, KInstruction *target,
@@ -344,8 +341,9 @@ private:
   ObjectState *bindObjectInState(ExecutionState &state, const MemoryObject *mo,
                                  bool IsAlloca, const Array *array = 0);
 
-  ObjectState *bindSymbolicInState(ExecutionState &state, const MemoryObject *mo,
-                                 bool IsAlloca, const Array *array);
+  ObjectState *bindSymbolicInState(ExecutionState &state,
+                                   const MemoryObject *mo, bool IsAlloca,
+                                   const Array *array);
 
   /// Resolve a pointer to the memory objects it could point to the
   /// start of, forking execution when necessary and generating errors
@@ -415,13 +413,17 @@ private:
                               KInstruction *target /* def if read*/,
                               std::vector<ExecutionState *> *results = nullptr);
 
-  ObjectPair lazyInitializeVariable(ExecutionState &state, ref<Expr> address, bool isLocal,
-                                    const llvm::Value *allocSite, uint64_t size);
+  ObjectPair lazyInitializeVariable(ExecutionState &state, ref<Expr> address,
+                                    bool isLocal, const llvm::Value *allocSite,
+                                    uint64_t size);
 
-  ObjectPair transparentLazyInitializeVariable(ExecutionState &state, ref<Expr> address,
-                                               const llvm::Value *allocSite, uint64_t size);
-  
-  ObjectPair lazyInitialize(ExecutionState &state, const MemoryObject *mo, const Array *array);
+  ObjectPair transparentLazyInitializeVariable(ExecutionState &state,
+                                               ref<Expr> address,
+                                               const llvm::Value *allocSite,
+                                               uint64_t size);
+
+  ObjectPair lazyInitialize(ExecutionState &state, const MemoryObject *mo,
+                            const Array *array);
 
   ObjectPair executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo,
                                  const std::string &name, bool isAlloca,
@@ -437,11 +439,9 @@ private:
   // Fork current and return states in which condition holds / does
   // not hold, respectively. One of the states is necessarily the
   // current state, and one of the states may be null.
-  StatePair fork(ExecutionState &current, ref<Expr> condition,
-                 bool isInternal, bool produceUnsatCore,
-                 std::vector<ref<Expr>> &conflict);
-  StatePair fork(ExecutionState &current, ref<Expr> condition,
-                 bool isInternal);
+  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal,
+                 bool produceUnsatCore, std::vector<ref<Expr>> &conflict);
+  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 
   /// Add the given (boolean) condition as a constraint on state. This
   /// function is a wrapper around the state's addConstraint function
@@ -478,12 +478,14 @@ private:
     return getDestCell(state.stack.back(), target);
   }
 
-  void bindLocal(const KInstruction *target, StackFrame &frame, ref<Expr> value);
+  void bindLocal(const KInstruction *target, StackFrame &frame,
+                 ref<Expr> value);
 
   void bindArgument(KFunction *kf, unsigned index, StackFrame &frame,
-                                 ref<Expr> value);
+                    ref<Expr> value);
 
-  void bindLocal(const KInstruction *target, ExecutionState &state, ref<Expr> value);
+  void bindLocal(const KInstruction *target, ExecutionState &state,
+                 ref<Expr> value);
 
   void bindArgument(KFunction *kf, unsigned index, ExecutionState &state,
                     ref<Expr> value);
@@ -593,7 +595,7 @@ private:
 
 public:
   Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
-               InterpreterHandler *ie);
+           InterpreterHandler *ie);
   virtual ~Executor() = default;
 
   const InterpreterHandler &getHandler() { return *interpreterHandler; }
@@ -628,10 +630,13 @@ public:
 
   void clearGlobal();
 
-  void addAllocaDisequality(ExecutionState &state, const llvm::Value *allocSite, ref<Expr> address);
+  void addAllocaDisequality(ExecutionState &state, const llvm::Value *allocSite,
+                            ref<Expr> address);
 
-  void prepareSymbolicValue(ExecutionState &state, StackFrame &frame, const KInstruction *targetW);
-  void prepareSymbolicRegister(ExecutionState &state, StackFrame &frame, unsigned index);
+  void prepareSymbolicValue(ExecutionState &state, StackFrame &frame,
+                            const KInstruction *targetW);
+  void prepareSymbolicRegister(ExecutionState &state, StackFrame &frame,
+                               unsigned index);
   void prepareSymbolicArgs(ExecutionState &state, StackFrame &frame);
 
   ref<Expr> makeSymbolicValue(llvm::Value *value, ExecutionState &state,
@@ -659,15 +664,15 @@ public:
   getConstraintLog(const ExecutionState &state, std::string &res,
                    Interpreter::LogType logFormat = Interpreter::STP) override;
 
-  int resolveLazyInstantiation(ExecutionState& state) override;
+  int resolveLazyInstantiation(ExecutionState &state) override;
 
-  void setInstantiationGraph(ExecutionState& state, TestCase& tc) override;
-  
+  void setInstantiationGraph(ExecutionState &state, TestCase &tc) override;
+
   void logState(ExecutionState &state, int id,
                 std::unique_ptr<llvm::raw_fd_ostream> &f) override;
 
   bool getSymbolicSolution(const ExecutionState &state, TestCase &res) override;
-  
+
   void getCoveredLines(
       const ExecutionState &state,
       std::map<const std::string *, std::set<unsigned>> &res) override;
@@ -694,7 +699,7 @@ public:
 
   MemoryManager *getMemoryManager();
 
-  ExecutionManager* getExecutionManager();
+  ExecutionManager *getExecutionManager();
 
   ExprOptimizer *getOptimizer();
 
@@ -706,11 +711,12 @@ public:
   const Array *makeArray(ExecutionState &state, const uint64_t size,
                          const std::string &name, bool isExternal);
   const Array *makeArray(ExecutionState &state, const uint64_t size,
-                         const std::string &name, ref<Expr> liSource = ref<Expr>());
+                         const std::string &name,
+                         ref<Expr> liSource = ref<Expr>());
   void executeStep(ExecutionState &state);
   void silentRemove(ExecutionState &state);
   bool isGEPExpr(ref<Expr> expr);
-  
+
 public:
   void addCompletedResult(ExecutionState &state);
   void addErroneousResult(ExecutionState &state);

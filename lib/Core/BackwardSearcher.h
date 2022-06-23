@@ -5,8 +5,8 @@
 #include "ProofObligation.h"
 #include "SearcherUtil.h"
 
-#include <queue>
 #include <map>
+#include <queue>
 #include <unordered_set>
 
 namespace klee {
@@ -28,8 +28,9 @@ private:
   std::vector<ProofObligation *> pobs;
   std::set<std::pair<ProofObligation *, ExecutionState *>> used;
   std::map<ProofObligation *,
-          std::set<ExecutionState *, ExecutionStateIDCompare>,
-          ProofObligationIDCompare> propagatePobToStates;
+           std::set<ExecutionState *, ExecutionStateIDCompare>,
+           ProofObligationIDCompare>
+      propagatePobToStates;
   ExecutionManager emanager;
 
 public:
@@ -41,4 +42,4 @@ public:
   bool empty() override;
 };
 
-};
+}; // namespace klee

@@ -26,12 +26,9 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
   return true;
 }
 
+bool RecencyRankedSearcher::empty() { return propagatePobToStates.empty(); }
 
-bool RecencyRankedSearcher::empty() {
-  return propagatePobToStates.empty();
-}
-
-void RecencyRankedSearcher::update(ProofObligation* pob) {
+void RecencyRankedSearcher::update(ProofObligation *pob) {
   pobs.push_back(pob);
   Target t(pob->location);
   std::unordered_set<ExecutionState *> &states = emanager.at(t);
@@ -63,7 +60,6 @@ RecencyRankedSearcher::selectAction() {
   return std::make_pair(pob, leastUsedState);
 }
 
-
 void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
   if (state->isIsolated())
     emanager.insert(target, *state->copy());
@@ -71,14 +67,14 @@ void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
   for (auto pob : pobs) {
     Target pobsTarget(pob->location);
     if (target == pobsTarget && checkStack(state, pob)) {
-        assert(state->path.getFinalBlock() == pob->path.getInitialBlock() && "Paths are not compatible.");
-        propagatePobToStates[pob].insert(state->copy());
+      assert(state->path.getFinalBlock() == pob->path.getInitialBlock() &&
+             "Paths are not compatible.");
+      propagatePobToStates[pob].insert(state->copy());
     }
   }
-
 }
 
-void RecencyRankedSearcher::removePob(ProofObligation* pob) {
+void RecencyRankedSearcher::removePob(ProofObligation *pob) {
   auto pos = std::find(pobs.begin(), pobs.end(), pob);
   if (pos != pobs.end()) {
     pobs.erase(pos);
@@ -86,4 +82,4 @@ void RecencyRankedSearcher::removePob(ProofObligation* pob) {
   propagatePobToStates.erase(pob);
 }
 
-};
+}; // namespace klee

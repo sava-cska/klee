@@ -35,8 +35,8 @@ void Solver::setCoreSolverTimeout(time::Span timeout) {
     impl->setCoreSolverTimeout(timeout);
 }
 
-void Solver::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
-  impl->getLastQueryCore(queryCore);
+void Solver::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+  impl->popUnsatCore(unsatCore);
 }
 
 bool Solver::evaluate(const Query& query, Validity &result) {

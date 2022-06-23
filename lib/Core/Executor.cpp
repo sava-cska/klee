@@ -1021,9 +1021,13 @@ void Executor::branch(ExecutionState &state,
       addConstraint(*result[i], conditions[i]);
 }
 
-Executor::StatePair 
+Executor::StatePair
 Executor::fork(ExecutionState &current, ref<Expr> condition,
-               bool isInternal, std::vector<ref<Expr>> *conflict) {
+               bool isInternal, bool produceUnsatCore,
+               std::vector<ref<Expr>> &conflict) {
+  if (produceUnsatCore)
+    assert(ProduceUnsatCore);
+
   Solver::Validity res;
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
     seedMap.find(&current);
@@ -1061,14 +1065,10 @@ Executor::fork(ExecutionState &current, ref<Expr> condition,
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
   solver->setTimeout(timeout);
-  bool success = false;
-  if (conflict) {
-    success = solver->evaluate(current.constraints, condition, res,
-                               current.queryMetaData, conflict);
-  } else {
-    success = solver->evaluate(current.constraints, condition, res,
-                     current.queryMetaData);
-  }
+  bool success = solver->evaluate(current.constraints, condition, res,
+                                  current.queryMetaData, produceUnsatCore);
+  if (produceUnsatCore)
+    solver->popUnsatCore(conflict);
 
   solver->setTimeout(time::Span());
   if (!success) {
@@ -1248,6 +1248,13 @@ Executor::fork(ExecutionState &current, ref<Expr> condition,
 
     return StatePair(trueState, falseState);
   }
+}
+
+Executor::StatePair
+Executor::fork(ExecutionState &current, ref<Expr> condition,
+               bool isInternal) {
+  std::vector<ref<Expr>> dummyunsatCore;
+  return fork(current, condition, isInternal, false, dummyunsatCore);
 }
 
 void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
@@ -2244,7 +2251,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
       cond = optimizer.optimizeExpr(cond, false);
       std::vector<ref<Expr>> conflict;
-      Executor::StatePair branches = fork(state, cond, false, &conflict);
+      Executor::StatePair branches;
+      if (ProduceUnsatCore)
+        branches = fork(state, cond, false, true, conflict);
+      else
+        branches = fork(state, cond, false);
 
       if (!conflict.empty() &&
           state.depth && !state.isIsolated()) {

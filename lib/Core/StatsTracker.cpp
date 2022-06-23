@@ -558,6 +558,7 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, 20, -1LL);
 #endif
   sqlite3_bind_int64(insertStmt, 21, stats::summarizedLocationCount);
+  sqlite3_bind_int64(insertStmt, 22, stats::unsatCoresCount);
   int errCode = sqlite3_step(insertStmt);
   if(errCode != SQLITE_DONE) klee_error("Error writing stats data: %s", sqlite3_errmsg(statsFile));
   sqlite3_reset(insertStmt);

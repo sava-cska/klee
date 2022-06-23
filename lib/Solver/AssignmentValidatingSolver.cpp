@@ -35,7 +35,7 @@ public:
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query &);
   void setCoreSolverTimeout(time::Span timeout);
-  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+  void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 };
 
 // TODO: use computeInitialValues for all queries for more stress testing
@@ -150,8 +150,8 @@ void AssignmentValidatingSolver::setCoreSolverTimeout(time::Span timeout) {
 }
 
 
-void AssignmentValidatingSolver::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
-   solver->impl->getLastQueryCore(queryCore);
+void AssignmentValidatingSolver::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+   solver->impl->popUnsatCore(unsatCore);
 }
 
 Solver *createAssignmentValidatingSolver(Solver *s) {

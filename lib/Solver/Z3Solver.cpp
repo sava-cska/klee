@@ -65,7 +65,7 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
   ::Z3_symbol unsatCoreParamStrSymbol;
-   std::vector<ref<Expr>> lastQueryCore;
+   std::vector<ref<Expr>> unsatCore;
 
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
@@ -87,9 +87,9 @@ public:
     Z3_params_set_uint(builder->ctx, solverParameters, timeoutParamStrSymbol,
                        timeoutInMilliSeconds);
   }
-  void getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
-    queryCore.clear();
-    std::swap(lastQueryCore, queryCore);
+  void popUnsatCore(std::vector<ref<Expr>> &_unsatCore) {
+    _unsatCore.insert(_unsatCore.begin(), unsatCore.begin(), unsatCore.end());
+    unsatCore.clear();
   }
   void enableUnsatCore() {
     Z3_params_set_bool(builder->ctx, solverParameters, unsatCoreParamStrSymbol, Z3_L_TRUE);
@@ -285,11 +285,9 @@ bool Z3SolverImpl::internalRunSolver(
     Z3ASTHandleCmp>
       z3_ast_expr_to_klee_expr;
 
-  lastQueryCore.clear();
-
   for (auto const &constraint : query.constraints) {
     Z3ASTHandle z3Constraint = builder->construct(constraint);
-    if (ProduceUnsatCore && query.produceQueryCore) {
+    if (ProduceUnsatCore && query.produceUnsatCore) {
       Z3ASTHandle p = builder->buildFreshBoolConst(constraint->toString().c_str());
       z3_ast_expr_to_klee_expr.insert({p, constraint});
       z3_ast_expr_constraints.push_back(p);
@@ -322,7 +320,7 @@ bool Z3SolverImpl::internalRunSolver(
   // negation of the equivalent i.e.
   // ∃ X Constraints(X) ∧ ¬ query(X)
   Z3ASTHandle z3NotQueryExpr = Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx);
-  if (ProduceUnsatCore && query.produceQueryCore) {
+  if (ProduceUnsatCore && query.produceUnsatCore) {
     std::string s = "not " + query.expr->toString();
     Z3ASTHandle p = builder->buildFreshBoolConst(s.c_str());
     Z3_solver_assert_and_track(builder->ctx, theSolver, z3NotQueryExpr, p);
@@ -342,23 +340,23 @@ bool Z3SolverImpl::internalRunSolver(
   ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, theSolver);
   runStatusCode = handleSolverResponse(theSolver, satisfiable, objects, values,
                                        hasSolution);
-  if (ProduceUnsatCore &&  query.produceQueryCore && satisfiable == Z3_L_FALSE) {
-    Z3_ast_vector unsatCore = Z3_solver_get_unsat_core(builder->ctx, theSolver);
-    Z3_ast_vector_inc_ref(builder->ctx, unsatCore);
+  if (ProduceUnsatCore &&  query.produceUnsatCore && satisfiable == Z3_L_FALSE) {
+    Z3_ast_vector z3_unsat_core = Z3_solver_get_unsat_core(builder->ctx, theSolver);
+    Z3_ast_vector_inc_ref(builder->ctx, z3_unsat_core);
 
-    unsigned size = Z3_ast_vector_size(builder->ctx, unsatCore);
+    unsigned size = Z3_ast_vector_size(builder->ctx, z3_unsat_core);
     std::unordered_set<Z3ASTHandle, Z3ASTHandleHash, Z3ASTHandleCmp> z3_ast_expr_unsat_core;
 
     for (unsigned index = 0; index < size; ++index) {
       Z3ASTHandle constraint = Z3ASTHandle(
-        Z3_ast_vector_get(builder->ctx, unsatCore, index), builder->ctx);
+        Z3_ast_vector_get(builder->ctx, z3_unsat_core, index), builder->ctx);
       z3_ast_expr_unsat_core.insert(constraint);
     }
 
-    for (auto &z3Csonstraint : z3_ast_expr_constraints) {
-      if (z3_ast_expr_unsat_core.find(z3Csonstraint) != z3_ast_expr_unsat_core.end()) {
-        ref<Expr> constraint = z3_ast_expr_to_klee_expr[z3Csonstraint];
-        lastQueryCore.push_back(constraint);
+    for (auto &z3_constraint : z3_ast_expr_constraints) {
+      if (z3_ast_expr_unsat_core.find(z3_constraint) != z3_ast_expr_unsat_core.end()) {
+        ref<Expr> constraint = z3_ast_expr_to_klee_expr[z3_constraint];
+        unsatCore.push_back(constraint);
       }
     }
 
@@ -366,10 +364,11 @@ bool Z3SolverImpl::internalRunSolver(
     Z3_ast_vector_inc_ref(builder->ctx, assertions);
     unsigned assertionsCount = Z3_ast_vector_size(builder->ctx, assertions);
 
-    stats::unsatQueriesAssertionsCount += assertionsCount;
+    stats::validQueriesSize += assertionsCount;
     stats::unsatCoresSize += size;
+    ++stats::unsatCoresCount;
 
-    Z3_ast_vector_dec_ref(builder->ctx, unsatCore);
+    Z3_ast_vector_dec_ref(builder->ctx, z3_unsat_core);
     Z3_ast_vector_dec_ref(builder->ctx, assertions);
   }
 

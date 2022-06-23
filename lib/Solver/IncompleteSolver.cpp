@@ -145,6 +145,6 @@ void StagedSolverImpl::setCoreSolverTimeout(time::Span timeout) {
   secondary->impl->setCoreSolverTimeout(timeout);
 }
 
-void StagedSolverImpl::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
-  secondary->impl->getLastQueryCore(queryCore);
+void StagedSolverImpl::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+  secondary->impl->popUnsatCore(unsatCore);
 }

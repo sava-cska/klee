@@ -31,8 +31,9 @@ bool SolverImpl::computeValidity(const Query &query,
   return true;
 }
 
-void SolverImpl::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
-  klee_warning("getLastQueryCore is not implemented");
+void SolverImpl::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+  if (ProduceUnsatCore)
+    klee_error("popUnsatCore is not implemented");
 }
 
 const char *SolverImpl::getOperationStatusString(SolverRunStatus statusCode) {

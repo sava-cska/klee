@@ -85,7 +85,7 @@ public:
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query&);
   void setCoreSolverTimeout(time::Span timeout);
-  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+  void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 };
 
 /** @returns the canonical version of the given query.  The reference
@@ -253,8 +253,8 @@ void CachingSolver::setCoreSolverTimeout(time::Span timeout) {
   solver->impl->setCoreSolverTimeout(timeout);
 }
 
-void CachingSolver::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {
-  solver->impl->getLastQueryCore(queryCore);
+void CachingSolver::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+  solver->impl->popUnsatCore(unsatCore);
 }
 
 ///

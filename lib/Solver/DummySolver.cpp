@@ -25,7 +25,7 @@ public:
                             std::vector<std::vector<unsigned char> > &values,
                             bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
-  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+  void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 };
 
 DummySolverImpl::DummySolverImpl() {}
@@ -60,7 +60,7 @@ SolverImpl::SolverRunStatus DummySolverImpl::getOperationStatusCode() {
   return SOLVER_RUN_STATUS_FAILURE;
 }
 
-void DummySolverImpl::getLastQueryCore(std::vector<ref<Expr>> &queryCore) {}
+void DummySolverImpl::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {}
 
 Solver *createDummySolver() { return new Solver(new DummySolverImpl()); }
 }

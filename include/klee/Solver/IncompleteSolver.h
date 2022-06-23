@@ -102,7 +102,7 @@ public:
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query&);
   void setCoreSolverTimeout(time::Span timeout);
-  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+  void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 };
 
 }

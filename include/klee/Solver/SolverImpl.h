@@ -104,7 +104,7 @@ namespace klee {
         return nullptr;
     }
 
-    virtual void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+    virtual void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 
     virtual void setCoreSolverTimeout(time::Span timeout) {};
   };

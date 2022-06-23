@@ -405,7 +405,7 @@ public:
   SolverRunStatus getOperationStatusCode();
   char *getConstraintLog(const Query&);
   void setCoreSolverTimeout(time::Span timeout);
-  void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+  void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 };
 
 bool IndependentSolver::computeValidity(const Query& query,
@@ -415,7 +415,7 @@ bool IndependentSolver::computeValidity(const Query& query,
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
   return solver->impl->computeValidity(
-    Query(tmp, query.expr, query.produceQueryCore), result);
+    Query(tmp, query.expr, query.produceUnsatCore), result);
 }
 
 bool IndependentSolver::computeTruth(const Query& query,
@@ -425,7 +425,7 @@ bool IndependentSolver::computeTruth(const Query& query,
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
   return solver->impl->computeTruth(
-    Query(tmp, query.expr, query.produceQueryCore), isValid);
+    Query(tmp, query.expr, query.produceUnsatCore), isValid);
 }
 
 bool IndependentSolver::computeValue(const Query& query,
@@ -435,7 +435,7 @@ bool IndependentSolver::computeValue(const Query& query,
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
   return solver->impl->computeValue(
-    Query(tmp, query.expr, query.produceQueryCore), result);
+    Query(tmp, query.expr, query.produceUnsatCore), result);
 }
 
 // Helper function used only for assertions to make sure point created
@@ -500,7 +500,7 @@ bool IndependentSolver::computeInitialValues(const Query& query,
     ConstraintSet tmp(it->exprs);
     std::vector<std::vector<unsigned char> > tempValues;
     if (!solver->impl->computeInitialValues(Query(tmp, ConstantExpr::alloc(0, Expr::Bool),
-                                                  query.produceQueryCore),
+                                                  query.produceUnsatCore),
                                             arraysInFactor, tempValues, hasSolution)){
       values.clear();
       delete factors;
@@ -562,8 +562,8 @@ void IndependentSolver::setCoreSolverTimeout(time::Span timeout) {
   solver->impl->setCoreSolverTimeout(timeout);
 }
 
-void IndependentSolver::getLastQueryCore(std::vector<ref<Expr>> &queryCore){
-  solver->impl->getLastQueryCore(queryCore);
+void IndependentSolver::popUnsatCore(std::vector<ref<Expr>> &unsatCore){
+  solver->impl->popUnsatCore(unsatCore);
 }
 
 Solver *klee::createIndependentSolver(Solver *s) {

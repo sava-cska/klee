@@ -25,8 +25,9 @@ namespace stats {
   extern Statistic queryCexCacheMisses;
   extern Statistic queryConstructs;
   extern Statistic queryCounterexamples;
-  extern Statistic unsatQueriesAssertionsCount;
+  extern Statistic validQueriesSize;
   extern Statistic unsatCoresSize;
+  extern Statistic unsatCoresCount;
   extern Statistic queryTime;
   
 #ifdef KLEE_ARRAY_DEBUG

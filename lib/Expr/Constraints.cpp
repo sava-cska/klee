@@ -292,6 +292,10 @@ void Constraints::insert(const ref<Expr> &e, KInstruction *l) {
 }
 
 KInstruction *Constraints::getLocation(const ref<Expr> &e) const {
+  if (!constraintLocations.count(e)) {
+    llvm::errs() << e;
+    llvm::errs() << "\n";
+  }
   assert(constraintLocations.count(e) && "the constraint is not contained in the constraint set");
   return constraintLocations.at(e);
 }

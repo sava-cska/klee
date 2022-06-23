@@ -46,23 +46,23 @@ public:
 
   bool evaluate(const ConstraintSet &, ref<Expr>, Solver::Validity &result,
                 SolverQueryMetaData &metaData,
-                std::vector<ref<Expr>> *validityCore = nullptr);
+                bool produceUnsatCore = false);
 
   bool mustBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
                   SolverQueryMetaData &metaData,
-                std::vector<ref<Expr>> *validityCore = nullptr);
+                  bool produceUnsatCore = false);
 
   bool mustBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
                    SolverQueryMetaData &metaData,
-                   std::vector<ref<Expr>> *validityCore = nullptr);
+                   bool produceUnsatCore = false);
 
   bool mayBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
                  SolverQueryMetaData &metaData,
-                 std::vector<ref<Expr>> *validityCore = nullptr);
+                 bool produceUnsatCore = false);
 
   bool mayBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
                   SolverQueryMetaData &metaData,
-                  std::vector<ref<Expr>> *validityCore = nullptr);
+                  bool produceUnsatCore = false);
 
   bool getValue(const ConstraintSet &, ref<Expr> expr,
                 ref<ConstantExpr> &result, SolverQueryMetaData &metaData);
@@ -75,6 +75,8 @@ public:
   std::pair<ref<Expr>, ref<Expr>> getRange(const ConstraintSet &,
                                            ref<Expr> query,
                                            SolverQueryMetaData &metaData);
+
+  void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
 };
 }
 

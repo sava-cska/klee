@@ -38,24 +38,24 @@ namespace klee {
   public:
     const ConstraintSet &constraints;
     ref<Expr> expr;
-    bool produceQueryCore = false;
+    bool produceUnsatCore = false;
 
     Query(const ConstraintSet& _constraints, ref<Expr> _expr)
       : constraints(_constraints), expr(_expr) {
     }
 
-    Query(const ConstraintSet& _constraints, ref<Expr> _expr, bool _produceQueryCore)
-      : constraints(_constraints), expr(_expr), produceQueryCore(_produceQueryCore) {
+    Query(const ConstraintSet& _constraints, ref<Expr> _expr, bool _produceUnsatCore)
+      : constraints(_constraints), expr(_expr), produceUnsatCore(_produceUnsatCore) {
     }
 
     /// withExpr - Return a copy of the query with the given expression.
     Query withExpr(ref<Expr> _expr) const {
-      return Query(constraints, _expr, produceQueryCore);
+      return Query(constraints, _expr, produceUnsatCore);
     }
 
     /// withFalse - Return a copy of the query with a false expression.
     Query withFalse() const {
-      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool), produceQueryCore);
+      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool), produceUnsatCore);
     }
 
     /// negateExpr - Return a copy of the query with the expression negated.
@@ -220,7 +220,7 @@ namespace klee {
     
     virtual char *getConstraintLog(const Query& query);
     virtual void setCoreSolverTimeout(time::Span timeout);
-    void getLastQueryCore(std::vector<ref<Expr>> &queryCore);
+    void popUnsatCore(std::vector<ref<Expr>> &unsatCore);
   };
 
   /* *** */

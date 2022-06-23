@@ -26,7 +26,7 @@ using namespace llvm;
 bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
                             Solver::Validity &result,
                             SolverQueryMetaData &metaData,
-                            std::vector<ref<Expr>> *validityCore) {
+                            bool produceUnsatCore) {
   // Fast path, to avoid timer and OS overhead.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
     result = CE->isTrue() ? Solver::True : Solver::False;
@@ -38,10 +38,8 @@ bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
   if (simplifyExprs)
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
-  bool success = solver->evaluate(Query(constraints, expr, validityCore != nullptr), result);
-
-  if (validityCore)
-    solver->getLastQueryCore(*validityCore);
+  bool success =
+      solver->evaluate(Query(constraints, expr, produceUnsatCore), result);
 
   metaData.queryCost += timer.delta();
 
@@ -50,7 +48,7 @@ bool TimingSolver::evaluate(const ConstraintSet &constraints, ref<Expr> expr,
 
 bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
                               bool &result, SolverQueryMetaData &metaData,
-                              std::vector<ref<Expr>> *validityCore) {
+                              bool produceUnsatCore) {
   // Fast path, to avoid timer and OS overhead.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
     result = CE->isTrue() ? true : false;
@@ -62,10 +60,8 @@ bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
   if (simplifyExprs)
     expr = ConstraintManager::simplifyExpr(constraints, expr);
 
-  bool success = solver->mustBeTrue(Query(constraints, expr, validityCore != nullptr), result);
-
-  if (validityCore)
-    solver->getLastQueryCore(*validityCore);
+  bool success =
+      solver->mustBeTrue(Query(constraints, expr, produceUnsatCore), result);
 
   metaData.queryCost += timer.delta();
 
@@ -74,15 +70,16 @@ bool TimingSolver::mustBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
 
 bool TimingSolver::mustBeFalse(const ConstraintSet &constraints, ref<Expr> expr,
                                bool &result, SolverQueryMetaData &metaData,
-                              std::vector<ref<Expr>> *validityCore) {
-  return mustBeTrue(constraints, Expr::createIsZero(expr), result, metaData, validityCore);
+                               bool produceUnsatCore) {
+  return mustBeTrue(constraints, Expr::createIsZero(expr), result, metaData,
+                    produceUnsatCore);
 }
 
 bool TimingSolver::mayBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
                              bool &result, SolverQueryMetaData &metaData,
-                              std::vector<ref<Expr>> *validityCore) {
+                             bool produceUnsatCore) {
   bool res;
-  if (!mustBeFalse(constraints, expr, res, metaData, validityCore))
+  if (!mustBeFalse(constraints, expr, res, metaData, produceUnsatCore))
     return false;
   result = !res;
   return true;
@@ -90,9 +87,9 @@ bool TimingSolver::mayBeTrue(const ConstraintSet &constraints, ref<Expr> expr,
 
 bool TimingSolver::mayBeFalse(const ConstraintSet &constraints, ref<Expr> expr,
                               bool &result, SolverQueryMetaData &metaData,
-                              std::vector<ref<Expr>> *validityCore) {
+                              bool produceUnsatCore) {
   bool res;
-  if (!mustBeTrue(constraints, expr, res, metaData, validityCore))
+  if (!mustBeTrue(constraints, expr, res, metaData, produceUnsatCore))
     return false;
   result = !res;
   return true;
@@ -143,4 +140,8 @@ TimingSolver::getRange(const ConstraintSet &constraints, ref<Expr> expr,
   auto result = solver->getRange(Query(constraints, expr));
   metaData.queryCost += timer.delta();
   return result;
+}
+
+void TimingSolver::popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+  solver->popUnsatCore(unsatCore);
 }

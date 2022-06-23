@@ -100,8 +100,7 @@ bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState &state, ref<Expr>
   return success;
 }
 
-bool Composer::tryRebuild(const ProofObligation &old,
-                          ExecutionState &state,
+bool Composer::tryRebuild(const ProofObligation &old, ExecutionState &state,
                           ProofObligation &rebuilt,
                           Conflict::core_ty &conflictCore,
                           ExprHashMap<ref<Expr>> &rebuildMap) {
@@ -118,18 +117,16 @@ bool Composer::tryRebuild(const ProofObligation &old,
     if (success) {
       rebuildMap[rebuiltConstraint] = constraint;
       success = executor->getSolver()->mayBeTrue(
-        composer.copy.constraints,
-        rebuiltConstraint,
-        mayBeTrue,
-        composer.copy.queryMetaData,
-        &unsatCore
-      );
+          composer.copy.constraints, rebuiltConstraint, mayBeTrue,
+          composer.copy.queryMetaData, true);
+      executor->getSolver()->popUnsatCore(unsatCore);
       if (success && !mayBeTrue &&
-           // confclitCore needs for summarizing and should be non empty for that.
-           // It means that unsatCore sould be non empty
-           // or rebuilt constraint should be constant.
+          // confclitCore needs for summarizing and should be non empty for
+          // that. It means that unsatCore sould be non empty or rebuilt
+          // constraint should be constant.
           (unsatCore.size() || isa<ConstantExpr>(rebuiltConstraint))) {
-        Executor::makeConflictCore(composer.copy, unsatCore, rebuiltConstraint, loc, conflictCore);
+        Executor::makeConflictCore(composer.copy, unsatCore, rebuiltConstraint,
+                                   loc, conflictCore);
       }
     }
     if (success && mayBeTrue) {
@@ -142,7 +139,8 @@ bool Composer::tryRebuild(const ProofObligation &old,
   rebuilt.condition = composer.copy.constraintInfos;
   std::vector<Symbolic> sourced;
   composer.copy.extractSourcedSymbolics(sourced);
-  rebuilt.sourcedSymbolics.insert(rebuilt.sourcedSymbolics.end(), sourced.begin(), sourced.end());
+  rebuilt.sourcedSymbolics.insert(rebuilt.sourcedSymbolics.end(),
+                                  sourced.begin(), sourced.end());
   rebuilt.path = concat(state.path, old.path);
   return success;
 }

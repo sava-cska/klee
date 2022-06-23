@@ -24,7 +24,7 @@ namespace klee {
 
   public:
     PForest() = default;
-    ~PForest() = default;
+    ~PForest();
     void addRoot(ExecutionState *initialState);
     void attach(PTreeNode *node, ExecutionState *leftState,
                 ExecutionState *rightState);

@@ -41,3 +41,10 @@ void PForest::dump(llvm::raw_ostream &os) {
   for (auto &ntree : trees)
     ntree.second->dump(os);
 }
+
+
+PForest::~PForest() {
+  for (auto &ntree : trees)
+    delete ntree.second;
+  trees.clear();
+}

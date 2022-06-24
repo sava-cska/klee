@@ -491,9 +491,9 @@ void ExprPPrinter::printSingleExpr(llvm::raw_ostream &os, const ref<Expr> &e) {
 void ExprPPrinter::printSingleArray(llvm::raw_ostream &os, const Array *A) {
   PrintContext PC(os);
   PC << "array "
-     << (A->isLazilyInitialized() ? A->liSource->toString() : A->name) << " "
-     << A->index << " " << (A->isExternal ? "true" : "false") << " "
-     << "[" << A->size << "]"
+     << (A->isLazilyInitialized() ? A->liSource->toString() : A->name)
+     << "[" << A->size << "] "
+     << A->index << " " << (A->isExternal ? "true" : "false")
      << " : w" << A->domain << " -> w" << A->range << " = ";
   if (A->isSymbolicArray()) {
     PC << "symbolic";

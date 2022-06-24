@@ -508,8 +508,8 @@ DeclResult ParserImpl::ParseArrayDecl() {
   IntegerResult Size;
   TypeResult DomainType;
   TypeResult RangeType;
-  int Index;
-  bool IsExternal;
+  int Index = 0;
+  bool IsExternal = true;
   ExprResult LISource;
   std::vector< ref<ConstantExpr> > Values;
 
@@ -522,12 +522,6 @@ DeclResult ParserImpl::ParseArrayDecl() {
     Error("expected LI or name.");
     return DeclResult();
   }
-
-  Index = ParseIntegerInternal(Tok);
-  ConsumeToken();
-
-  IsExternal = ParseBoolInternal(Tok);
-  ConsumeToken();
 
   if (Tok.kind != Token::LSquare) {
     Error("expected '['.");
@@ -543,6 +537,14 @@ DeclResult ParserImpl::ParseArrayDecl() {
     goto exit;
   }
   ConsumeRSquare();
+
+  if (Tok.kind != Token::Colon) {
+    Index = ParseIntegerInternal(Tok);
+    ConsumeToken();
+
+    IsExternal = ParseBoolInternal(Tok);
+    ConsumeToken();
+  }
 
   if (Tok.kind != Token::Colon) {
     Error("expected ':'.");

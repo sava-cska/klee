@@ -174,9 +174,10 @@ void BidirectionalSearcher::updateForward(
 void BidirectionalSearcher::updateBranch(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates) {
-  branch->update(current, addedStates, removedStates);
+  std::map<Target, std::unordered_set<ExecutionState *>> reached;
 
-  auto reached = branch->collectAndClearReached();
+  branch->update(current, addedStates, removedStates, reached);
+
   for (auto &targetStates : reached) {
     for (auto state : targetStates.second) {
       if (DebugBidirectionalSearcher) {

@@ -157,19 +157,30 @@ namespace klee {
   private:
     std::unique_ptr<ForwardSearcher> baseSearcher;
     std::map<Target, std::unique_ptr<TargetedSearcher>> targetedSearchers;
-    unsigned index {1};
+    unsigned index{1};
     bool reachingEnough;
     void addTarget(Target target);
+    void innerUpdate(ExecutionState *current,
+                     const std::vector<ExecutionState *> &addedStates,
+                     const std::vector<ExecutionState *> &removedStates);
+
+    void clearReached();
+    void collectReached(
+        std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates);
 
   public:
-    GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher, bool _reachingEnough);
+    GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher,
+                   bool _reachingEnough);
     ~GuidedSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
                 const std::vector<ExecutionState *> &removedStates) override;
-
-    std::map<Target, std::unordered_set<ExecutionState *>> collectAndClearReached();
+    void update(
+        ExecutionState *current,
+        const std::vector<ExecutionState *> &addedStates,
+        const std::vector<ExecutionState *> &removedStates,
+        std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates);
 
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;

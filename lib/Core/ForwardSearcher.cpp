@@ -235,17 +235,6 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetPostTargetWeight(const Ex
 }
 
 TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(const ExecutionState &es, double &weight) {
-  if (target.atReturn()) {
-    if (es.prevPC->parent == target.block &&
-        es.prevPC == es.prevPC->parent->getLastInstruction() &&
-        es.stackBalance == -1) {
-      return Done;
-    } else if (es.pc->parent == target.block) {
-      weight = 0;
-      return Continue;
-    }
-  }
-  
   std::vector<KBlock*> localTargets = {target.block};
   WeightResult res = tryGetLocalWeight(es, weight, localTargets);
 
@@ -254,6 +243,16 @@ TargetedSearcher::WeightResult TargetedSearcher::tryGetTargetWeight(const Execut
 }
 
 TargetedSearcher::WeightResult TargetedSearcher::tryGetWeight(const ExecutionState &es, double &weight) {
+  if (target.atReturn()) {
+    if (es.prevPC->parent == target.block &&
+        es.prevPC == target.block->getLastInstruction()) {
+      return Done;
+    } else if (es.pc->parent == target.block) {
+      weight = 0;
+      return Continue;
+    }
+  }
+
   BasicBlock *bb = es.getPCBlock();
   KBlock *kb = es.stack.back().kf->blockMap[bb];
   unsigned int minCallWeight = UINT_MAX, minSfNum = UINT_MAX, sfNum = 0;
@@ -303,6 +302,10 @@ void TargetedSearcher::update(ExecutionState *current,
       }
       break;
     case Done:
+      if (!states->inTree(current)) {
+        states->insert(current, weight);
+        states_set.insert(current);
+      }
       reachedOnLastUpdate.push_back(current);
       break;
     case Miss:
@@ -384,11 +387,10 @@ ExecutionState &GuidedSearcher::selectState() {
   }
 }
 
+void GuidedSearcher::innerUpdate(
+    ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
+    const std::vector<ExecutionState *> &removedStates) {
 
-void GuidedSearcher::update(ExecutionState *current,
-                            const std::vector<ExecutionState *> &addedStates,
-                            const std::vector<ExecutionState *> &removedStates) {
-  
   std::map<Target, std::vector<ExecutionState *>> addedTStates;
   std::map<Target, std::vector<ExecutionState *>> removedTStates;
   std::set<Target> targets;
@@ -411,7 +413,8 @@ void GuidedSearcher::update(ExecutionState *current,
   }
 
   if (current)
-    for (auto i : current->targets) targets.insert(i);
+    for (auto i : current->targets)
+      targets.insert(i);
 
   for (auto target : targets) {
     ExecutionState *currTState =
@@ -421,7 +424,8 @@ void GuidedSearcher::update(ExecutionState *current,
 
     if (targetedSearchers.count(target) == 0)
       addTarget(target);
-    targetedSearchers[target]->update(currTState, addedTStates[target], removedTStates[target]);
+    targetedSearchers[target]->update(currTState, addedTStates[target],
+                                      removedTStates[target]);
 
     if (targetedSearchers[target]->empty())
       targetedSearchers.erase(target);
@@ -430,22 +434,49 @@ void GuidedSearcher::update(ExecutionState *current,
   baseSearcher->update(current, addedStates, removedStates);
 }
 
-std::map<Target, std::unordered_set<ExecutionState *>> GuidedSearcher::collectAndClearReached() {
+void GuidedSearcher::update(
+    ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
+    const std::vector<ExecutionState *> &removedStates,
+    std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates) {
+  innerUpdate(current, addedStates, removedStates);
+  collectReached(reachedStates);
+  clearReached();
+}
+
+void GuidedSearcher::update(
+    ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
+    const std::vector<ExecutionState *> &removedStates) {
+  innerUpdate(current, addedStates, removedStates);
+  clearReached();
+}
+
+void GuidedSearcher::collectReached(
+    std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates) {
   std::map<Target, std::unordered_set<ExecutionState *>> ret;
   std::vector<Target> targets;
-  for(auto const& targetSearcher: targetedSearchers)
+  for (auto const &targetSearcher : targetedSearchers)
     targets.push_back(targetSearcher.first);
   for (auto target : targets) {
     auto reached = targetedSearchers[target]->reached();
     if (!reached.empty()) {
-      for (auto state: reached)
-        ret[target].insert(state);
+      for (auto state : reached)
+        reachedStates[target].insert(state);
+    }
+  }
+}
+
+void GuidedSearcher::clearReached() {
+  std::vector<Target> targets;
+  for (auto const &targetSearcher : targetedSearchers)
+    targets.push_back(targetSearcher.first);
+  for (auto target : targets) {
+    auto reached = targetedSearchers[target]->reached();
+    if (!reached.empty()) {
       targetedSearchers[target]->removeReached();
       if (reachingEnough || targetedSearchers[target]->empty())
         targetedSearchers.erase(target);
     }
   }
-  return ret;
 }
 
 bool GuidedSearcher::empty() {

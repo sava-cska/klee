@@ -4576,11 +4576,14 @@ const Array * Executor::makeArray(ExecutionState &state,
                                   bool isExternal,
                                   ref<Expr> liSource) {
   static uint64_t id = 0;
-  std::string uniqueName = isExternal ? name + "#" + std::to_string(id++) : name;
-  // std::string uniqueName = name;
-  // while (!state.arrayNames.insert(uniqueName).second) {
-  //   uniqueName = name + "#" + llvm::utostr(++id);
-  // }
+  std::string uniqueName = name;
+
+  if (isExternal) {
+    while (!state.arrayNames.insert(uniqueName).second) {
+      uniqueName = name + "#" + llvm::utostr(++id);
+    }
+  }
+
   const Array *array = arrayManager.CreateArray(uniqueName, size, isExternal, liSource);
 
   return array;

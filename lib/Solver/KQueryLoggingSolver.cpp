@@ -57,6 +57,10 @@ public:
     printer(ExprPPrinter::create(logBuffer)) {
     }
 
+    virtual void popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+      solver->impl->popUnsatCore(unsatCore);
+    }
+
     virtual ~KQueryLoggingSolver() {
         delete printer;
     }

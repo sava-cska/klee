@@ -2143,10 +2143,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     if (state.stack.size() <= 1) {
       assert(!caller && "caller set on initial stack frame");
-      state.popFrame();
       state.pc = state.prevPC;
       state.increaseLevel();
       if (state.isIsolated()) {
+        state.popFrame();
         state.returnValue = result;
       }
       terminateStateOnExit(state);

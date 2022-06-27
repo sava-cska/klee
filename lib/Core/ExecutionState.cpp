@@ -87,7 +87,6 @@ ExecutionState::ExecutionState(KFunction *kf) :
     stackBalance(0),
     incomingBBIndex(-1),
     depth(0),
-    maxLevel(0),
     constraints(constraintInfos),
     ptreeNode(nullptr),
     steppedInstructions(0),
@@ -112,7 +111,6 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     stackBalance(0),
     incomingBBIndex(-1),
     depth(0),
-    maxLevel(0),
     constraints(constraintInfos),
     ptreeNode(nullptr),
     steppedInstructions(0),
@@ -150,7 +148,6 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     multilevel(state.multilevel),
     level(state.level),
     transitionLevel(state.transitionLevel),
-    maxLevel(state.maxLevel),
     addressSpace(state.addressSpace),
     constraintInfos(state.constraintInfos),
     constraints(constraintInfos),
@@ -547,8 +544,6 @@ void ExecutionState::increaseLevel() {
   llvm::BasicBlock *dstbb = getPCBlock();
   if (prevPC->inst->isTerminator()) {
     multilevel.insert(srcbb);
-    if (multilevel.count(srcbb) > maxLevel)
-      maxLevel = multilevel.count(srcbb);
     level.insert(srcbb);
   }
   transitionLevel.insert(std::make_pair(srcbb, dstbb));

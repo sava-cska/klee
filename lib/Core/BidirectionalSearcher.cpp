@@ -98,8 +98,10 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
 
     case StepKind::Branch: {
       auto &state = branch->selectState();
+      KInstruction *prevKI = state.prevPC;
       if (ex->initialState->getInitPCBlock() != state.getInitPCBlock() &&
-          state.maxLevel > 1) {
+          prevKI->inst->isTerminator() &&
+          state.multilevel.count(state.getPCBlock()) > 0) {
         branch->update(nullptr, {}, {&state});
         ex->pauseState(state);
       } else {

@@ -27,9 +27,9 @@ class KLEE(object):
         self.base_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)))
         self.klee_path = os.path.join(self.base_directory, "build/bin/klee")
         # self.compiler_path = os.path.join(self.base_directory, "compiler/clang")
-        self.compiler_path = os.path.join(self.base_directory, "../llvm11/bin/clang")
+        self.compiler_path = os.path.join(self.base_directory, "/usr/bin/clang")
         # self.linker_path = os.path.join(self.base_directory, "compiler/llvm-link")
-        self.linker_path = os.path.join(self.base_directory, "../llvm11/bin/llvm-link")
+        self.linker_path = os.path.join(self.base_directory, "/usr/bin/llvm-link")
         # self.library_path = os.path.join(self.base_directory, "libraries")
         # self.runtime_library_path = os.path.join(self.base_directory,  "klee_build/Debug+Asserts/lib")
         self.test_results_path = os.path.join(os.getcwd(), "test-suite")
@@ -108,7 +108,6 @@ class KLEE(object):
             cmd += ["--allocate-determ-start-address=0x00030000000"]
 
         if self.f_err:
-            cmd += ["--tc-type=bug"]
             cmd += ["--dump-states-on-halt=false"] # Explicitly do not dump states
             cmd += ["-exit-on-error-type=Assert"] # Only generate test cases of type assert
             cmd += ["-dump-test-case-type=Assert"] # Only dump test cases of type assert
@@ -116,10 +115,8 @@ class KLEE(object):
                 cmd += ["-max-time="+str(int(self.max_time) )] # Use the whole time
 
         if self.f_cov:
-            cmd += ["--tc-type=cov"]
-            cmd += ["-output-states-covering-new"] # Don't generate all test cases
+            cmd += ["--only-output-states-covering-new"] # Don't generate all test cases
             cmd += ["-dump-states-on-halt=true"] # Check in case we missed some oncovered instructions
-            cmd += ["-coverage-on-the-fly"]
             if self.max_time:
                 cmd += ["-max-time="+str(int(self.max_time) )] # execute one minute less
 

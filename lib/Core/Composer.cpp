@@ -252,22 +252,31 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
     if (!allocSite)
       return nullptr;
 
-    if (array->index == -1 && state.stack.empty()) {
+    if (array->index == -1) {
       assert(isa<CallInst>(allocSite) || isa<InvokeInst>(allocSite));
       const Instruction *inst = cast<Instruction>(allocSite);
       const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
       KFunction *kf = ki->parent->parent;
-      Function *calledf =
-        isa<CallInst>(inst) ?
-          dyn_cast<CallInst>(inst)->getCalledFunction() :
-          dyn_cast<InvokeInst>(inst)->getCalledFunction();
-      KFunction *lastkf = state.pc->parent->parent;
-      KBlock *pckb = lastkf->blockMap[state.getPCBlock()];
-      bool isFinalPCKB = std::find(lastkf->finalKBlocks.begin(),
-                                   lastkf->finalKBlocks.end(),
-                                   pckb) != lastkf->finalKBlocks.end();
-      assert(isFinalPCKB && calledf == lastkf->function);
-      prevVal = state.returnValue;
+
+      if (state.stack.empty()) {
+        Function *calledf =
+          isa<CallInst>(inst) ?
+            dyn_cast<CallInst>(inst)->getCalledFunction() :
+            dyn_cast<InvokeInst>(inst)->getCalledFunction();
+        KFunction *lastkf = state.pc->parent->parent;
+        KBlock *pckb = lastkf->blockMap[state.getPCBlock()];
+        bool isFinalPCKB = std::find(lastkf->finalKBlocks.begin(),
+                                    lastkf->finalKBlocks.end(),
+                                    pckb) != lastkf->finalKBlocks.end();
+        assert(isFinalPCKB && calledf == lastkf->function);
+        prevVal = state.returnValue;
+      } else {
+        StackFrame &frame = state.stack.back();
+        KFunction *framekf = frame.kf;
+        assert(kf->function == framekf->function);
+        prevVal = caller.executor->getDestCell(frame, ki).value;
+        assert(prevVal);
+      }
     } else {
       assert(!state.stack.empty());
       StackFrame &frame = state.stack.at(state.stack.size() - array->index - 1);
@@ -284,7 +293,7 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
         const Instruction *inst = cast<Instruction>(allocSite);
         const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
         if (isa<PHINode>(inst)) {
-          assert(framekf->function == state.stack.back().kf->function);
+          assert(framekf->function == inst->getParent()->getParent());
           if (inst->getParent() == state.getPCBlock())
             prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, frame, false).value;
           else

@@ -5569,9 +5569,11 @@ ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
     newPob->propagationCount[state]++;
     // goBackward assumes that the state and the proof obligation are stack-compatible
     // so we only need to pop the right amount of stack frames from the proof obligation.
-    for (auto it = state->stack.rbegin();
-         it != std::prev(state->stack.rend()) && !newPob->stack.empty(); it++) {
-      newPob->stack.pop_back();
+    if (state->stack.size() != 0) {
+      for (auto it = state->stack.rbegin();
+          it != std::prev(state->stack.rend()) && !newPob->stack.empty(); it++) {
+        newPob->stack.pop_back();
+      }
     }
     std::vector<ProofObligation *> newPobs;
     // If the state initial location is a "right after call" location,

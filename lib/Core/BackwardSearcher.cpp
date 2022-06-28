@@ -10,7 +10,10 @@
 namespace klee {
 
 bool checkStack(ExecutionState *state, ProofObligation *pob) {
-  size_t range = std::min(state->stack.size(), pob->stack.size());
+  if (state->stack.size() == 0)
+    return true;
+
+  size_t range = std::min(state->stack.size() - 1, pob->stack.size());
   auto stateIt = state->stack.rbegin();
   auto pobIt = pob->stack.rbegin();
 

@@ -140,19 +140,17 @@ void BidirectionalSearcher::updateForward(
   forward->update(current, addedStates, removedStates);
 
   if (current && current->getPrevPCBlock() != current->getPCBlock() &&
-      !isa<KReturnBlock>(current->pc->parent)) {
-    Target target = isa<KReturnBlock>(current->prevPC->parent)
-                        ? Target(current->prevPC->parent)
-                        : Target(current->pc->parent);
+      !isa<KReturnBlock>(current->pc->parent) &&
+      !isa<KReturnBlock>(current->prevPC->parent)) {
+    Target target = Target(current->pc->parent);
     backward->addState(target, current);
   }
 
   for (auto &state : addedStates) {
     if (state->getPrevPCBlock() != state->getPCBlock() && 
-        !isa<KReturnBlock>(state->pc->parent)) {
-      Target target = isa<KReturnBlock>(state->prevPC->parent)
-                          ? Target(state->prevPC->parent)
-                          : Target(state->pc->parent);
+        !isa<KReturnBlock>(state->pc->parent) &&
+        !isa<KReturnBlock>(state->prevPC->parent)) {
+      Target target = Target(state->pc->parent);
       backward->addState(target, state);
     }
   }
@@ -184,6 +182,8 @@ void BidirectionalSearcher::updateBranch(
 
   for (auto &targetStates : reached) {
     for (auto state : targetStates.second) {
+      if (targetStates.first.atReturn() && state->stack.size() > 0)
+        continue;
       if (DebugBidirectionalSearcher) {
         llvm::errs() << "New isolated state.\n";
         llvm::errs() << "Id: " << state->id << "\n";

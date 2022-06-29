@@ -52,6 +52,10 @@ class SMTLIBLoggingSolver : public QueryLoggingSolver
 		  //Setup the printer
 		  printer.setOutput(logBuffer);
 		}
+
+        virtual void popUnsatCore(std::vector<ref<Expr>> &unsatCore) {
+          solver->impl->popUnsatCore(unsatCore);
+        }
 };
 
 

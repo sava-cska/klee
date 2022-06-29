@@ -5467,10 +5467,79 @@ void Executor::run(ExecutionState &state) {
   states.insert(&state);
 
   SearcherConfig cfg;
-  cfg.initial_state = &state;
+  // cfg.initial_state = &state;
   cfg.executor = this;
 
+  if (usingSeeds) {
+    std::vector<SeedInfo> &v = seedMap[&state];
+
+    for (std::vector<KTest*>::const_iterator it = usingSeeds->begin(),
+           ie = usingSeeds->end(); it != ie; ++it)
+      v.push_back(SeedInfo(*it));
+
+    int lastNumSeeds = usingSeeds->size()+10;
+    time::Point lastTime, startTime = lastTime = time::getWallTime();
+    ExecutionState *lastState = 0;
+    while (!seedMap.empty()) {
+      if (haltExecution) {
+        doDumpStates();
+        return;
+      }
+
+      std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it = 
+        seedMap.upper_bound(lastState);
+      if (it == seedMap.end())
+        it = seedMap.begin();
+      lastState = it->first;
+      ExecutionState &state = *lastState;
+      KInstruction *ki = state.pc;
+      stepInstruction(state);
+
+      executeInstruction(state, ki);
+      timers.invoke();
+      if (::dumpStates) dumpStates();
+      if (::dumpPForest) dumpPForest();
+      ref<ForwardResult> res = new ForwardResult(&state, addedStates, removedStates);
+      updateResult(res);
+
+      if ((stats::instructions % 1000) == 0) {
+        int numSeeds = 0, numStates = 0;
+        for (std::map<ExecutionState*, std::vector<SeedInfo> >::iterator
+               it = seedMap.begin(), ie = seedMap.end();
+             it != ie; ++it) {
+          numSeeds += it->second.size();
+          numStates++;
+        }
+        const auto time = time::getWallTime();
+        const time::Span seedTime(SeedTime);
+        if (seedTime && time > startTime + seedTime) {
+          klee_warning("seed time expired, %d seeds remain over %d states",
+                       numSeeds, numStates);
+          break;
+        } else if (numSeeds<=lastNumSeeds-10 ||
+                   time - lastTime >= time::seconds(10)) {
+          lastTime = time;
+          lastNumSeeds = numSeeds;
+          klee_message("%d seeds remaining over: %d states",
+                       numSeeds, numStates);
+        }
+      }
+    }
+
+    klee_message("seeding done (%d states remain)", (int) states.size());
+
+    if (OnlySeed) {
+      doDumpStates();
+      return;
+    }
+  }
+
   searcher = std::make_unique<BidirectionalSearcher>(cfg);
+  std::vector<ExecutionState *> newStates(states.begin(), states.end());
+  std::vector<ExecutionState *> removed{};
+  ref<ForwardResult> res = new ForwardResult(nullptr, newStates, removed);
+  searcher->update(res);
+
   summary->loadAllFromDB();
 
   while (!haltExecution) {

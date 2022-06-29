@@ -105,7 +105,7 @@ struct InitializeAction : public BidirectionalAction {
 };
 
 struct SearcherConfig {
-  ExecutionState *initial_state;
+  // ExecutionState *initial_state;
   Executor *executor;
 };
 

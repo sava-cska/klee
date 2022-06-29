@@ -5548,6 +5548,12 @@ ref<ForwardResult> Executor::goForward(ref<ForwardAction> action) {
 
   ref<ForwardResult> ret = new ForwardResult(state, addedStates, removedStates, targetedConflict);
   targetedConflict = ref<TargetedConflict>();
+
+  if (!checkMemoryUsage()) {
+    // update searchers when states were terminated early due to memory pressure
+    updateResult(ret);
+    ret = new ForwardResult(nullptr, addedStates, removedStates);
+  }
   return ret;
 }
 

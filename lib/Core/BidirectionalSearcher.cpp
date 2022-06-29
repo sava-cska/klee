@@ -240,7 +240,6 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
     : ticker({80, 10, 5, 5}) {
   ex = cfg.executor;
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
-  // forward->update(nullptr, {cfg.initial_state}, {});
   branch = new GuidedSearcher(
       std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new RecencyRankedSearcher();

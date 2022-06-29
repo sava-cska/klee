@@ -5467,7 +5467,6 @@ void Executor::run(ExecutionState &state) {
   states.insert(&state);
 
   SearcherConfig cfg;
-  // cfg.initial_state = &state;
   cfg.executor = this;
 
   if (usingSeeds) {

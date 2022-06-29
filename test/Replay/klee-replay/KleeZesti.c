@@ -8,7 +8,7 @@
 // RUN: echo -n bbbb > %t.out/bbbb.txt
 // RUN: echo -n ccc > %t.out/cccc.txt
 // RUN: %clang %s -emit-llvm %O0opt -c -o %t.bc
-// RUN: %klee-zesti -only-replay-seeds -libc=uclibc -posix-runtime %t.bc -o -p -q %t.out/bbbb.txt %t.out/cccc.txt < %t.out/aaaa.txt  &> %t.out/out.txt
+// RUN: %klee-zesti -only-replay-seeds -libc=uclibc -posix-runtime --produce-unsat-core=false %t.bc -o -p -q %t.out/bbbb.txt %t.out/cccc.txt < %t.out/aaaa.txt  &> %t.out/out.txt
 // RUN: FileCheck --input-file=%t.out/out.txt %s
 
 #include <fcntl.h>

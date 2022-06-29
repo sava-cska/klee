@@ -16,8 +16,9 @@ entry:
   %0 = alloca [47 x i8], align 16
   %1 = getelementptr inbounds [47 x i8], [47 x i8]* %0, i64 0, i64 0
   ; Make sure memory barrier with function arguments is kept
+  ; KLEE will put the call in a separate basic block so the index gets shifted
   %2 = call i8* asm sideeffect "", "=r,0,~{memory},~{dirflag},~{fpsr},~{flags}"(i8* nonnull %1)
-  ; CHECK: %2 = call i8* asm sideeffect "", "=r,0,~{memory},~{dirflag},~{fpsr},~{flags}"(i8* nonnull %1)
+  ; CHECK: %3 = call i8* asm sideeffect "", "=r,0,~{memory},~{dirflag},~{fpsr},~{flags}"(i8* nonnull %1)
   ret i32 0
 }
 

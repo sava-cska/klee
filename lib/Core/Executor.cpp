@@ -58,9 +58,6 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/Support/Casting.h"
-#include <iterator>
-#include <memory>
-#include <optional>
 #if LLVM_VERSION_CODE < LLVM_VERSION(8, 0)
 #include "llvm/IR/CallSite.h"
 #endif
@@ -94,11 +91,15 @@ typedef unsigned TypeSize;
 #include <iomanip>
 #include <iosfwd>
 #include <iostream>
+#include <iterator>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <sys/mman.h>
 #include <vector>
+
 using namespace std::chrono;
 
 using namespace llvm;

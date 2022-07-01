@@ -5715,7 +5715,7 @@ int Executor::getBase(ref<Expr> expr,
     break;
   }
   default: {
-    if (UseGEPExpr && isGEPExpr(expr)) {
+    if (UseGEPOptimization && isGEPExpr(expr)) {
       ref<Expr> gepBase = gepExprBases[expr].first;
       ref<Expr> offset = gepExprOffsets[expr];
       std::pair<Symbolic, ref<Expr>> gepResolved;

@@ -2171,8 +2171,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
       } else {
         state.pc = kcaller;
-        ++state.pc;
         state.increaseLevel();
+        ++state.pc;
       }
 
       if (ri->getFunction()->getName() == "_klee_eh_cxx_personality") {

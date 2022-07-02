@@ -64,15 +64,21 @@ RecencyRankedSearcher::selectAction() {
 }
 
 void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
-  if (state->isIsolated())
-    emanager.insert(target, *state->copy());
+  if (state->isIsolated()) {
+    state = state->copy();
+    emanager.insert(target, *state);
+  }
 
   for (auto pob : pobs) {
     Target pobsTarget(pob->location);
     if (target == pobsTarget && checkStack(state, pob)) {
       assert(state->path.getFinalBlock() == pob->path.getInitialBlock() &&
              "Paths are not compatible.");
-      propagatePobToStates[pob].insert(state->copy());
+      if (state->isIsolated()) {
+        propagatePobToStates[pob].insert(state);
+      } else {
+        propagatePobToStates[pob].insert(state->copy());
+      }
     }
   }
 }

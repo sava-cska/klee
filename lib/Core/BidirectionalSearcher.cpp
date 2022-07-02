@@ -151,14 +151,12 @@ void BidirectionalSearcher::updateForward(
 
   forward->update(current, addedStates, removedStates);
 
-  if (current && current->getPrevPCBlock() != current->getPCBlock() &&
-      !isa<KReturnBlock>(current->pc->parent) &&
-      !isa<KReturnBlock>(current->prevPC->parent)) {
-    Target target = Target(current->pc->parent);
-    backward->addState(target, current);
-  }
+  std::vector<ExecutionState *> states;
+  if (current)
+    states.push_back(current);
+  states.insert(states.end(), addedStates.begin(), addedStates.end());
 
-  for (auto &state : addedStates) {
+  for (auto &state : states) {
     if (state->getPrevPCBlock() != state->getPCBlock() && 
         !isa<KReturnBlock>(state->pc->parent) &&
         !isa<KReturnBlock>(state->prevPC->parent)) {

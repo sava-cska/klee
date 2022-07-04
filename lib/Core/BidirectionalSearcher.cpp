@@ -93,6 +93,17 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
 
     case StepKind::Forward: {
       auto &state = forward->selectState();
+
+      if (state.backwardStepsLeftCounter > 0) {
+        break;
+      }
+
+      if (state.failedBackwardStepsCounter > 0) {
+        forward->update(nullptr, {}, {&state});
+        ex->pauseState(state);
+        break;
+      }
+
       if (isStuck(state)) {
         KBlock *target = ex->calculateTargetByBlockHistory(state);
         if (target) {
@@ -234,6 +245,11 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
   case ActionResult::Kind::Backward: {
     auto bckr = cast<BackwardResult>(r);
     updateBackward(bckr->newPobs, bckr->oldPob);
+    if (bckr->state->backwardStepsLeftCounter > 0) {
+      --bckr->state->backwardStepsLeftCounter;
+      if (bckr->newPobs.empty())
+        ++bckr->state->failedBackwardStepsCounter;
+    }
     break;
   }
   case ActionResult::Kind::Initialize: {

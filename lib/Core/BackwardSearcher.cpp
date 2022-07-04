@@ -80,8 +80,11 @@ void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
       if (state->isIsolated()) {
         propagatePobToStates[pob].insert(state);
       } else {
-        propagatePobToStates[pob].insert(state->copy());
+        propagatePobToStates[pob].insert(state);
       }
+
+      if (!state->isIsolated())
+        ++state->backwardStepsLeftCounter;
     }
   }
 }

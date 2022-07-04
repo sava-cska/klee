@@ -195,10 +195,11 @@ struct BackwardResult : ActionResult {
   friend class ref<BackwardResult>;
 
   std::vector<ProofObligation*> newPobs;
+  ExecutionState *state;
   ProofObligation *oldPob;
 
-  BackwardResult(std::vector<ProofObligation*> _newPobs, ProofObligation *_oldPob)
-    : newPobs(_newPobs), oldPob(_oldPob) {}
+  BackwardResult(std::vector<ProofObligation*> _newPobs, ExecutionState *_state, ProofObligation *_oldPob)
+    : newPobs(_newPobs), state(_state), oldPob(_oldPob) {}
 
   Kind getKind() const { return Kind::Backward; }
   static bool classof(const ActionResult *A) {

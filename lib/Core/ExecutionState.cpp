@@ -103,9 +103,10 @@ ExecutionState::ExecutionState(KFunction *kf) :
     isolated(false),
     targets(),
     path({kf->entryKBlock}),
-    symbolicCounter(0) {
+    symbolicCounter(0),
+    backwardStepsLeftCounter(0),
+    failedBackwardStepsCounter(0) {
   pushFrame(nullptr, kf);
-  stackBalance = 0;
 }
 
 ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
@@ -125,9 +126,10 @@ ExecutionState::ExecutionState(KFunction *kf, KBlock *kb) :
     isolated(false),
     targets(),
     path({kb}),
-    symbolicCounter(0) {
+    symbolicCounter(0),
+    backwardStepsLeftCounter(0),
+    failedBackwardStepsCounter(0) {
   pushFrame(nullptr, kf);
-  stackBalance = 0;
 }
 
 ExecutionState::~ExecutionState() {
@@ -171,7 +173,9 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     targets(state.targets),
     path(state.path),
     symbolicCounter(state.symbolicCounter),
-    returnValue(state.returnValue) {
+    returnValue(state.returnValue),
+    backwardStepsLeftCounter(0),
+    failedBackwardStepsCounter(0) {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
 }

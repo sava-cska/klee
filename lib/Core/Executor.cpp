@@ -5636,9 +5636,9 @@ ref<ForwardResult> Executor::goForward(ref<ForwardAction> action) {
 ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
   ExecutionState *state = action->state;
   ProofObligation *pob = action->pob;
-  std::unique_ptr<ExecutionState> useState;
-  if (!state->isIsolated())
-    useState = std::unique_ptr<ExecutionState>(state);
+  // std::unique_ptr<ExecutionState> useState;
+  // if (!state->isIsolated())
+  //   useState = std::unique_ptr<ExecutionState>(state);
 
   Conflict::core_ty conflictCore;
   ExprHashMap<ref<Expr>> rebuildMap;
@@ -5686,13 +5686,13 @@ ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
       newPob->parent = pob;
       pob->children.insert(newPob);
     }
-    return new BackwardResult(newPobs, pob);
+    return new BackwardResult(newPobs, state, pob);
   } else {
     newPob->detachParent();
     delete newPob;
     if (state->isIsolated() && conflictCore.size())
       summary->summarize(pob, makeConflict(*state, conflictCore), rebuildMap);
-    return new BackwardResult({}, pob);
+    return new BackwardResult({}, state, pob);
   }
 }
 

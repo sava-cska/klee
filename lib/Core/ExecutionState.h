@@ -316,6 +316,9 @@ public:
 
   ref<Expr> returnValue;
 
+  unsigned backwardStepsLeftCounter;
+  unsigned failedBackwardStepsCounter;
+
 public:
   #ifdef KLEE_UNITTEST
   // provide this function only in the context of unittests

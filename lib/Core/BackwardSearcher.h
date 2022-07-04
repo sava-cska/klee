@@ -32,9 +32,10 @@ private:
            ProofObligationIDCompare>
       propagatePobToStates;
   ExecutionManager emanager;
+  unsigned maxPropagations;
 
 public:
-  RecencyRankedSearcher() = default;
+  RecencyRankedSearcher(unsigned _maxPropagations);
   std::pair<ProofObligation *, ExecutionState *> selectAction() override;
   void addState(Target target, ExecutionState *state) override;
   void update(ProofObligation *pob) override;

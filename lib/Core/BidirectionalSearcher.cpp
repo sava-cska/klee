@@ -252,7 +252,7 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   branch = new GuidedSearcher(
       std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new RecencyRankedSearcher();
+  backward = new RecencyRankedSearcher(MaxCycles);
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
 

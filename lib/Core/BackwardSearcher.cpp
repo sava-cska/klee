@@ -29,6 +29,9 @@ bool checkStack(ExecutionState *state, ProofObligation *pob) {
   return true;
 }
 
+RecencyRankedSearcher::RecencyRankedSearcher(unsigned _maxPropagation)
+    : maxPropagations(_maxPropagation) {}
+
 bool RecencyRankedSearcher::empty() { return propagatePobToStates.empty(); }
 
 void RecencyRankedSearcher::update(ProofObligation *pob) {
@@ -36,7 +39,7 @@ void RecencyRankedSearcher::update(ProofObligation *pob) {
   Target t(pob->location);
   std::unordered_set<ExecutionState *> &states = emanager.at(t);
   for (auto state : states) {
-    if (pob->propagationCount[state] < 1 && checkStack(state, pob)) {
+    if (pob->propagationCount[state] <= maxPropagations && checkStack(state, pob)) {
       propagatePobToStates[pob].insert(state);
     }
   }

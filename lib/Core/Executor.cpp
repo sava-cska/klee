@@ -144,6 +144,7 @@ cl::opt<ExecutionKind> ExecutionMode(
       "execution-mode",
       cl::values(
           clEnumValN(ExecutionKind::Forward, "forward", "Use basic klee symbolic execution"),
+          clEnumValN(ExecutionKind::Guided, "guided", "Use basic klee symbolic execution with guided searcher"),
           clEnumValN(ExecutionKind::Bidirectional, "bidirectional", "Use bidirectional execution")
               KLEE_LLVM_CL_VAL_END),
       cl::init(ExecutionKind::Bidirectional),

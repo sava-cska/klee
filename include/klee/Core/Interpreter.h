@@ -52,6 +52,7 @@ public:
 
 enum class ExecutionKind {
   Forward,
+  Guided,
   Bidirectional,
 };
 

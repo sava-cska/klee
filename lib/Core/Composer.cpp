@@ -22,15 +22,6 @@
 using namespace klee;
 using namespace llvm;
 
-cl::OptionCategory
-    ComposerCat("State-composition-related options",
-                "These options affect the behavior of the composer.");
-
-cl::opt<bool> ComposerDebug(
-    "debug-composer", cl::init(false),
-    cl::desc("Turn on expression composition debug trace (default=false)"),
-    cl::cat(ComposerCat));
-
 Executor* Composer::executor = nullptr;
 
 std::map<const ExecutionState *, ExprVisitor::visited_ty,

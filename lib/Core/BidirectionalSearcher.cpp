@@ -282,7 +282,7 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
   }
 }
 
-bool BidirectionalSearcher::isStuck(ExecutionState &state) {
+bool isStuck(ExecutionState &state) {
   KInstruction *prevKI = state.prevPC;
   return prevKI->inst->isTerminator() && state.targets.empty() &&
          state.multilevel.count(state.getPCBlock()) > MaxCycles;
@@ -340,5 +340,55 @@ ForwardOnlySearcher::ForwardOnlySearcher(const SearcherConfig &cfg) {
 }
 
 ForwardOnlySearcher::~ForwardOnlySearcher() {}
+
+ref<BidirectionalAction> GuidedOnlySearcher::selectAction() {
+  if (searcher->empty()) {
+    return new TerminateAction();
+  }
+
+  ref<BidirectionalAction> action;
+  while (action.isNull()) {
+    auto &state = searcher->selectState();
+    if (isStuck(state)) {
+      KBlock *target = ex->calculateTargetByBlockHistory(state);
+      if (target) {
+        state.targets.insert(Target(target));
+        searcher->update(&state, {}, {});
+        action = new ForwardAction(&state);
+      } else {
+        searcher->update(nullptr, {}, {&state});
+        ex->pauseState(state);
+      }
+    } else
+      action = new ForwardAction(&state);
+  }
+  return new ForwardAction(&searcher->selectState());
+}
+
+void GuidedOnlySearcher::update(ref<ActionResult> r) {
+  switch (r->getKind()) {
+  case ActionResult::Kind::Forward: {
+    auto fr = cast<ForwardResult>(r);
+    searcher->update(fr->current, fr->addedStates, fr->removedStates);
+    break;
+  }
+  case ActionResult::Kind::Terminate: {
+    break;
+  }
+  default: {
+    klee_error("ForwardOnlySearcher received non-forward action result.");
+  }
+  }
+}
+
+void GuidedOnlySearcher::closeProofObligation(ProofObligation *) {}
+
+GuidedOnlySearcher::GuidedOnlySearcher(const SearcherConfig &cfg) {
+  searcher = std::unique_ptr<GuidedSearcher>(
+      new GuidedSearcher(constructUserSearcher(*cfg.executor), true));
+  ex = cfg.executor;
+}
+
+GuidedOnlySearcher::~GuidedOnlySearcher() {}
 
 } // namespace klee

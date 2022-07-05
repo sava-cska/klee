@@ -69,7 +69,6 @@ private:
   void addPob(ProofObligation *);
   void removePob(ProofObligation *);
   void answerPob(ProofObligation *);
-  bool isStuck(ExecutionState &);
 };
 
 class ForwardOnlySearcher : public IBidirectionalSearcher {
@@ -83,5 +82,20 @@ public:
 private:
   std::unique_ptr<ForwardSearcher> searcher;
 };
+
+class GuidedOnlySearcher : public IBidirectionalSearcher {
+public:
+  ref<BidirectionalAction> selectAction() override;
+  void update(ref<ActionResult>) override;
+  void closeProofObligation(ProofObligation *) override;
+  explicit GuidedOnlySearcher(const SearcherConfig &);
+  ~GuidedOnlySearcher() override;
+
+private:
+  Executor *ex; // hack
+  std::unique_ptr<GuidedSearcher> searcher;
+};
+
+bool isStuck(ExecutionState &state);
 
 } // namespace klee

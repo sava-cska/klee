@@ -458,6 +458,25 @@ private:
                    ExecutionState &state, StackFrame &sf,
                    bool isSymbolic = true);
 
+  ref<Expr> readArgument(ExecutionState &state, StackFrame &frame,
+                         const KFunction *kf, unsigned index) {
+    ref<Expr> arg = frame.locals[kf->getArgRegister(index)].value;
+    if (!arg) {
+      prepareSymbolicArg(state, frame, index);
+    }
+    return frame.locals[kf->getArgRegister(index)].value;
+  }
+
+  ref<Expr> readDest(ExecutionState &state, StackFrame &frame,
+                     const KInstruction *target) {
+    unsigned index = target->dest;
+    ref<Expr> reg = frame.locals[index].value;
+    if (!reg) {
+      prepareSymbolicRegister(state, frame, index);
+    }
+    return frame.locals[index].value;
+  }
+
   Cell &getArgumentCell(const StackFrame &frame, const KFunction *kf,
                         unsigned index) {
     return frame.locals[kf->getArgRegister(index)];
@@ -640,6 +659,8 @@ public:
                             const KInstruction *targetW);
   void prepareSymbolicRegister(ExecutionState &state, StackFrame &frame,
                                unsigned index);
+  void prepareSymbolicArg(ExecutionState &state, StackFrame &frame,
+                          unsigned index);
   void prepareSymbolicArgs(ExecutionState &state, StackFrame &frame);
 
   ref<Expr> makeSymbolicValue(llvm::Value *value, ExecutionState &state,

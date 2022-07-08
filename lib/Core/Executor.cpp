@@ -4839,15 +4839,21 @@ void Executor::prepareSymbolicRegister(ExecutionState &state, StackFrame &frame,
   prepareSymbolicValue(state, frame, allocInst);
 }
 
+void Executor::prepareSymbolicArg(ExecutionState &state, StackFrame &frame, unsigned index) {
+  KFunction *kf = frame.kf;
+  Argument *arg = &kf->function->arg_begin()[index];
+  uint64_t size = kmodule->targetData->getTypeStoreSize(arg->getType());
+  uint64_t width = kmodule->targetData->getTypeSizeInBits(arg->getType());
+  std::string name = kf->argToString(arg);
+  ref<Expr> result = makeSymbolicValue(arg, state, size, width, name);
+  bindArgument(kf, index, frame, result);
+}
+
 void Executor::prepareSymbolicArgs(ExecutionState &state, StackFrame &frame) {
   KFunction *kf = frame.kf;
-  for (auto ai = kf->function->arg_begin(), ae = kf->function->arg_end(); ai != ae; ai++) {
-    Argument *arg = *&ai;
-    uint64_t size = kmodule->targetData->getTypeStoreSize(arg->getType());
-    uint64_t width = kmodule->targetData->getTypeSizeInBits(arg->getType());
-    std::string name = kf->argToString(arg);
-    ref<Expr> result = makeSymbolicValue(arg, state, size, width, name);
-    bindArgument(frame.kf, arg->getArgNo(), frame, result);
+  unsigned argSize = kf->function->arg_size();
+  for (unsigned argNo = 0; argNo < argSize; ++argNo) {
+    prepareSymbolicArg(state, frame, argNo);
   }
 }
 
@@ -5594,6 +5600,7 @@ ref<InitializeResult> Executor::initBranch(ref<InitializeAction> action) {
   ExecutionState *state = nullptr;
   if (loc == initialState->initPC) {
     state = initialState->copy();
+    state->stackBalance = 0;
     state->isolated = true;
   } else {
     state = emptyState->withKInstruction(loc);
@@ -5636,9 +5643,6 @@ ref<ForwardResult> Executor::goForward(ref<ForwardAction> action) {
 ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
   ExecutionState *state = action->state;
   ProofObligation *pob = action->pob;
-  // std::unique_ptr<ExecutionState> useState;
-  // if (!state->isIsolated())
-  //   useState = std::unique_ptr<ExecutionState>(state);
 
   Conflict::core_ty conflictCore;
   ExprHashMap<ref<Expr>> rebuildMap;

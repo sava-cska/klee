@@ -279,42 +279,32 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
         const KFunction *kf = caller.executor->getKFunction(f);
         const unsigned argN = arg->getArgNo();
         assert(kf->function == framekf->function);
-        prevVal = caller.executor->getArgumentCell(frame, kf, argN).value;
+        prevVal = caller.executor->readArgument(state, frame, kf, argN);
       } else if(isa<Instruction>(allocSite)) {
         const Instruction *inst = cast<Instruction>(allocSite);
         const KInstruction *ki  = caller.executor->getKInst(const_cast<Instruction *>(inst));
         if (isa<PHINode>(inst)) {
           assert(framekf->function == inst->getParent()->getParent());
           if (inst->getParent() == state.getPCBlock())
-            prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, frame, false).value;
+            prevVal = caller.executor->eval(ki, state.incomingBBIndex, state, frame).value;
           else
-            prevVal = caller.executor->getDestCell(frame, ki).value;
+            prevVal = caller.executor->readDest(state, frame, ki);
         }
         else if ((isa<CallInst>(inst) || isa<InvokeInst>(inst))) {
           KFunction *kf = ki->parent->parent;
           assert(kf->function == framekf->function);
-          prevVal = caller.executor->getDestCell(frame, ki).value;
-          if (prevVal.isNull()) {
-            caller.executor->prepareSymbolicValue(state, frame, ki);
-            prevVal = caller.executor->getDestCell(frame, ki).value;
-          }
+          prevVal = caller.executor->readDest(state, frame, ki);
         } else {
           const Instruction *inst = cast<Instruction>(allocSite);
           const Function *f = inst->getParent()->getParent();
           const KFunction *kf = caller.executor->getKFunction(f);
           assert(kf->function == framekf->function);
-          prevVal = caller.executor->getDestCell(frame, ki).value;
+          prevVal = caller.executor->readDest(state, frame, ki);
         }
       }
     }
 
-    if (prevVal.isNull()) {
-      const ObjectState *os = state.addressSpace.findObject(object);
-      if(!os) {
-        os = caller.executor->bindSymbolicInState(state, object, false, array);
-      }
-      prevVal = os->read(0, 8 * os->size);
-    }
+    assert(prevVal);
 
     readCache[object] = prevVal;
     return prevVal;

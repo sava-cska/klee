@@ -489,7 +489,11 @@ BasicBlock *ExecutionState::getPCBlock() const {
 void ExecutionState::increaseLevel() {
   llvm::BasicBlock *srcbb = getPrevPCBlock();
   llvm::BasicBlock *dstbb = getPCBlock();
-  if (prevPC->inst->isTerminator()) {
+  KFunction *kf = prevPC->parent->parent;
+  KModule *kmodule = kf->parent;
+
+  if (prevPC->inst->isTerminator() &&
+      kmodule->mainFunctions.count(kf->function)) {
     multilevel.insert(srcbb);
     level.insert(srcbb);
   }

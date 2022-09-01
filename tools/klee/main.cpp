@@ -1434,6 +1434,21 @@ int main(int argc, char **argv, char **envp) {
 
   llvm::Module *mainModule = M.get();
 
+  std::vector<llvm::Function *> mainFunctions;
+  for (auto &Function : *mainModule) {
+    if (!Function.isDeclaration()) {
+      mainFunctions.push_back(&Function);
+    }
+  }
+
+  const std::string &module_triple = mainModule->getTargetTriple();
+  std::string host_triple = llvm::sys::getDefaultTargetTriple();
+
+  if (module_triple != host_triple)
+    klee_warning("Module and host target triples do not match: '%s' != '%s'\n"
+                 "This may cause unexpected crashes or assertion violations.",
+                 module_triple.c_str(), host_triple.c_str());
+
   // Detect architecture
   std::string opt_suffix = "64"; // Fall back to 64bit
   if (mainModule->getTargetTriple().find("i686") != std::string::npos ||
@@ -1584,7 +1599,7 @@ int main(int argc, char **argv, char **envp) {
   // Get the desired main function.  klee_main initializes uClibc
   // locale and other data and then calls main.
 
-  auto finalModule = interpreter->setModule(loadedModules, Opts);
+  auto finalModule = interpreter->setModule(loadedModules, Opts, mainFunctions);
   Function *mainFn = finalModule->getFunction(EntryPoint);
   if (!mainFn) {
     klee_error("Entry function '%s' not found in module.", EntryPoint.c_str());

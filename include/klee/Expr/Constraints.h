@@ -18,6 +18,8 @@
 
 namespace klee {
 
+extern llvm::cl::opt<bool> RewriteEqualities;
+
 /// Resembles a set of constraints that can be passed around
 ///
 class ConstraintSet {

@@ -22,12 +22,12 @@
 
 using namespace klee;
 
-namespace {
+namespace klee {
 llvm::cl::opt<bool> RewriteEqualities(
     "rewrite-equalities",
     llvm::cl::desc("Rewrite existing constraints when an equality with a "
-                   "constant is added (default=false)"),
-    llvm::cl::init(false),
+                   "constant is added (default=true)"),
+    llvm::cl::init(true),
     llvm::cl::cat(SolvingCat));
 } // namespace
 

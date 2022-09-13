@@ -538,6 +538,18 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
     klee_error("Failed to create core solver\n");
   }
 
+  if (CoreSolverToUse != Z3_SOLVER && ProduceUnsatCore) {
+    klee_message("Using not Z3 solver backend, disable producing unsat cores");
+    ProduceUnsatCore = false;
+  }
+  if (ProduceUnsatCore) {
+    klee_message("Producing unsat cores, disable cex cache, branch cache and "
+                 "rewrite equalities");
+    UseCexCache = false;
+    UseBranchCache = false;
+    RewriteEqualities = false;
+  }
+
   Solver *solver = constructSolverChain(
       coreSolver,
       interpreterHandler->getOutputFilename(ALL_QUERIES_SMT2_FILE_NAME),

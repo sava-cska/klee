@@ -43,12 +43,12 @@ cl::opt<bool> UseFastCexSolver(
     cl::desc("Enable an experimental range-based solver (default=false)"),
     cl::cat(SolvingCat));
 
-cl::opt<bool> UseCexCache("use-cex-cache", cl::init(!ProduceUnsatCore),
-                          cl::desc("Use the counterexample cache (default=false)"),
+cl::opt<bool> UseCexCache("use-cex-cache", cl::init(true),
+                          cl::desc("Use the counterexample cache (default=true)"),
                           cl::cat(SolvingCat));
 
-cl::opt<bool> UseBranchCache("use-branch-cache", cl::init(!ProduceUnsatCore),
-                             cl::desc("Use the branch cache (default=false)"),
+cl::opt<bool> UseBranchCache("use-branch-cache", cl::init(true),
+                             cl::desc("Use the branch cache (default=true)"),
                              cl::cat(SolvingCat));
 
 cl::opt<bool>
@@ -212,8 +212,10 @@ cl::opt<CoreSolverType> DebugCrossCheckCoreSolverWith(
     cl::init(NO_SOLVER), cl::cat(SolvingCat));
 
 llvm::cl::opt<bool> ProduceUnsatCore(
-    "produce-unsat-core", llvm::cl::init(CoreSolverToUse == Z3_SOLVER),
-    llvm::cl::desc("Produce unsat core"), llvm::cl::cat(klee::SolvingCat));
+    "produce-unsat-core", llvm::cl::init(true),
+    llvm::cl::desc("Produce unsat core. This option disables use-cex-cache, "
+                   "use-branch-cache and rewrite-equalities (default=true)."),
+    llvm::cl::cat(klee::SolvingCat));
 } // namespace klee
 
 #undef STP_IS_DEFAULT_STR

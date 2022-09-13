@@ -107,7 +107,7 @@ using namespace klee;
 
 namespace klee {
 cl::OptionCategory ExecCat("Execution option",
-                           "This opntions control kind of execution");
+                           "This options control kind of execution");
 
 cl::OptionCategory DebugCat("Debugging options",
                             "These are debugging options.");

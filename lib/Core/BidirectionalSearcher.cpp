@@ -44,6 +44,17 @@ llvm::cl::opt<unsigned>
                              "this amount of times (default=0)."),
               llvm::cl::init(0), llvm::cl::cat(klee::TerminationCat));
 
+llvm::cl::opt<bool> DoBackwardFirst(
+    "do-backward-first",
+    llvm::cl::desc("do all possible backward steps with a state before "
+                   "forward step (default=true)."),
+    llvm::cl::init(true), llvm::cl::cat(klee::ExecCat));
+
+llvm::cl::opt<bool> PruneStates(
+    "prune-states",
+    llvm::cl::desc("prune a state of failed backward step (default=false)."),
+    llvm::cl::init(false), llvm::cl::cat(klee::ExecCat));
+
 } // namespace
 
 namespace klee {
@@ -94,11 +105,11 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
     case StepKind::Forward: {
       auto &state = forward->selectState();
 
-      if (state.backwardStepsLeftCounter > 0) {
+      if (DoBackwardFirst && state.backwardStepsLeftCounter > 0) {
         break;
       }
 
-      if (state.failedBackwardStepsCounter > 0) {
+      if (PruneStates && state.failedBackwardStepsCounter > 0) {
         forward->update(nullptr, {}, {&state});
         ex->pauseState(state);
         break;

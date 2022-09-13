@@ -148,7 +148,7 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   }
   for (auto &init : inits) {
     if (!initialized[init.first].count(init.second) &&
-        !(!isa<KReturnBlock>(init.second.block) && init.first->parent == init.second.block)) {
+        !(isa<KReturnBlock>(init.second.block) && init.first->parent == init.second.block)) {
       if (DebugInitializer) {
         llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
         llvm::errs() << init.second.print() << "\n" << init.second.block->instructions[0]->getSourceLocation();

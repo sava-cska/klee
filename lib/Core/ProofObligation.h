@@ -40,6 +40,8 @@ public:
   ProofObligation(KBlock *_location, ProofObligation *_parent = nullptr)
       : id(counter++), parent(_parent), root(_parent ? _parent->root : this),
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
+        propagationCount(_parent ? _parent->propagationCount
+                                 : std::map<ExecutionState *, unsigned>()),
         location(_location), path({_location}) {
     if (parent) {
       parent->children.insert(this);

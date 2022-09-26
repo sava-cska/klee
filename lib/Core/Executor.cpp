@@ -5558,6 +5558,8 @@ void Executor::run(ExecutionState &state) {
 
   if (ExecutionMode == ExecutionKind::Forward) {
     searcher = std::make_unique<ForwardOnlySearcher>(cfg);
+  } else if (ExecutionMode == ExecutionKind::Guided) {
+    searcher = std::make_unique<GuidedOnlySearcher>(cfg);
   } else {
     searcher = std::make_unique<BidirectionalSearcher>(cfg);
   }

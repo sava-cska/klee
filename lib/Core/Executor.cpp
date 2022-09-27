@@ -2279,10 +2279,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       cond = optimizer.optimizeExpr(cond, false);
       std::vector<ref<Expr>> conflict;
       Executor::StatePair branches;
-      if (ProduceUnsatCore)
+      if (ProduceUnsatCore) {
         branches = fork(state, cond, false, true, conflict);
-      else
+      } else {
         branches = fork(state, cond, false);
+      }
 
       if (!conflict.empty() &&
           state.depth && !state.isIsolated()) {

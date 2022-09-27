@@ -72,7 +72,7 @@ BidirectionalSearcher::StepKind BidirectionalSearcher::selectStep() {
       break;
     }
     case 1: {
-      if (!branch->empty()) {
+      if (!branch->empty() && !pobs.empty()) {
         return StepKind::Branch;
       }
       break;

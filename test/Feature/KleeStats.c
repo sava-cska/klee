@@ -16,4 +16,4 @@ int main(){
 // First check we find a line with the expected format
 // CHECK-STATS: | Path | Instrs| Time(s)| ICov(%)| BCov(%)| ICount| TSolver(%)|
 //Check there is a line with .klee-out dir, non zero instruction, less than 1 second execution time and 100 ICov.
-// CHECK-STATS: {{.*\.klee-out\|[ ]*[1-9]+\|[ ]*0\.([0-9]+)\|[ ]*100\.00}}
+// CHECK-STATS: {{.*\.klee-out\|[ ]*[1-9]+\|[ ]*0\.([0-9]+)\|[ ]*88\.24|[ ]*100\.00}}

@@ -4898,6 +4898,7 @@ void Executor::runFunctionAsMain(Function *f,
                int argc,
                char **argv,
                char **envp) {
+  entrypoint = new KFunction(f, kmodule.get());
   ExecutionState *state = formState(f, argc, argv, envp);
 
   if (pathWriter)
@@ -4923,6 +4924,7 @@ void Executor::runFunctionAsMain(Function *f,
 
   if (statsTracker)
     statsTracker->done();
+  delete entrypoint;
 }
 
 unsigned Executor::getPathStreamID(const ExecutionState &state) {
@@ -5473,7 +5475,7 @@ void Executor::replayStateFromPob(ProofObligation *pob) {
     replayState->symbolics.push_back(symbolic);
   }
 
-  replayState->targets.insert(Target(pob->root->location));
+  replayState->addTarget(Target(pob->root->location));
   states.insert(replayState);
   processForest->addRoot(replayState);
   std::vector<ExecutionState *> v = {replayState};
@@ -5564,6 +5566,10 @@ void Executor::run(ExecutionState &state) {
   } else {
     searcher = std::make_unique<BidirectionalSearcher>(cfg);
   }
+  ConflictCoreInitializer *initializer = searcher->getInitializer();
+  if (initializer != nullptr) {
+    initializer->setEntryPoint(entrypoint);
+  }
 
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   std::vector<ExecutionState *> removed{};
@@ -5576,7 +5582,6 @@ void Executor::run(ExecutionState &state) {
     auto action = searcher->selectAction();
     auto result = executeAction(action);
     updateResult(result);
-
     if (isa<BackwardResult>(result)) {
       auto br = cast<BackwardResult>(result);
       for (auto pob : br->newPobs) {
@@ -5626,7 +5631,7 @@ ref<InitializeResult> Executor::initBranch(ref<InitializeAction> action) {
   isolatedStates.insert(state);
   processForest->addRoot(state);
   for (auto target : targets) {
-    state->targets.insert(target);
+    state->addTarget(target);
   }
   timers.invoke();
   return new InitializeResult(loc, *state);
@@ -5814,7 +5819,6 @@ void Executor::extractSourcedSymbolics(ExecutionState &state,
     }
   }
 }
-
 
 int Executor::resolveLazyInstantiation(ExecutionState &state) {
   return resolveLazyInstantiation(state, state.pointers);

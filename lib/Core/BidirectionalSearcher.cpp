@@ -12,7 +12,6 @@
 #include "ExecutionState.h"
 #include "Executor.h"
 #include "ForwardSearcher.h"
-#include "Initializer.h"
 #include "MergeHandler.h"
 #include "ProofObligation.h"
 #include "SearcherUtil.h"
@@ -118,7 +117,7 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
       if (isStuck(state)) {
         KBlock *target = ex->calculateTargetByBlockHistory(state);
         if (target) {
-          state.targets.insert(Target(target));
+          state.addTarget(Target(target));
           forward->update(&state, {}, {});
           action = new ForwardAction(&state);
         } else {
@@ -209,35 +208,83 @@ void BidirectionalSearcher::updateBranch(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates) {
   std::map<Target, std::unordered_set<ExecutionState *>> reached;
+  std::map<Target, std::unordered_set<ExecutionState *>> unreached;
 
-  branch->update(current, addedStates, removedStates, reached);
+  for (const ExecutionState *state : addedStates) {
+    for (const Target &target : state->targets) {
+      initializer->addRunningStateToTarget(state, target);
+    }
+  }
 
-  for (auto &targetStates : reached) {
-    for (auto state : targetStates.second) {
-      if (targetStates.first.atReturn() && state->stack.size() > 0)
+  //addedStates идут до Target (.targets)
+  branch->update(current, addedStates, removedStates, reached, unreached);
+  //вернулся из reached и unreached -- удаляю (.location)
+  //множество опустело -- всё
+  //зарегистрировать все state из addedStates
+  //все стейты из addedStates я добавляю в Running
+  //reached и unreached я удаляю из Running
+
+
+  for (const auto &targetAndStates : reached) {
+    for (const auto &reachedState : targetAndStates.second) {
+      initializer->removeRunningStateToTarget(reachedState,
+                                              targetAndStates.first);
+    }
+  }
+  for (const auto &targetAndStates : unreached) {
+    for (const auto &reachedState : targetAndStates.second) {
+      initializer->removeRunningStateToTarget(reachedState,
+                                              targetAndStates.first);
+    }
+  }
+
+  for (const auto &targetAndStates : reached) {
+    for (const auto &reachedState : targetAndStates.second) {
+      if (targetAndStates.first.atReturn() && reachedState->stack.size() > 0)
         continue;
       if (DebugBidirectionalSearcher) {
         llvm::errs() << "New isolated state.\n";
-        llvm::errs() << "Id: " << state->id << "\n";
-        llvm::errs() << "Path: " << state->path.toString() << "\n";
-        llvm::errs() << "Constraints:\n" << state->constraints;
+        llvm::errs() << "Id: " << reachedState->id << "\n";
+        llvm::errs() << "Path: " << reachedState->path.toString() << "\n";
+        llvm::errs() << "Constraints:\n" << reachedState->constraints;
         llvm::errs() << "\n";
       }
-      backward->addState(targetStates.first, state);
+      ExecutionState *newBackwardState = backward->addState(targetAndStates.first, reachedState);
+      //добавляю во второе множество
+      initializer->addWaitingStateToTarget(newBackwardState, targetAndStates.first);
     }
   }
 }
 
 void BidirectionalSearcher::updateBackward(
-    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob) {
+    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob, ExecutionState *state) {
   for (auto pob : newPobs) {
     addPob(pob);
+  }
+
+  // прокинуть state, удаляю state у pob.location
+  //проверить на пустоту два множества
+
+  if (state->isIsolated()) {
+    std::string s;
+    llvm::raw_string_ostream ss(s);
+    state->initPC->parent->basicBlock->printAsOperand(ss, false);
+    klee_message("updateBackward: state %s", ss.str().c_str());
+    initializer->removeWaitingStateToPob(state, oldPob);
+    if (newPobs.empty()) {
+      klee_message("updateBackward: newPobs is empty\n%s", oldPob->print().c_str());
+      closePobIfNoPathLeft(oldPob);
+    }
   }
 }
 
 void BidirectionalSearcher::updateInitialize(KInstruction *location,
                                              ExecutionState &state) {
+  //здесь регистрация state
   branch->update(nullptr, {&state}, {});
+  for (const Target &target : state.targets) {
+    initializer->createRunningStateToTarget(&state, target);
+  }
 }
 
 void BidirectionalSearcher::update(ref<ActionResult> r) {
@@ -255,7 +302,7 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
   }
   case ActionResult::Kind::Backward: {
     auto bckr = cast<BackwardResult>(r);
-    updateBackward(bckr->newPobs, bckr->oldPob);
+    updateBackward(bckr->newPobs, bckr->oldPob, bckr->state);
     if (bckr->state->backwardStepsLeftCounter > 0) {
       --bckr->state->backwardStepsLeftCounter;
       if (bckr->newPobs.empty())
@@ -309,6 +356,23 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
   }
 }
 
+void BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
+  while (pob && pob->children.empty()) {
+    initializer->updateBlockSetForPob(pob);
+    if (initializer->isTargetUnreachable(pob)) {
+      klee_message("Close POB!!!!!!!\n%s\n", pob->print().c_str());
+      ProofObligation *parent = pob->parent;
+      removePob(pob);
+      pob->detachParent();
+      delete pob;
+      pob = parent;
+    }
+    else {
+      break;
+    }
+  }
+}
+
 bool isStuck(ExecutionState &state) {
   KInstruction *prevKI = state.prevPC;
   return prevKI->inst->isTerminator() && state.targets.empty() &&
@@ -335,6 +399,10 @@ void BidirectionalSearcher::answerPob(ProofObligation *pob) {
     reachableBlocks.insert(pob->location->basicBlock);
     pob = pob->parent;
   }
+}
+
+ConflictCoreInitializer* BidirectionalSearcher::getInitializer() const {
+  return initializer;
 }
 
 ref<BidirectionalAction> ForwardOnlySearcher::selectAction() {
@@ -379,7 +447,7 @@ ref<BidirectionalAction> GuidedOnlySearcher::selectAction() {
     if (isStuck(state)) {
       KBlock *target = ex->calculateTargetByBlockHistory(state);
       if (target) {
-        state.targets.insert(Target(target));
+        state.addTarget(Target(target));
         searcher->update(&state, {}, {});
         action = new ForwardAction(&state);
       } else {

@@ -1,15 +1,11 @@
 #include "Initializer.h"
-#include "ExecutionState.h"
 #include "Path.h"
-#include "ProofObligation.h"
 #include "SearcherUtil.h"
-#include "klee/Module/KInstruction.h"
-#include "klee/Module/KModule.h"
-#include "klee/Solver/Solver.h"
 #include "klee/Support/ModuleUtil.h"
 #include "klee/Support/OptionCategories.h"
 
 #include "llvm/IR/Instructions.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include <algorithm>
 #include <iostream>
@@ -169,5 +165,91 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   }
 }
 
-};
+void ConflictCoreInitializer::setEntryPoint(KFunction *_entrypoint) {
+  entrypoint = _entrypoint;
+}
+
+bool ConflictCoreInitializer::isDominatorSet(
+    ProofObligation *pob, const std::set<KBlock *> &dominatorSet) const {
+  bool result = !entrypoint->isReachable(pob->location, dominatorSet);
+  klee_message("Result: %d\n", result);
+  return result;
+}
+
+bool ConflictCoreInitializer::isTargetUnreachable(ProofObligation *pob) const {
+  if (pobBlockSet.find(pob) == pobBlockSet.end()) {
+    return false;
+  }
+  return isDominatorSet(pob, pobBlockSet.at(pob));
+}
+
+void ConflictCoreInitializer::createRunningStateToTarget(
+    const ExecutionState *state, const Target &target) {
+  std::string s;
+  llvm::raw_string_ostream ss(s);
+  target.block->basicBlock->printAsOperand(ss, false);
+  klee_message("createRunningStateToTarget: state %s\n", ss.str().c_str());
+  assert(runningStateToTarget[target].find(state->initPC->parent) == runningStateToTarget[target].end());
+  runningStateToTarget[target].insert({state->initPC->parent, {state}});
+}
+
+void ConflictCoreInitializer::addRunningStateToTarget(
+    const ExecutionState *state, const Target &target) {
+  std::string s;
+  llvm::raw_string_ostream ss(s);
+  target.block->basicBlock->printAsOperand(ss, false);
+  klee_message("addRunningStateToTarget: state %s\n", ss.str().c_str());
+  assert(runningStateToTarget.find(target) != runningStateToTarget.end() && runningStateToTarget[target].find(state->initPC->parent) !=
+         runningStateToTarget[target].end());
+  runningStateToTarget[target][state->initPC->parent].insert(state);
+}
+
+void ConflictCoreInitializer::removeRunningStateToTarget(
+    const ExecutionState *state, const Target &target) {
+  std::string s;
+  llvm::raw_string_ostream ss(s);
+  target.block->basicBlock->printAsOperand(ss, false);
+  klee_message("removeRunningStateToTarget: state %s\n", ss.str().c_str());
+  assert(runningStateToTarget[target][state->initPC->parent].find(state) != runningStateToTarget[target][state->initPC->parent].end());
+  runningStateToTarget[target][state->initPC->parent].erase(state);
+}
+
+void ConflictCoreInitializer::addWaitingStateToTarget(
+    const ExecutionState *state, const Target &target) {
+  std::string s;
+  llvm::raw_string_ostream ss(s);
+  target.block->basicBlock->printAsOperand(ss, false);
+  klee_message("addWaitingStateToTarget: state %s\n", ss.str().c_str());
+  waitingStateToTarget[target][state->initPC->parent].insert(state);
+}
+
+void ConflictCoreInitializer::removeWaitingStateToPob(
+    const ExecutionState *state, ProofObligation *pob) {
+  klee_message("removeWaitingStateToPob: pob %s\n", pob->print().c_str());
+  waitingStateToPob[pob][state->initPC->parent].insert(state);
+}
+
+void ConflictCoreInitializer::updateBlockSetForPob(ProofObligation *pob) {
+  Target target = Target(pob->location);
+  bool f1 = runningStateToTarget.find(target) != runningStateToTarget.end();
+  bool f3 = waitingStateToTarget.find(target) != waitingStateToTarget.end();
+  assert(f1 && f3);
+  FromStartToStates waitingStatesToPob = waitingStateToTarget[target];
+  for (const auto &startAndStates : waitingStatesToPob) {
+    KBlock *startBlock = startAndStates.first;
+    std::set<const ExecutionState *> waitingStates = startAndStates.second;
+    bool f2 = runningStateToTarget[target].find(startBlock) != runningStateToTarget[target].end();
+    bool f4 = waitingStateToTarget[target].find(startBlock) != waitingStateToTarget[target].end();
+    assert(f2 && f4);
+
+    bool fl1 = runningStateToTarget[target][startBlock].empty();
+    bool fl2 = waitingStateToTarget[target][startBlock] ==
+               waitingStateToPob[pob][startBlock];
+    if (fl1 && fl2) {
+      pobBlockSet[pob].insert(startBlock);
+    }
+  }
+}
+
+}
  

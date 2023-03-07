@@ -65,6 +65,10 @@ public:
     visited = &globalVisited[&caller.state];
   }
 
+  ~ComposeVisitor() {
+    globalVisited.erase(&caller.state);
+  }
+
 private:
   ref<Expr> faultyPtr;
   static std::map<const ExecutionState *, visited_ty, ExecutionStateIDCompare>

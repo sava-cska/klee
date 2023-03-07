@@ -56,6 +56,7 @@
 #include "llvm/Transforms/Utils.h"
 #endif
 
+#include <queue>
 #include <sstream>
 
 using namespace llvm;
@@ -761,6 +762,37 @@ void KFunction::calculateBackwardDistance(KBlock *bb) {
     }
     nodes.pop_front();
   }
+}
+
+bool KFunction::isReachable(KBlock *kb,
+                            const std::set<KBlock *> &prohibited) const {
+  KBlock *start = entryKBlock;
+  if (prohibited.find(start) != prohibited.end()) {
+    return false;
+  }
+
+  std::set<KBlock *> used;
+  std::queue<KBlock *> nodes;
+  nodes.push(start);
+  used.insert(start);
+
+  while (!nodes.empty()) {
+    KBlock *curBlock = nodes.front();
+    nodes.pop();
+    if (curBlock == kb) {
+      return true;
+    }
+
+    for (auto const &succ : successors(curBlock->basicBlock)) {
+      KBlock *nxt = blockMap.at(succ);
+      if (prohibited.find(nxt) == prohibited.end() &&
+          used.find(nxt) == used.end()) {
+        nodes.push(nxt);
+        used.insert(nxt);
+      }
+    }
+  }
+  return false;
 }
 
 std::map<KBlock *, unsigned int>& KFunction::getDistance(KBlock *kb) {

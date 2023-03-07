@@ -615,6 +615,8 @@ private:
       std::map<ref<Expr>, std::pair<Symbolic, ref<Expr>>> &resolved);
   void extractSourcedSymbolics(ExecutionState &state, std::vector<Symbolic> &);
 
+  KFunction *entrypoint;
+
 public:
   Executor(llvm::LLVMContext &ctx, const InterpreterOptions &opts,
            InterpreterHandler *ie);

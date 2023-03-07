@@ -358,6 +358,9 @@ public:
   llvm::BasicBlock *getPrevPCBlock() const;
   llvm::BasicBlock *getPCBlock() const;
 
+  void addTarget(const Target &target);
+  void removeTarget(const Target &target);
+
   void increaseLevel();
   bool isEmpty() const;
   bool isCriticalPC() const;

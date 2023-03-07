@@ -20,7 +20,6 @@ public:
   virtual void addPob(ProofObligation *pob) = 0;
   virtual void removePob(ProofObligation *pob) = 0;
   virtual void addConflictInit(const Conflict &, KBlock *) = 0;
-
 };
 
 class ConflictCoreInitializer: public Initializer {
@@ -30,6 +29,19 @@ public:
   void addPob(ProofObligation *pob) override;
   void removePob(ProofObligation *pob) override;
   void addConflictInit(const Conflict &, KBlock *) override;
+  void setEntryPoint(KFunction *_entrypoint);
+
+  void createRunningStateToTarget(const ExecutionState *state, const Target &target);
+  void addRunningStateToTarget(const ExecutionState *state, const Target &target);
+  void removeRunningStateToTarget(const ExecutionState *state, const Target &target);
+
+  void addWaitingStateToTarget(const ExecutionState *state, const Target &target);
+  void removeWaitingStateToPob(const ExecutionState *state, ProofObligation *pob);
+
+  bool isDominatorSet(ProofObligation *pob, const std::set<KBlock *> &dominatorSet) const;
+  bool isTargetUnreachable(ProofObligation *pob) const;
+
+  void updateBlockSetForPob(ProofObligation *pob);
 
   explicit ConflictCoreInitializer(KInstruction *initInst) : initInst(initInst) {};
   ~ConflictCoreInitializer() override {}
@@ -41,6 +53,13 @@ private:
   std::queue<std::pair<KInstruction *, std::set<Target>>> conflictCoreInits;
   std::map<KInstruction *, std::set<Target>> initialized;
   std::set<KFunction *> dismantledKFunctions;
+
+  using FromStartToStates = std::map<KBlock *, std::set<const ExecutionState *>>;
+  std::map<Target, FromStartToStates> runningStateToTarget;
+  std::map<Target, FromStartToStates> waitingStateToTarget;
+  std::map<ProofObligation *, FromStartToStates> waitingStateToPob;
+  std::map<ProofObligation *, std::set<KBlock *>> pobBlockSet;
+  KFunction *entrypoint;
 };
 
 };

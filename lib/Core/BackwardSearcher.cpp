@@ -66,9 +66,12 @@ RecencyRankedSearcher::selectAction() {
   return std::make_pair(pob, leastUsedState);
 }
 
-void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
+ExecutionState *RecencyRankedSearcher::addState(Target target,
+                                                ExecutionState *state) {
+  // возвращает ссылку state
   if (state->isIsolated()) {
     state = state->copy();
+    // регистрирую state
     emanager.insert(target, *state);
   }
 
@@ -77,19 +80,19 @@ void RecencyRankedSearcher::addState(Target target, ExecutionState *state) {
     if (target == pobsTarget && checkStack(state, pob)) {
       assert(state->path.getFinalBlock() == pob->path.getInitialBlock() &&
              "Paths are not compatible.");
-      if (state->isIsolated()) {
-        propagatePobToStates[pob].insert(state);
-      } else {
-        propagatePobToStates[pob].insert(state);
-      }
-
+      propagatePobToStates[pob].insert(state);
       if (!state->isIsolated())
         ++state->backwardStepsLeftCounter;
     }
   }
+  return state;
 }
 
+//removePob
+//answerPob
+//closeProofObligation
 void RecencyRankedSearcher::removePob(ProofObligation *pob) {
+  // вызвать этот метод, чтобы удалить pob
   auto pos = std::find(pobs.begin(), pobs.end(), pob);
   if (pos != pobs.end()) {
     pobs.erase(pos);

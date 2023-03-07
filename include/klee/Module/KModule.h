@@ -134,6 +134,7 @@ namespace klee {
     std::vector<std::pair<KBlock *, unsigned int>>& getSortedDistance(KBlock *kb);
     std::map<KBlock *, unsigned int>& getBackwardDistance(KBlock *kb);
     std::vector<std::pair<KBlock *, unsigned int>>& getSortedBackwardDistance(KBlock *kb);
+    bool isReachable(KBlock *kb, const std::set<KBlock *> &prohibited) const;
     KBlock *getNearestJoinBlock(KBlock *kb);
     KBlock *getNearestJoinOrCallBlock(KBlock *kb);
     std::string argToString(llvm::Argument *arg);

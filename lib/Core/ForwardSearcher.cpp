@@ -332,9 +332,9 @@ void TargetedSearcher::update(
       reachedOnLastUpdate.push_back(current);
       break;
     case Miss:
-      current->removeTarget(target);
-      states->remove(current);
-      states_set.erase(current);
+      //current->removeTarget(target);
+      //states->remove(current);
+      //states_set.erase(current);
       unreachedOnLastUpdate.push_back(current);
       break;
     }
@@ -354,7 +354,9 @@ void TargetedSearcher::update(
       reachedOnLastUpdate.push_back(state);
       break;
     case Miss:
-      state->removeTarget(target);
+      //state->removeTarget(target);
+      states->insert(state, weight);
+      states_set.insert(state);
       unreachedOnLastUpdate.push_back(state);
       break;
     }
@@ -367,9 +369,9 @@ void TargetedSearcher::update(
         state->prevPC == target.block->getLastInstruction())
       reachedOnLastUpdate.push_back(state);
     else {
-      state->removeTarget(target);
-      states->remove(state);
-      states_set.erase(state);
+      //state->removeTarget(target);
+      //states->remove(state);
+      //states_set.erase(state);
       unreachedOnLastUpdate.push_back(state);
     }
   }
@@ -389,6 +391,14 @@ std::vector<ExecutionState *> TargetedSearcher::unreached() const {
   return unreachedOnLastUpdate;
 }
 
+void TargetedSearcher::removeUnreached() {
+  for (auto state : unreachedOnLastUpdate) {
+    states->remove(state);
+    states_set.erase(state);
+    state->removeTarget(target);
+  }
+}
+
 void TargetedSearcher::removeReached() {
   for (auto state : reachedOnLastUpdate) {
     states->remove(state);
@@ -401,8 +411,8 @@ void TargetedSearcher::removeReached() {
 ///
 
 GuidedSearcher::GuidedSearcher(std::unique_ptr<ForwardSearcher> _baseSearcher,
-                               bool _reachingEnough)
-    : baseSearcher(std::move(_baseSearcher)), reachingEnough(_reachingEnough) {}
+                               bool _reachingEnough, KBlock *_initPCBlock)
+    : baseSearcher(std::move(_baseSearcher)), reachingEnough(_reachingEnough), initPCBlock(_initPCBlock) {}
 
 ExecutionState &GuidedSearcher::selectState() {
   unsigned size = targetedSearchers.size();
@@ -467,12 +477,42 @@ void GuidedSearcher::innerUpdate(
   baseSearcher->update(current, addedStates, removedStates);
 }
 
+void GuidedSearcher::checkAddAnRemove(ExecutionState *current, std::vector<ExecutionState *> &addedStates,
+                      std::vector<ExecutionState *> &removedStates) {
+  if (current != nullptr) {
+    KInstruction *prevKI = current->prevPC;
+    if (initPCBlock->basicBlock != current->getInitPCBlock() &&
+        prevKI->inst->isTerminator() &&
+        current->multilevel.count(current->getPCBlock()) > 0) {
+      removedStates.push_back(current);
+      // вот тут беда, забыли про условие
+    }
+  }
+
+  auto it = addedStates.begin();
+  while (it != addedStates.end()) {
+    ExecutionState *state = *it;
+    KInstruction *prevKI = state->prevPC;
+    if (initPCBlock->basicBlock != state->getInitPCBlock() &&
+        prevKI->inst->isTerminator() &&
+        state->multilevel.count(state->getPCBlock()) > 0) {
+      it = addedStates.erase(it);
+      // вот тут беда, забыли про условие
+    } else {
+      it++;
+    }
+  }
+}
+
 void GuidedSearcher::update(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates,
     std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates,
     std::map<Target, std::unordered_set<ExecutionState *>> &unreachedStates) {
-  innerUpdate(current, addedStates, removedStates);
+  //tmpCopy = added and removed
+  std::vector<ExecutionState *> tmpAddedStates = addedStates, tmpRemovedStates = removedStates;
+  checkAddAnRemove(current, tmpAddedStates, tmpRemovedStates);
+  innerUpdate(current, tmpAddedStates, tmpRemovedStates);
   collectReachedAndUnreached(reachedStates, unreachedStates);
   clearReached();
 }
@@ -480,7 +520,9 @@ void GuidedSearcher::update(
 void GuidedSearcher::update(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates) {
-  innerUpdate(current, addedStates, removedStates);
+  std::vector<ExecutionState *> tmpAddedStates = addedStates, tmpRemovedStates = removedStates;
+  checkAddAnRemove(current, tmpAddedStates, tmpRemovedStates);
+  innerUpdate(current, tmpAddedStates, tmpRemovedStates);
   clearReached();
 }
 
@@ -511,6 +553,12 @@ void GuidedSearcher::clearReached() {
     targets.push_back(targetSearcher.first);
   for (auto target : targets) {
     auto reached = targetedSearchers[target]->reached();
+    auto unreached = targetedSearchers[target]->unreached();
+    if (!unreached.empty()) {
+      targetedSearchers[target]->removeUnreached();
+      if (targetedSearchers[target]->empty())
+        targetedSearchers.erase(target);
+    }
     if (!reached.empty()) {
       targetedSearchers[target]->removeReached();
       if (reachingEnough || targetedSearchers[target]->empty())

@@ -164,6 +164,7 @@ namespace klee {
     std::vector<ExecutionState *> reached() const;
     std::vector<ExecutionState *> unreached() const;
     void removeReached();
+    void removeUnreached();
   };
 
   class GuidedSearcher final : public ForwardSearcher {
@@ -173,6 +174,7 @@ namespace klee {
     std::map<Target, std::unique_ptr<TargetedSearcher>> targetedSearchers;
     unsigned index{1};
     bool reachingEnough;
+    KBlock *initPCBlock;
     void addTarget(Target target);
     void innerUpdate(ExecutionState *current,
                      const std::vector<ExecutionState *> &addedStates,
@@ -183,9 +185,12 @@ namespace klee {
         std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates,
         std::map<Target, std::unordered_set<ExecutionState *>> &unreachedStates) const;
 
+    void checkAddAnRemove(ExecutionState *current, std::vector<ExecutionState *> &addedStates,
+                                          std::vector<ExecutionState *> &removedStates);
+
   public:
     GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher,
-                   bool _reachingEnough);
+                   bool _reachingEnough, KBlock *_initPCBlock);
     ~GuidedSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,

@@ -131,15 +131,15 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
 
     case StepKind::Branch: {
       auto &state = branch->selectState();
-      KInstruction *prevKI = state.prevPC;
+      /*KInstruction *prevKI = state.prevPC;
       if (ex->initialState->getInitPCBlock() != state.getInitPCBlock() &&
           prevKI->inst->isTerminator() &&
           state.multilevel.count(state.getPCBlock()) > 0) {
-        branch->update(nullptr, {}, {&state});
+        branch->update(nullptr, {}, {&state}); // вот тут беда, забыли про условие
         ex->pauseState(state);
-      } else {
+      } else {*/
         action = new BranchAction(&state);
-      }
+      //}
       break;
     }
 
@@ -323,9 +323,9 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
 BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
     : ticker({80, 10, 5, 5}) {
   ex = cfg.executor;
-  forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
+  forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true, ex->initialState->initPC->parent);
   branch = new GuidedSearcher(
-      std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
+      std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false, ex->initialState->initPC->parent);
   backward = new RecencyRankedSearcher(MaxCycles);
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
@@ -388,7 +388,7 @@ void BidirectionalSearcher::addPob(ProofObligation *pob) {
 void BidirectionalSearcher::removePob(ProofObligation *pob) {
   auto pos = std::find(pobs.begin(), pobs.end(), pob);
   if (pos != pobs.end()) {
-    pobs.erase(pos);
+    pobs.erase(pos); //runningStates опустел, при этом мы ничего не добавили в waitingStates. Не создан waitingStates[target]
   }
   backward->removePob(pob);
   initializer->removePob(pob);
@@ -479,9 +479,9 @@ void GuidedOnlySearcher::update(ref<ActionResult> r) {
 void GuidedOnlySearcher::closeProofObligation(ProofObligation *) {}
 
 GuidedOnlySearcher::GuidedOnlySearcher(const SearcherConfig &cfg) {
-  searcher = std::unique_ptr<GuidedSearcher>(
-      new GuidedSearcher(constructUserSearcher(*cfg.executor), true));
   ex = cfg.executor;
+  searcher = std::unique_ptr<GuidedSearcher>(
+      new GuidedSearcher(constructUserSearcher(*cfg.executor), true, ex->initialState->initPC->parent));
 }
 
 GuidedOnlySearcher::~GuidedOnlySearcher() {}

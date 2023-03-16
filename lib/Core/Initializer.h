@@ -34,6 +34,7 @@ public:
   void createRunningStateToTarget(const ExecutionState *state, const Target &target);
   void addRunningStateToTarget(const ExecutionState *state, const Target &target);
   void removeRunningStateToTarget(const ExecutionState *state, const Target &target);
+  bool emptyRunningStateToTarget(KBlock *stateStartBlock, const Target &target) const;
 
   void addWaitingStateToTarget(const ExecutionState *state, const Target &target);
   void removeWaitingStateToPob(const ExecutionState *state, ProofObligation *pob);

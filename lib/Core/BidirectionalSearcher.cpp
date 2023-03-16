@@ -232,16 +232,18 @@ void BidirectionalSearcher::updateBranch(
     }
   }
   for (const auto &targetAndStates : unreached) {
-    for (const auto &reachedState : targetAndStates.second) {
-      initializer->removeRunningStateToTarget(reachedState,
+    for (const auto &unreachedState : targetAndStates.second) {
+      initializer->removeRunningStateToTarget(unreachedState,
                                               targetAndStates.first);
     }
   }
 
   for (const auto &targetAndStates : reached) {
     for (const auto &reachedState : targetAndStates.second) {
-      if (targetAndStates.first.atReturn() && reachedState->stack.size() > 0)
+      if (targetAndStates.first.atReturn() && reachedState->stack.size() > 0) {
+        closePobsInTargetIfNeeded(targetAndStates.first, reachedState->initPC->parent);
         continue;
+      }
       if (DebugBidirectionalSearcher) {
         llvm::errs() << "New isolated state.\n";
         llvm::errs() << "Id: " << reachedState->id << "\n";
@@ -252,6 +254,12 @@ void BidirectionalSearcher::updateBranch(
       ExecutionState *newBackwardState = backward->addState(targetAndStates.first, reachedState);
       //добавляю во второе множество
       initializer->addWaitingStateToTarget(newBackwardState, targetAndStates.first);
+    }
+  }
+
+  for (const auto &targetAndStates : unreached) {
+    for (const auto &unreachedState : targetAndStates.second) {
+      closePobsInTargetIfNeeded(targetAndStates.first, unreachedState->initPC->parent);
     }
   }
 }
@@ -331,8 +339,10 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
 }
 
 BidirectionalSearcher::~BidirectionalSearcher() {
-  for (auto pob : pobs) {
-    delete pob;
+  for (auto targetAndPobs : pobs) {
+    for (ProofObligation *pob : targetAndPobs.second) {
+      delete pob;
+    }
   }
   pobs.clear();
   delete forward;
@@ -356,10 +366,12 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
   }
 }
 
-void BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
+bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
+  bool deletePob = false;
   while (pob && pob->children.empty()) {
     initializer->updateBlockSetForPob(pob);
     if (initializer->isTargetUnreachable(pob)) {
+      deletePob = true;
       klee_message("Close POB!!!!!!!\n%s\n", pob->print().c_str());
       ProofObligation *parent = pob->parent;
       removePob(pob);
@@ -371,6 +383,30 @@ void BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
       break;
     }
   }
+  return deletePob;
+}
+
+void BidirectionalSearcher::closePobsInTargetIfNeeded(const Target &target, KBlock *startBlock) {
+  if (!initializer->emptyRunningStateToTarget(startBlock, target)) {
+    return;
+  }
+
+  while (true) {
+    if (pobs.find(target.block) == pobs.end()) {
+      return;
+    }
+    std::set<ProofObligation *> allPobsInLoc = pobs[target.block];
+    bool deletePob = false;
+    for (ProofObligation *pob : allPobsInLoc) {
+      if (closePobIfNoPathLeft(pob)) {
+        deletePob = true;
+        break;
+      }
+    }
+    if (!deletePob) {
+      return;
+    }
+  }
 }
 
 bool isStuck(ExecutionState &state) {
@@ -380,15 +416,20 @@ bool isStuck(ExecutionState &state) {
 }
 
 void BidirectionalSearcher::addPob(ProofObligation *pob) {
-  pobs.push_back(pob);
+  pobs[pob->location].insert(pob);
   backward->update(pob);
   initializer->addPob(pob);
 }
 
 void BidirectionalSearcher::removePob(ProofObligation *pob) {
-  auto pos = std::find(pobs.begin(), pobs.end(), pob);
-  if (pos != pobs.end()) {
-    pobs.erase(pos); //runningStates опустел, при этом мы ничего не добавили в waitingStates. Не создан waitingStates[target]
+  assert(pobs.find(pob->location) != pobs.end());
+  assert(pobs[pob->location].find(pob) != pobs[pob->location].end());
+  std::set<ProofObligation *> pobsInLoc = pobs[pob->location];
+  pobsInLoc.erase(pob); //runningStates опустел, при этом мы ничего не добавили в waitingStates. Не создан waitingStates[target]
+  if (!pobsInLoc.empty()) {
+    pobs[pob->location] = pobsInLoc;
+  } else {
+    pobs.erase(pob->location);
   }
   backward->removePob(pob);
   initializer->removePob(pob);

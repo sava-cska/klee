@@ -48,7 +48,7 @@ private:
   RecencyRankedSearcher *backward;
   ConflictCoreInitializer *initializer;
 
-  std::vector<ProofObligation *> pobs;
+  std::map<KBlock *, std::set<ProofObligation *>> pobs;
 
   Ticker ticker;
 
@@ -71,7 +71,8 @@ private:
   void addPob(ProofObligation *);
   void removePob(ProofObligation *);
   void answerPob(ProofObligation *);
-  void closePobIfNoPathLeft(ProofObligation *pob);
+  bool closePobIfNoPathLeft(ProofObligation *pob);
+  void closePobsInTargetIfNeeded(const Target &target, KBlock *startBlock);
 };
 
 class ForwardOnlySearcher : public IBidirectionalSearcher {

@@ -189,8 +189,10 @@ void ConflictCoreInitializer::createRunningStateToTarget(
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
   klee_message("createRunningStateToTarget: state %s\n", ss.str().c_str());
-  assert(runningStateToTarget[target].find(state->initPC->parent) == runningStateToTarget[target].end());
+  assert(runningStateToTarget[target].find(state->initPC->parent) ==
+         runningStateToTarget[target].end());
   runningStateToTarget[target].insert({state->initPC->parent, {state}});
+  waitingStateToTarget[target].insert({state->initPC->parent, {}});
 }
 
 void ConflictCoreInitializer::addRunningStateToTarget(
@@ -199,8 +201,9 @@ void ConflictCoreInitializer::addRunningStateToTarget(
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
   klee_message("addRunningStateToTarget: state %s\n", ss.str().c_str());
-  assert(runningStateToTarget.find(target) != runningStateToTarget.end() && runningStateToTarget[target].find(state->initPC->parent) !=
-         runningStateToTarget[target].end());
+  assert(runningStateToTarget.find(target) != runningStateToTarget.end() &&
+         runningStateToTarget[target].find(state->initPC->parent) !=
+             runningStateToTarget[target].end());
   runningStateToTarget[target][state->initPC->parent].insert(state);
 }
 
@@ -210,8 +213,14 @@ void ConflictCoreInitializer::removeRunningStateToTarget(
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
   klee_message("removeRunningStateToTarget: state %s\n", ss.str().c_str());
-  assert(runningStateToTarget[target][state->initPC->parent].find(state) != runningStateToTarget[target][state->initPC->parent].end());
+  assert(runningStateToTarget[target][state->initPC->parent].find(state) !=
+         runningStateToTarget[target][state->initPC->parent].end());
   runningStateToTarget[target][state->initPC->parent].erase(state);
+}
+
+bool ConflictCoreInitializer::emptyRunningStateToTarget(
+    KBlock *stateStartBlock, const Target &target) const {
+  return runningStateToTarget.at(target).at(stateStartBlock).empty();
 }
 
 void ConflictCoreInitializer::addWaitingStateToTarget(
@@ -238,8 +247,10 @@ void ConflictCoreInitializer::updateBlockSetForPob(ProofObligation *pob) {
   for (const auto &startAndStates : waitingStatesToPob) {
     KBlock *startBlock = startAndStates.first;
     std::set<const ExecutionState *> waitingStates = startAndStates.second;
-    bool f2 = runningStateToTarget[target].find(startBlock) != runningStateToTarget[target].end();
-    bool f4 = waitingStateToTarget[target].find(startBlock) != waitingStateToTarget[target].end();
+    bool f2 = runningStateToTarget[target].find(startBlock) !=
+              runningStateToTarget[target].end();
+    bool f4 = waitingStateToTarget[target].find(startBlock) !=
+              waitingStateToTarget[target].end();
     assert(f2 && f4);
 
     bool fl1 = runningStateToTarget[target][startBlock].empty();

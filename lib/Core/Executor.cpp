@@ -5419,6 +5419,8 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
   unsigned int sfNum = 0;
   bool newCov = false;
 
+  ConflictCoreInitializer *initializer = searcher->getInitializer();
+
   for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend();
        sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
@@ -5426,12 +5428,19 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
     for (auto &kbd : kf->getSortedDistance(kb)) {
       KBlock *target = kbd.first;
       unsigned distance = kbd.second;
+
+      if (initializer != nullptr) {
+        if (initializer->checkIsRootTargetUnreachable(Target(target))) {
+          continue;
+        }
+      }
+
       if ((sfNum > 0 || distance > 0)) {
         if (distance >= minDistance)
           break;
         if (history[target->basicBlock].size() != 0) {
           std::vector<BasicBlock *> diff;
-          if (!newCov) {
+          /*if (!newCov) {
             std::set<BasicBlock*> left(state.level.begin(), state.level.end());
             std::set<BasicBlock*> right(
               history[target->basicBlock].begin(),
@@ -5439,7 +5448,7 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
             std::set_difference(left.begin(), left.end(),
                                 right.begin(), right.end(),
                                 std::inserter(diff, diff.begin()));
-          }
+          }*/
           if (diff.empty()) {
             continue;
           }

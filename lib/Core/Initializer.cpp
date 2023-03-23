@@ -238,6 +238,14 @@ void ConflictCoreInitializer::removeWaitingStateToPob(
   waitingStateToPob[pob][state->initPC->parent].insert(state);
 }
 
+void ConflictCoreInitializer::addUnreachableRootTarget(const Target &target) {
+  unreachableRootTarget.insert(target);
+}
+
+bool ConflictCoreInitializer::checkIsRootTargetUnreachable(const Target &target) const {
+  return unreachableRootTarget.find(target) != unreachableRootTarget.end();
+}
+
 void ConflictCoreInitializer::updateBlockSetForPob(ProofObligation *pob) {
   Target target = Target(pob->location);
   bool f1 = runningStateToTarget.find(target) != runningStateToTarget.end();

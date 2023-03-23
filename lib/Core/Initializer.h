@@ -42,6 +42,9 @@ public:
   bool isDominatorSet(ProofObligation *pob, const std::set<KBlock *> &dominatorSet) const;
   bool isTargetUnreachable(ProofObligation *pob) const;
 
+  void addUnreachableRootTarget(const Target &target);
+  bool checkIsRootTargetUnreachable(const Target &target) const;
+
   void updateBlockSetForPob(ProofObligation *pob);
 
   explicit ConflictCoreInitializer(KInstruction *initInst) : initInst(initInst) {};
@@ -61,6 +64,8 @@ private:
   std::map<ProofObligation *, FromStartToStates> waitingStateToPob;
   std::map<ProofObligation *, std::set<KBlock *>> pobBlockSet;
   KFunction *entrypoint;
+
+  std::set<Target> unreachableRootTarget;
 };
 
 };

@@ -216,8 +216,37 @@ void BidirectionalSearcher::updateBranch(
     }
   }
 
+  std::vector<ExecutionState *> tmpAddedStates = addedStates, tmpRemovedStates = removedStates;
+  {
+    KBlock *initPCBlock = ex->initialState->initPC->parent;
+    if (current != nullptr) {
+      KInstruction *prevKI = current->prevPC;
+      if (initPCBlock->basicBlock != current->getInitPCBlock() &&
+          prevKI->inst->isTerminator() &&
+          current->multilevel.count(current->getPCBlock()) > 0) {
+        tmpRemovedStates.push_back(current);
+        // ex->pauseState(*current);
+        // вот тут беда, забыли про условие
+      }
+    }
+
+    auto it = tmpAddedStates.begin();
+    while (it != tmpAddedStates.end()) {
+      ExecutionState *state = *it;
+      KInstruction *prevKI = state->prevPC;
+      if (initPCBlock->basicBlock != state->getInitPCBlock() &&
+          prevKI->inst->isTerminator() &&
+          state->multilevel.count(state->getPCBlock()) > 0) {
+        it = tmpAddedStates.erase(it);
+        // вот тут беда, забыли про условие
+      } else {
+        it++;
+      }
+    }
+  }
+
   //addedStates идут до Target (.targets)
-  branch->update(current, addedStates, removedStates, reached, unreached);
+  branch->update(current, tmpAddedStates, tmpRemovedStates, reached, unreached);
   //вернулся из reached и unreached -- удаляю (.location)
   //множество опустело -- всё
   //зарегистрировать все state из addedStates
@@ -260,6 +289,19 @@ void BidirectionalSearcher::updateBranch(
   for (const auto &targetAndStates : unreached) {
     for (const auto &unreachedState : targetAndStates.second) {
       closePobsInTargetIfNeeded(targetAndStates.first, unreachedState->initPC->parent);
+    }
+  }
+
+  {
+    KBlock *initPCBlock = ex->initialState->initPC->parent;
+    if (current != nullptr) {
+      KInstruction *prevKI = current->prevPC;
+      if (initPCBlock->basicBlock != current->getInitPCBlock() &&
+          prevKI->inst->isTerminator() &&
+          current->multilevel.count(current->getPCBlock()) > 0) {
+        ex->pauseState(*current);
+        // вот тут беда, забыли про условие
+      }
     }
   }
 }
@@ -331,9 +373,9 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
 BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
     : ticker({80, 10, 5, 5}) {
   ex = cfg.executor;
-  forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true, ex->initialState->initPC->parent);
+  forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   branch = new GuidedSearcher(
-      std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false, ex->initialState->initPC->parent);
+      std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
   backward = new RecencyRankedSearcher(MaxCycles);
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
@@ -374,6 +416,11 @@ bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
       deletePob = true;
       klee_message("Close POB!!!!!!!\n%s\n", pob->print().c_str());
       ProofObligation *parent = pob->parent;
+      if (parent == nullptr) {
+        Target rootTarget = Target(pob->location);
+        forward->removeTarget(rootTarget);
+        initializer->addUnreachableRootTarget(rootTarget);
+      }
       removePob(pob);
       pob->detachParent();
       delete pob;
@@ -522,7 +569,7 @@ void GuidedOnlySearcher::closeProofObligation(ProofObligation *) {}
 GuidedOnlySearcher::GuidedOnlySearcher(const SearcherConfig &cfg) {
   ex = cfg.executor;
   searcher = std::unique_ptr<GuidedSearcher>(
-      new GuidedSearcher(constructUserSearcher(*cfg.executor), true, ex->initialState->initPC->parent));
+      new GuidedSearcher(constructUserSearcher(*cfg.executor), true));
 }
 
 GuidedOnlySearcher::~GuidedOnlySearcher() {}

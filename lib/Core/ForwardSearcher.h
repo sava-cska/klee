@@ -174,7 +174,6 @@ namespace klee {
     std::map<Target, std::unique_ptr<TargetedSearcher>> targetedSearchers;
     unsigned index{1};
     bool reachingEnough;
-    KBlock *initPCBlock;
     void addTarget(Target target);
     void innerUpdate(ExecutionState *current,
                      const std::vector<ExecutionState *> &addedStates,
@@ -190,7 +189,7 @@ namespace klee {
 
   public:
     GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher,
-                   bool _reachingEnough, KBlock *_initPCBlock);
+                   bool _reachingEnough);
     ~GuidedSearcher() override = default;
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
@@ -205,6 +204,8 @@ namespace klee {
 
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
+
+    void removeTarget(const Target &target);
   };
 
   /// The base class for all weighted searchers. Uses DiscretePDF as underlying

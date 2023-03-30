@@ -13,6 +13,8 @@
 #include <stack>
 #include <utility>
 
+using namespace llvm;
+
 namespace {
 llvm::cl::opt<bool> DebugInitializer(
     "debug-initializer",
@@ -145,6 +147,11 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   for (auto &init : inits) {
     if (!initialized[init.first].count(init.second) &&
         !(isa<KReturnBlock>(init.second.block) && init.first->parent == init.second.block)) {
+      if (isa<CallInst>(init.first->inst) &&
+          cast<KCallBlock>(init.first->parent)->calledFunction !=
+              init.second.block->parent->function) {
+        continue;
+      }
       if (DebugInitializer) {
         llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
         llvm::errs() << init.second.print() << "\n" << init.second.block->instructions[0]->getSourceLocation();

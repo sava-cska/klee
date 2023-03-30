@@ -97,6 +97,17 @@ void RecencyRankedSearcher::removePob(ProofObligation *pob) {
   if (pos != pobs.end()) {
     pobs.erase(pos);
   }
+
+  if (propagatePobToStates.count(pob) > 0) {
+    auto &states = propagatePobToStates.at(pob);
+    for (ExecutionState *state : states) {
+      if (!state->isIsolated()) {
+        --state->backwardStepsLeftCounter;
+        assert(state->backwardStepsLeftCounter >= 0);
+      }
+    }
+  }
+
   propagatePobToStates.erase(pob);
 }
 

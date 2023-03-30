@@ -220,7 +220,7 @@ cl::opt<bool>
 cl::opt<bool>
     EqualitySubstitution("equality-substitution", cl::init(false),
                          cl::desc("Simplify equality expressions before "
-                                  "querying the solver (default=true)"),
+                                  "querying the solver (default=false)"),
                          cl::cat(SolvingCat));
 
 cl::opt<bool>
@@ -2285,7 +2285,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         branches = fork(state, cond, false);
       }
 
-      if (!conflict.empty() &&
+      if ((!conflict.empty() || isa<ConstantExpr>(cond)) &&
           state.depth && !state.isIsolated()) {
         assert((branches.first && !branches.second) ||
                (!branches.first && branches.second));
@@ -2296,6 +2296,13 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         }
         KBlock *target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
         ref<Expr> lastCondition = (branches.first ? Expr::createIsZero(cond) : cond);
+
+        if (!isa<ConstantExpr>(lastCondition)) {
+          std::vector<ref<Expr>>::iterator ie =
+              std::find(conflict.begin(), conflict.end(), lastCondition);
+          assert(ie != conflict.end());
+          conflict.erase(ie);
+        }
 
         if (DebugExecutor) {
           llvm::errs() << "Condition:\n" << lastCondition << "\n";

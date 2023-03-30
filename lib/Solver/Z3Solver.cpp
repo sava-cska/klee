@@ -359,6 +359,7 @@ bool Z3SolverImpl::internalRunSolver(
         unsatCore.push_back(constraint);
       }
     }
+    unsatCore.push_back(query.negateExpr().expr);
 
     Z3_ast_vector assertions = Z3_solver_get_assertions(builder->ctx, theSolver);
     Z3_ast_vector_inc_ref(builder->ctx, assertions);

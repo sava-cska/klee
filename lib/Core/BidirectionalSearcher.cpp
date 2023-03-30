@@ -219,7 +219,7 @@ void BidirectionalSearcher::updateBranch(
   std::vector<ExecutionState *> tmpAddedStates = addedStates, tmpRemovedStates = removedStates;
   {
     KBlock *initPCBlock = ex->initialState->initPC->parent;
-    if (current != nullptr) {
+    if (current != nullptr && std::find(removedStates.begin(), removedStates.end(), current) == removedStates.end()) {
       KInstruction *prevKI = current->prevPC;
       if (initPCBlock->basicBlock != current->getInitPCBlock() &&
           prevKI->inst->isTerminator() &&
@@ -294,7 +294,7 @@ void BidirectionalSearcher::updateBranch(
 
   {
     KBlock *initPCBlock = ex->initialState->initPC->parent;
-    if (current != nullptr) {
+    if (current != nullptr && std::find(removedStates.begin(), removedStates.end(), current) == removedStates.end()) {
       KInstruction *prevKI = current->prevPC;
       if (initPCBlock->basicBlock != current->getInitPCBlock() &&
           prevKI->inst->isTerminator() &&

@@ -72,7 +72,7 @@ private:
   void removePob(ProofObligation *);
   void answerPob(ProofObligation *);
   bool closePobIfNoPathLeft(ProofObligation *pob);
-  void closePobsInTargetIfNeeded(const Target &target, KBlock *startBlock);
+  void closePobsInTargetIfNeeded(const Target &target);
 };
 
 class ForwardOnlySearcher : public IBidirectionalSearcher {

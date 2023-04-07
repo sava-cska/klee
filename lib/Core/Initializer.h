@@ -29,23 +29,21 @@ public:
   void addPob(ProofObligation *pob) override;
   void removePob(ProofObligation *pob) override;
   void addConflictInit(const Conflict &, KBlock *) override;
-  void setEntryPoint(KFunction *_entrypoint);
 
   void createRunningStateToTarget(const ExecutionState *state, const Target &target);
   void addRunningStateToTarget(const ExecutionState *state, const Target &target);
   void removeRunningStateToTarget(const ExecutionState *state, const Target &target);
-  bool emptyRunningStateToTarget(KBlock *stateStartBlock, const Target &target) const;
+  bool emptyRunningStateToTarget(const Target &target) const;
 
   void addWaitingStateToTarget(const ExecutionState *state, const Target &target);
   void removeWaitingStateToPob(const ExecutionState *state, ProofObligation *pob);
 
-  bool isDominatorSet(ProofObligation *pob, const std::set<KBlock *> &dominatorSet) const;
-  bool isTargetUnreachable(ProofObligation *pob) const;
+  bool isPobProcessAllStates(ProofObligation *pob) const;
 
   void addUnreachableRootTarget(const Target &target);
   bool checkIsRootTargetUnreachable(const Target &target) const;
 
-  void updateBlockSetForPob(ProofObligation *pob);
+  void updateFinishPob(ProofObligation *pob);
 
   explicit ConflictCoreInitializer(KInstruction *initInst) : initInst(initInst) {};
   ~ConflictCoreInitializer() override {}
@@ -58,12 +56,10 @@ private:
   std::map<KInstruction *, std::set<Target>> initialized;
   std::set<KFunction *> dismantledKFunctions;
 
-  using FromStartToStates = std::map<KBlock *, std::set<const ExecutionState *>>;
-  std::map<Target, FromStartToStates> runningStateToTarget;
-  std::map<Target, FromStartToStates> waitingStateToTarget;
-  std::map<ProofObligation *, FromStartToStates> waitingStateToPob;
-  std::map<ProofObligation *, std::set<KBlock *>> pobBlockSet;
-  KFunction *entrypoint;
+  std::map<Target, std::set<const ExecutionState *>> runningStateToTarget;
+  std::map<Target, std::set<const ExecutionState *>> waitingStateToTarget;
+  std::map<ProofObligation *, std::set<const ExecutionState *>> waitingStateToPob;
+  std::set<ProofObligation *> blockedPob;
 
   std::set<Target> unreachableRootTarget;
 };

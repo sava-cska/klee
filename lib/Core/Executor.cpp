@@ -5582,10 +5582,6 @@ void Executor::run(ExecutionState &state) {
   } else {
     searcher = std::make_unique<BidirectionalSearcher>(cfg);
   }
-  ConflictCoreInitializer *initializer = searcher->getInitializer();
-  if (initializer != nullptr) {
-    initializer->setEntryPoint(entrypoint);
-  }
 
   std::vector<ExecutionState *> newStates(states.begin(), states.end());
   std::vector<ExecutionState *> removed{};

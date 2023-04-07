@@ -270,7 +270,7 @@ void BidirectionalSearcher::updateBranch(
   for (const auto &targetAndStates : reached) {
     for (const auto &reachedState : targetAndStates.second) {
       if (targetAndStates.first.atReturn() && reachedState->stack.size() > 0) {
-        closePobsInTargetIfNeeded(targetAndStates.first, reachedState->initPC->parent);
+        closePobsInTargetIfNeeded(targetAndStates.first);
         continue;
       }
       if (DebugBidirectionalSearcher) {
@@ -287,9 +287,7 @@ void BidirectionalSearcher::updateBranch(
   }
 
   for (const auto &targetAndStates : unreached) {
-    for (const auto &unreachedState : targetAndStates.second) {
-      closePobsInTargetIfNeeded(targetAndStates.first, unreachedState->initPC->parent);
-    }
+      closePobsInTargetIfNeeded(targetAndStates.first);
   }
 
   {
@@ -376,7 +374,7 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   branch = new GuidedSearcher(
       std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new RecencyRankedSearcher(MaxCycles);
+  backward = new RecencyRankedSearcher(-1);
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
 }
 
@@ -411,8 +409,8 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
 bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
   bool deletePob = false;
   while (pob && pob->children.empty()) {
-    initializer->updateBlockSetForPob(pob);
-    if (initializer->isTargetUnreachable(pob)) {
+    initializer->updateFinishPob(pob);
+    if (initializer->isPobProcessAllStates(pob)) {
       deletePob = true;
       klee_message("Close POB!!!!!!!\n%s\n", pob->print().c_str());
       ProofObligation *parent = pob->parent;
@@ -433,8 +431,8 @@ bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
   return deletePob;
 }
 
-void BidirectionalSearcher::closePobsInTargetIfNeeded(const Target &target, KBlock *startBlock) {
-  if (!initializer->emptyRunningStateToTarget(startBlock, target)) {
+void BidirectionalSearcher::closePobsInTargetIfNeeded(const Target &target) {
+  if (!initializer->emptyRunningStateToTarget(target)) {
     return;
   }
 

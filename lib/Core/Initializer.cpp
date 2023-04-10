@@ -68,7 +68,8 @@ void ConflictCoreInitializer::removePob(ProofObligation *pob) {
 void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *target) {
   const Conflict::core_ty &core = conflict.core;
   assert(!core.empty());
-  const Path &path = conflict.path;
+  Path path = conflict.path;
+  path.append(target);
   std::set<std::pair<KInstruction *, Target>> inits;
   KFunction *mainKF = initInst->parent->parent;
   KInstruction *current = initInst;

@@ -26,10 +26,11 @@ class ComposeVisitor;
 class Composer {
   friend class klee::ComposeVisitor;
 
-  Composer(ExecutionState &_state) : state(_state), copy(*state.copy()) {}
+  Composer(ExecutionState &_state) : state(_state), copy(*state.copy()), composeID(++id) {}
   ~Composer();
 
 private:
+  static uint64_t id;
   static std::map<const ExecutionState *,
                   std::map<const MemoryObject *, ref<Expr>>,
                   ExecutionStateIDCompare>
@@ -40,6 +41,7 @@ private:
 
   ExecutionState &state;
   ExecutionState &copy;
+  uint64_t composeID;
 
   bool tryRebuild(const ref<Expr>, ref<Expr> &);
 
@@ -58,11 +60,15 @@ class ComposeVisitor : public ExprVisitor {
 
 public:
   ComposeVisitor() = delete;
-  explicit ComposeVisitor(Composer &_caller, int diff)
-      : ExprVisitor(false), caller(_caller), diffLevel(diff) {
+  explicit ComposeVisitor(Composer &_caller, int diff, uint64_t _id)
+      : ExprVisitor(false), caller(_caller), diffLevel(diff), id(_id) {
     usedExternalVisitorHash = true;
     delete visited;
     visited = &globalVisited[&caller.state];
+  }
+
+  ~ComposeVisitor() {
+    globalVisited.erase(&caller.state);
   }
 
 private:
@@ -82,6 +88,7 @@ private:
   ref<Expr> reindexArray(const Array *array);
   Composer &caller;
   int diffLevel;
+  uint64_t id;
 };
 } // namespace klee
 

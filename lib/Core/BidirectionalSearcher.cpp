@@ -55,6 +55,12 @@ llvm::cl::opt<bool> PruneStates(
     llvm::cl::desc("prune a state of failed backward step (default=false)."),
     llvm::cl::init(false), llvm::cl::cat(klee::ExecCat));
 
+llvm::cl::opt<bool> UseOnlyIsolatedStates(
+    "use-only-isolated-states",
+    llvm::cl::desc(
+        "use only isolated states for backward step (default=false)."),
+    llvm::cl::init(false), llvm::cl::cat(klee::ExecCat));
+
 } // namespace
 
 namespace klee {
@@ -178,12 +184,14 @@ void BidirectionalSearcher::updateForward(
     states.push_back(current);
   states.insert(states.end(), addedStates.begin(), addedStates.end());
 
-  for (auto &state : states) {
-    if (state->getPrevPCBlock() != state->getPCBlock() && 
-        !isa<KReturnBlock>(state->pc->parent) &&
-        !isa<KReturnBlock>(state->prevPC->parent)) {
-      Target target = Target(state->pc->parent);
-      backward->addState(target, state);
+  if (!UseOnlyIsolatedStates) {
+    for (auto &state : states) {
+      if (state->getPrevPCBlock() != state->getPCBlock() &&
+          !isa<KReturnBlock>(state->pc->parent) &&
+          !isa<KReturnBlock>(state->prevPC->parent)) {
+        Target target = Target(state->pc->parent);
+        backward->addState(target, state);
+      }
     }
   }
 

@@ -220,7 +220,7 @@ cl::opt<bool>
 cl::opt<bool>
     EqualitySubstitution("equality-substitution", cl::init(false),
                          cl::desc("Simplify equality expressions before "
-                                  "querying the solver (default=true)"),
+                                  "querying the solver (default=false)"),
                          cl::cat(SolvingCat));
 
 cl::opt<bool>
@@ -487,7 +487,10 @@ cl::opt<bool> DebugCheckForImpliedValues(
     cl::desc("Debug the implied value optimization"),
     cl::cat(DebugCat));
 
-cl::opt<bool> DebugExecutor("debug-executor", cl::desc(""), cl::init(false),
+cl::opt<bool> DebugForward("debug-forward", cl::desc(""), cl::init(false),
+                            cl::cat(DebugCat));
+
+cl::opt<bool> DebugBackward("debug-backward", cl::desc(""), cl::init(false),
                             cl::cat(DebugCat));
 
 } // namespace
@@ -2285,11 +2288,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         branches = fork(state, cond, false);
       }
 
-      if (!conflict.empty() &&
+      if ((!conflict.empty() || isa<ConstantExpr>(cond)) &&
           state.depth && !state.isIsolated()) {
         assert((branches.first && !branches.second) ||
                (!branches.first && branches.second));
-        if (DebugExecutor) {
+        if (DebugForward) {
           llvm::errs() << "Contradiction was found\n";
           llvm::errs() << "Path: " << state.path.toString() << "\n";
           llvm::errs() << "Constraint:" << state.constraints;
@@ -2297,7 +2300,14 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         KBlock *target = getKBlock(*bi->getSuccessor(branches.first ? 1 : 0));
         ref<Expr> lastCondition = (branches.first ? Expr::createIsZero(cond) : cond);
 
-        if (DebugExecutor) {
+        if (!isa<ConstantExpr>(lastCondition)) {
+          std::vector<ref<Expr>>::iterator ie =
+              std::find(conflict.begin(), conflict.end(), lastCondition);
+          assert(ie != conflict.end());
+          conflict.erase(ie);
+        }
+
+        if (DebugForward) {
           llvm::errs() << "Condition:\n" << lastCondition << "\n";
           llvm::errs() << "Target: " << target->getIRLocation() << "\n";
           llvm::errs() << "\n";
@@ -4605,13 +4615,7 @@ const Array * Executor::makeArray(ExecutionState &state,
                                   bool isExternal,
                                   ref<Expr> liSource) {
   static uint64_t id = 0;
-  std::string uniqueName = name;
-
-  if (isExternal) {
-    while (!state.arrayNames.insert(uniqueName).second) {
-      uniqueName = name + "#" + llvm::utostr(++id);
-    }
-  }
+  std::string uniqueName = isExternal ? name + "#" + std::to_string(id++) : name;
 
   const Array *array = arrayManager.CreateArray(uniqueName, size, isExternal, liSource);
 
@@ -5695,13 +5699,23 @@ ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
     } else {
       newPobs.push_back(newPob);
     }
-    if (DebugExecutor) {
+    if (DebugBackward) {
       llvm::errs() << "Propagated pobs\n";
       for (auto &pob : newPobs) {
         llvm::errs() << "Path: " << pob->path.toString() << "\n";
         llvm::errs() << "Constraints:\n" << pob->condition << "\n";
         llvm::errs() << "\n";
       }
+      llvm::errs() << "Old pob\n";
+      llvm::errs() << "Path: " << pob->path.toString() << "\n";
+      llvm::errs() << "Constraints:\n" << pob->condition << "\n";
+      llvm::errs() << "\n";
+
+      llvm::errs() << "State.\n";
+      llvm::errs() << "Id: " << state->id << "\n";
+      llvm::errs() << "Path: " << state->path.toString() << "\n";
+      llvm::errs() << "Constraints:\n" << state->constraints;
+      llvm::errs() << "\n";
     }
     for (auto &newPob : newPobs) {
       newPob->parent = pob;

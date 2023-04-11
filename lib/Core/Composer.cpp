@@ -72,6 +72,8 @@ std::map<const ExecutionState *, ExprHashMap<ref<Expr>>,
          ExecutionStateIDCompare>
     Composer::globalDerefCache;
 
+uint64_t Composer::id = 0;
+
 Composer::~Composer() {
   globalReadCache.erase(&copy);
   globalDerefCache.erase(&copy);
@@ -79,7 +81,7 @@ Composer::~Composer() {
 }
 
 bool Composer::tryRebuild(const ref<Expr> expr, ref<Expr> &res) {
-  ComposeVisitor visitor(*this, -copy.stackBalance);
+  ComposeVisitor visitor(*this, -copy.stackBalance, composeID);
   res = visitor.visit(expr);
   res = visitor.faultyPtr.isNull() ? res : visitor.faultyPtr;
   return visitor.faultyPtr.isNull();
@@ -116,6 +118,14 @@ bool Composer::tryRebuild(const ProofObligation &old, ExecutionState &state,
           // that. It means that unsatCore sould be non empty or rebuilt
           // constraint should be constant.
           (unsatCore.size() || isa<ConstantExpr>(rebuiltConstraint))) {
+
+        if (!isa<ConstantExpr>(rebuiltConstraint)) {
+          std::vector<ref<Expr>>::iterator ie =
+              std::find(unsatCore.begin(), unsatCore.end(), rebuiltConstraint);
+          assert(ie != unsatCore.end());
+          unsatCore.erase(ie);
+        }
+
         Executor::makeConflictCore(composer.copy, unsatCore, rebuiltConstraint,
                                    loc, conflictCore);
       }
@@ -250,10 +260,14 @@ ref<Expr> ComposeVisitor::processObject(const MemoryObject *object, const Array 
       KFunction *kf = ki->parent->parent;
 
       if (state.stack.empty()) {
-        Function *calledf =
-          isa<CallInst>(inst) ?
-            dyn_cast<CallInst>(inst)->getCalledFunction() :
-            dyn_cast<InvokeInst>(inst)->getCalledFunction();
+#if LLVM_VERSION_CODE >= LLVM_VERSION(8, 0)
+        const CallBase &cs = cast<CallBase>(*allocSite);
+        Value *fp = cs.getCalledOperand();
+#else
+        CallSite cs(firstit);
+        Value *fp = cs.getCalledValue();
+#endif
+        Function *calledf = getTargetFunction(fp);
         KFunction *lastkf = state.pc->parent->parent;
         KBlock *pckb = lastkf->blockMap[state.getPCBlock()];
         bool isFinalPCKB = std::find(lastkf->finalKBlocks.begin(),
@@ -316,7 +330,12 @@ ref<Expr> ComposeVisitor::processRead(const ReadExpr &re) {
   ref<ObjectState> os;
   if (re.updates.root->isExternal ||
      re.updates.root->isConstantArray()) {
-    os = new ObjectState(re.updates.root, caller.executor->getMemoryManager());
+    const Array *root = re.updates.root;
+    if (root->isExternal) {
+      root = caller.executor->arrayManager.CreateArray(
+          root->name + "<" + std::to_string(id) + ">", root->size, true, ref<Expr>());
+    }
+    os = new ObjectState(root, caller.executor->getMemoryManager());
     shareUpdates(os, re);
     return os->read(index, re.getWidth());
   }
@@ -338,7 +357,13 @@ ref<Expr> ComposeVisitor::processOrderedRead(const ConcatExpr &ce, const ReadExp
   ref<ObjectState> os;
   if (base.updates.root->isExternal ||
     base.updates.root->isConstantArray()) {
-    os = new ObjectState(base.updates.root, caller.executor->getMemoryManager());
+    const Array *root = base.updates.root;
+    if (root->isExternal) {
+      root = caller.executor->arrayManager.CreateArray(
+          root->name + "<" + std::to_string(id) + ">", root->size, true,
+          ref<Expr>());
+    }
+    os = new ObjectState(root, caller.executor->getMemoryManager());
     shareUpdates(os, base);
     ref<Expr> res = os->read(index, ce.getWidth());
     return res;

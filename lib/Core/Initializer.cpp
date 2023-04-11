@@ -17,6 +17,8 @@
 #include <stack>
 #include <utility>
 
+using namespace llvm;
+
 namespace {
 llvm::cl::opt<bool> DebugInitializer(
     "debug-initializer",
@@ -67,7 +69,8 @@ void ConflictCoreInitializer::removePob(ProofObligation *pob) {}
 void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *target) {
   const Conflict::core_ty &core = conflict.core;
   assert(!core.empty());
-  const Path &path = conflict.path;
+  Path path = conflict.path;
+  path.append(target);
   std::set<std::pair<KInstruction *, Target>> inits;
   KFunction *mainKF = initInst->parent->parent;
   KInstruction *current = initInst;
@@ -149,6 +152,11 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   for (auto &init : inits) {
     if (!initialized[init.first].count(init.second) &&
         !(isa<KReturnBlock>(init.second.block) && init.first->parent == init.second.block)) {
+      if (isa<CallInst>(init.first->inst) &&
+          cast<KCallBlock>(init.first->parent)->calledFunction !=
+              init.second.block->parent->function) {
+        continue;
+      }
       if (DebugInitializer) {
         llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
         llvm::errs() << init.second.print() << "\n" << init.second.block->instructions[0]->getSourceLocation();

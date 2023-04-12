@@ -313,7 +313,8 @@ void BidirectionalSearcher::updateBranch(
 }
 
 void BidirectionalSearcher::updateBackward(
-    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob, ExecutionState *state) {
+    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob, ExecutionState *state,
+    bool createdPobFromLemma) {
   for (auto pob : newPobs) {
     addPob(pob);
   }
@@ -327,7 +328,7 @@ void BidirectionalSearcher::updateBackward(
     state->initPC->parent->basicBlock->printAsOperand(ss, false);
     klee_message("updateBackward: state %s", ss.str().c_str());
     initializer->removeWaitingStateToPob(state, oldPob);
-    if (newPobs.empty()) {
+    if (newPobs.empty() || createdPobFromLemma) {
       klee_message("updateBackward: newPobs is empty\n%s", oldPob->print().c_str());
       closePobIfNoPathLeft(oldPob);
     }
@@ -358,7 +359,7 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
   }
   case ActionResult::Kind::Backward: {
     auto bckr = cast<BackwardResult>(r);
-    updateBackward(bckr->newPobs, bckr->oldPob, bckr->state);
+    updateBackward(bckr->newPobs, bckr->oldPob, bckr->state, bckr->createdPobFromLemma);
     if (bckr->state->backwardStepsLeftCounter > 0) {
       --bckr->state->backwardStepsLeftCounter;
       if (bckr->newPobs.empty())

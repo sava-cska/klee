@@ -5,9 +5,10 @@ namespace klee {
 
 unsigned ProofObligation::counter = 0;
 
-void ProofObligation::addCondition(ref<Expr> e, KInstruction *loc, bool *sat) {
-  ConstraintManager c(condition);
-  c.addConstraint(e, loc, sat);
+ProofObligation::ProofObligation(Lemma *lemma, const ProofObligation *oldPob)
+    : id(counter++), parent(nullptr), root(this), location(oldPob->location),
+      condition(), path({oldPob->location}), initialLemma(lemma) {
+
 }
 
 void ProofObligation::detachParent() {
@@ -44,6 +45,21 @@ ProofObligation *propagateToReturn(ProofObligation *pob,
   ret->path.prepend(returnBlock);
   ret->stack.push_back(callSite);
   return ret;
+}
+
+bool ProofObligation::createdFromLemma() const {
+  return initialLemma != nullptr;
+}
+
+const ProofObligation *ProofObligation::findAncestorAtLocation(const KBlock *requiredLocation) const {
+  if (location == requiredLocation) {
+    return this;
+  }
+  if (parent == nullptr) {
+    return nullptr;
+  } else {
+    return parent->findAncestorAtLocation(requiredLocation);
+  }
 }
 
 } // namespace klee

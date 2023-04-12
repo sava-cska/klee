@@ -93,12 +93,28 @@ bool Composer::tryRebuild(const ref<Expr> expr, ExecutionState &state, ref<Expr>
   return success;
 }
 
-bool Composer::tryRebuild(const ProofObligation &old, ExecutionState &state,
+bool Composer::tryRebuild(const klee::ProofObligation *pobAtStateLocation,
+                          const ProofObligation &old, ExecutionState &state,
                           ProofObligation &rebuilt,
                           Conflict::core_ty &conflictCore,
                           ExprHashMap<ref<Expr>> &rebuildMap) {
   bool success = true;
   Composer composer(state);
+  if (pobAtStateLocation != nullptr) {
+    Lemma *lemma = pobAtStateLocation->initialLemma;
+    assert(!lemma);
+    if (!lemma->constraints.empty()) {
+      auto it = lemma->constraints.begin();
+      ref<Expr> lemmaStatement = *it;
+      it++;
+      while (it != lemma->constraints.end()) {
+        lemmaStatement = OrExpr::create(lemmaStatement, *it);
+        it++;
+      }
+      composer.copy.addConstraint(lemmaStatement, nullptr);
+    }
+  }
+
   for (auto &constraint : old.condition) {
     auto loc = old.condition.getLocation(constraint);
     ref<Expr> rebuiltConstraint;

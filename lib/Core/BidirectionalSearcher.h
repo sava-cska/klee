@@ -65,7 +65,8 @@ private:
                     const std::vector<ExecutionState *> &addedStates,
                     const std::vector<ExecutionState *> &removedStates);
   void updateBackward(std::vector<ProofObligation *> newPobs,
-                      ProofObligation *oldPob, ExecutionState *state);
+                      ProofObligation *oldPob, ExecutionState *state,
+                      bool createdPobFromLemma);
   void updateInitialize(KInstruction *location, ExecutionState &state);
 
   void addPob(ProofObligation *);

@@ -197,9 +197,13 @@ struct BackwardResult : ActionResult {
   std::vector<ProofObligation*> newPobs;
   ExecutionState *state;
   ProofObligation *oldPob;
+  bool createdPobFromLemma;
 
-  BackwardResult(std::vector<ProofObligation*> _newPobs, ExecutionState *_state, ProofObligation *_oldPob)
-    : newPobs(_newPobs), state(_state), oldPob(_oldPob) {}
+  BackwardResult(std::vector<ProofObligation *> _newPobs,
+                 ExecutionState *_state, ProofObligation *_oldPob,
+                 bool _createdPobFromLemma)
+      : newPobs(_newPobs), state(_state), oldPob(_oldPob),
+        createdPobFromLemma(_createdPobFromLemma) {}
 
   Kind getKind() const { return Kind::Backward; }
   static bool classof(const ActionResult *A) {

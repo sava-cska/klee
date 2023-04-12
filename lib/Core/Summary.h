@@ -62,9 +62,9 @@ public:
     delete db;
   }
 
-  void summarize(const ProofObligation *pob,
-                 const Conflict &conflict,
-                 const ExprHashMap<ref<Expr>> &rebuildMap);
+  ProofObligation *summarize(const ProofObligation *pob,
+                             const Conflict &conflict,
+                             const ExprHashMap<ref<Expr>> &rebuildMap);
 
   void storeLemma(const Lemma *l);
 

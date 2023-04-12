@@ -17,6 +17,7 @@ namespace klee {
 
 class ExecutionState;
 class MemoryObject;
+struct Lemma;
 
 class ProofObligation {
 
@@ -35,6 +36,8 @@ public:
   Constraints condition;
   Path path;
 
+  Lemma *initialLemma;
+
   std::vector<std::pair<ref<const MemoryObject>, const Array *>> sourcedSymbolics;
 
   ProofObligation(KBlock *_location, ProofObligation *_parent = nullptr)
@@ -42,7 +45,7 @@ public:
         stack(_parent ? _parent->stack : std::vector<KInstruction *>()),
         propagationCount(_parent ? _parent->propagationCount
                                  : std::map<ExecutionState *, unsigned>()),
-        location(_location), path({_location}) {
+        location(_location), path({_location}), initialLemma(nullptr) {
     if (parent) {
       parent->children.insert(this);
     }
@@ -52,11 +55,13 @@ public:
       : id(counter++), parent(pob->parent), root(pob->root), stack(pob->stack),
         propagationCount(pob->propagationCount),
         location(pob->location), condition(pob->condition),
-        path(pob->path) {
+        path(pob->path), initialLemma(pob->initialLemma) {
     if (parent) {
       parent->children.insert(this);
     }
   }
+
+  explicit ProofObligation(Lemma *lemma, const ProofObligation *oldPob);
 
   // no copy ctor
   ProofObligation(const ProofObligation &state) = delete;
@@ -74,6 +79,10 @@ public:
   void detachParent();
   bool atReturn() const { return isa<KReturnBlock>(location); }
   std::string print() const;
+
+  bool createdFromLemma() const;
+
+  const ProofObligation *findAncestorAtLocation(const KBlock *requiredLocation) const;
 };
 
 struct ProofObligationIDCompare {

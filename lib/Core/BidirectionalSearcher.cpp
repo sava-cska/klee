@@ -12,7 +12,6 @@
 #include "ExecutionState.h"
 #include "Executor.h"
 #include "ForwardSearcher.h"
-#include "Initializer.h"
 #include "MergeHandler.h"
 #include "ProofObligation.h"
 #include "SearcherUtil.h"
@@ -124,7 +123,7 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
       if (isStuck(state)) {
         KBlock *target = ex->calculateTargetByBlockHistory(state);
         if (target) {
-          state.targets.insert(Target(target));
+          state.addTarget(Target(target));
           forward->update(&state, {}, {});
           action = new ForwardAction(&state);
         } else {
@@ -138,15 +137,15 @@ ref<BidirectionalAction> BidirectionalSearcher::selectAction() {
 
     case StepKind::Branch: {
       auto &state = branch->selectState();
-      KInstruction *prevKI = state.prevPC;
+      /*KInstruction *prevKI = state.prevPC;
       if (ex->initialState->getInitPCBlock() != state.getInitPCBlock() &&
           prevKI->inst->isTerminator() &&
           state.multilevel.count(state.getPCBlock()) > 0) {
-        branch->update(nullptr, {}, {&state});
+        branch->update(nullptr, {}, {&state}); // вот тут беда, забыли про условие
         ex->pauseState(state);
-      } else {
+      } else {*/
         action = new BranchAction(&state);
-      }
+      //}
       break;
     }
 
@@ -217,35 +216,130 @@ void BidirectionalSearcher::updateBranch(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates) {
   std::map<Target, std::unordered_set<ExecutionState *>> reached;
+  std::map<Target, std::unordered_set<ExecutionState *>> unreached;
 
-  branch->update(current, addedStates, removedStates, reached);
+  for (const ExecutionState *state : addedStates) {
+    for (const Target &target : state->targets) {
+      reachabilityTracker->addRunningStateToTarget(state, target);
+    }
+  }
 
-  for (auto &targetStates : reached) {
-    for (auto state : targetStates.second) {
-      if (targetStates.first.atReturn() && state->stack.size() > 0)
+  std::vector<ExecutionState *> tmpAddedStates = addedStates, tmpRemovedStates = removedStates;
+  {
+    KBlock *initPCBlock = ex->initialState->initPC->parent;
+    if (current != nullptr) {
+      KInstruction *prevKI = current->prevPC;
+      if (initPCBlock->basicBlock != current->getInitPCBlock() &&
+          prevKI->inst->isTerminator() &&
+          current->multilevel.count(current->getPCBlock()) > 0) {
+        tmpRemovedStates.push_back(current);
+        // ex->pauseState(*current);
+        // вот тут беда, забыли про условие
+      }
+    }
+
+    auto it = tmpAddedStates.begin();
+    while (it != tmpAddedStates.end()) {
+      ExecutionState *state = *it;
+      KInstruction *prevKI = state->prevPC;
+      if (initPCBlock->basicBlock != state->getInitPCBlock() &&
+          prevKI->inst->isTerminator() &&
+          state->multilevel.count(state->getPCBlock()) > 0) {
+        it = tmpAddedStates.erase(it);
+        // вот тут беда, забыли про условие
+      } else {
+        it++;
+      }
+    }
+  }
+
+  //addedStates идут до Target (.targets)
+  branch->update(current, tmpAddedStates, tmpRemovedStates, reached, unreached);
+  //вернулся из reached и unreached -- удаляю (.location)
+  //множество опустело -- всё
+  //зарегистрировать все state из addedStates
+  //все стейты из addedStates я добавляю в Running
+  //reached и unreached я удаляю из Running
+
+
+  for (const auto &targetAndStates : reached) {
+    for (const auto &reachedState : targetAndStates.second) {
+      reachabilityTracker->removeRunningStateToTarget(reachedState,
+                                              targetAndStates.first);
+    }
+  }
+  for (const auto &targetAndStates : unreached) {
+    for (const auto &unreachedState : targetAndStates.second) {
+      reachabilityTracker->removeRunningStateToTarget(unreachedState,
+                                              targetAndStates.first);
+    }
+  }
+
+  for (const auto &targetAndStates : reached) {
+    for (const auto &reachedState : targetAndStates.second) {
+      if (targetAndStates.first.atReturn() && reachedState->stack.size() > 0) {
+        closePobsInTargetIfNeeded(targetAndStates.first);
         continue;
+      }
       if (DebugBidirectionalSearcher) {
         llvm::errs() << "New isolated state.\n";
-        llvm::errs() << "Id: " << state->id << "\n";
-        llvm::errs() << "Path: " << state->path.toString() << "\n";
-        llvm::errs() << "Constraints:\n" << state->constraints;
+        llvm::errs() << "Id: " << reachedState->id << "\n";
+        llvm::errs() << "Path: " << reachedState->path.toString() << "\n";
+        llvm::errs() << "Constraints:\n" << reachedState->constraints;
         llvm::errs() << "\n";
       }
-      backward->addState(targetStates.first, state);
+      ExecutionState *newBackwardState = backward->addState(targetAndStates.first, reachedState);
+      //добавляю во второе множество
+      reachabilityTracker->addWaitingStateToTarget(newBackwardState, targetAndStates.first);
+    }
+  }
+
+  for (const auto &targetAndStates : unreached) {
+      closePobsInTargetIfNeeded(targetAndStates.first);
+  }
+
+  {
+    KBlock *initPCBlock = ex->initialState->initPC->parent;
+    if (current != nullptr) {
+      KInstruction *prevKI = current->prevPC;
+      if (initPCBlock->basicBlock != current->getInitPCBlock() &&
+          prevKI->inst->isTerminator() &&
+          current->multilevel.count(current->getPCBlock()) > 0) {
+        ex->pauseState(*current);
+        // вот тут беда, забыли про условие
+      }
     }
   }
 }
 
 void BidirectionalSearcher::updateBackward(
-    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob) {
+    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob, ExecutionState *state) {
   for (auto pob : newPobs) {
     addPob(pob);
+  }
+
+  // прокинуть state, удаляю state у pob.location
+  //проверить на пустоту два множества
+
+  if (state->isIsolated()) {
+    std::string s;
+    llvm::raw_string_ostream ss(s);
+    state->initPC->parent->basicBlock->printAsOperand(ss, false);
+    klee_message("updateBackward: state %s", ss.str().c_str());
+    reachabilityTracker->removeWaitingStateToPob(state, oldPob);
+    if (newPobs.empty()) {
+      klee_message("updateBackward: newPobs is empty\n%s", oldPob->print().c_str());
+      closePobIfNoPathLeft(oldPob);
+    }
   }
 }
 
 void BidirectionalSearcher::updateInitialize(KInstruction *location,
                                              ExecutionState &state) {
   branch->update(nullptr, {&state}, {});
+  for (const Target &target : state.targets) {
+    reachabilityTracker->createRunningStateToTarget(&state, target);
+  }
 }
 
 void BidirectionalSearcher::update(ref<ActionResult> r) {
@@ -263,7 +357,7 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
   }
   case ActionResult::Kind::Backward: {
     auto bckr = cast<BackwardResult>(r);
-    updateBackward(bckr->newPobs, bckr->oldPob);
+    updateBackward(bckr->newPobs, bckr->oldPob, bckr->state);
     if (bckr->state->backwardStepsLeftCounter > 0) {
       --bckr->state->backwardStepsLeftCounter;
       if (bckr->newPobs.empty())
@@ -287,19 +381,23 @@ BidirectionalSearcher::BidirectionalSearcher(const SearcherConfig &cfg)
   forward = new GuidedSearcher(constructUserSearcher(*cfg.executor), true);
   branch = new GuidedSearcher(
       std::unique_ptr<ForwardSearcher>(new BFSSearcher()), false);
-  backward = new RecencyRankedSearcher(MaxCycles);
+  backward = new RecencyRankedSearcher(-1);
   initializer = new ConflictCoreInitializer(ex->initialState->pc);
+  reachabilityTracker = new ReachabilityTracker();
 }
 
 BidirectionalSearcher::~BidirectionalSearcher() {
-  for (auto pob : pobs) {
-    delete pob;
+  for (auto targetAndPobs : pobs) {
+    for (ProofObligation *pob : targetAndPobs.second) {
+      delete pob;
+    }
   }
   pobs.clear();
   delete forward;
   delete branch;
   delete backward;
   delete initializer;
+  delete reachabilityTracker;
 }
 
 void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
@@ -317,6 +415,54 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
   }
 }
 
+bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
+  bool deletePob = false;
+  while (pob && pob->children.empty()) {
+    reachabilityTracker->updateFinishPob(pob);
+    if (reachabilityTracker->isPobProcessAllStates(pob)) {
+      deletePob = true;
+      klee_message("Close POB!!!!!!!\n%s\n", pob->print().c_str());
+      ProofObligation *parent = pob->parent;
+      if (parent == nullptr) {
+        Target rootTarget = Target(pob->location);
+        forward->removeTarget(rootTarget);
+        reachabilityTracker->addUnreachableRootTarget(rootTarget);
+      }
+      removePob(pob);
+      pob->detachParent();
+      delete pob;
+      pob = parent;
+    }
+    else {
+      break;
+    }
+  }
+  return deletePob;
+}
+
+void BidirectionalSearcher::closePobsInTargetIfNeeded(const Target &target) {
+  if (!reachabilityTracker->emptyRunningStateToTarget(target)) {
+    return;
+  }
+
+  while (true) {
+    if (pobs.find(target.block) == pobs.end()) {
+      return;
+    }
+    std::set<ProofObligation *> allPobsInLoc = pobs[target.block];
+    bool deletePob = false;
+    for (ProofObligation *pob : allPobsInLoc) {
+      if (closePobIfNoPathLeft(pob)) {
+        deletePob = true;
+        break;
+      }
+    }
+    if (!deletePob) {
+      return;
+    }
+  }
+}
+
 bool isStuck(ExecutionState &state) {
   KInstruction *prevKI = state.prevPC;
   return prevKI->inst->isTerminator() && state.targets.empty() &&
@@ -324,15 +470,20 @@ bool isStuck(ExecutionState &state) {
 }
 
 void BidirectionalSearcher::addPob(ProofObligation *pob) {
-  pobs.push_back(pob);
+  pobs[pob->location].insert(pob);
   backward->update(pob);
   initializer->addPob(pob);
 }
 
 void BidirectionalSearcher::removePob(ProofObligation *pob) {
-  auto pos = std::find(pobs.begin(), pobs.end(), pob);
-  if (pos != pobs.end()) {
-    pobs.erase(pos);
+  assert(pobs.find(pob->location) != pobs.end());
+  assert(pobs[pob->location].find(pob) != pobs[pob->location].end());
+  std::set<ProofObligation *> pobsInLoc = pobs[pob->location];
+  pobsInLoc.erase(pob); //runningStates опустел, при этом мы ничего не добавили в waitingStates. Не создан waitingStates[target]
+  if (!pobsInLoc.empty()) {
+    pobs[pob->location] = pobsInLoc;
+  } else {
+    pobs.erase(pob->location);
   }
   backward->removePob(pob);
   initializer->removePob(pob);
@@ -343,6 +494,10 @@ void BidirectionalSearcher::answerPob(ProofObligation *pob) {
     reachableBlocks.insert(pob->location->basicBlock);
     pob = pob->parent;
   }
+}
+
+ReachabilityTracker *BidirectionalSearcher::getReachabilityTracker() const {
+  return reachabilityTracker;
 }
 
 ref<BidirectionalAction> ForwardOnlySearcher::selectAction() {
@@ -387,7 +542,7 @@ ref<BidirectionalAction> GuidedOnlySearcher::selectAction() {
     if (isStuck(state)) {
       KBlock *target = ex->calculateTargetByBlockHistory(state);
       if (target) {
-        state.targets.insert(Target(target));
+        state.addTarget(Target(target));
         searcher->update(&state, {}, {});
         action = new ForwardAction(&state);
       } else {
@@ -419,9 +574,9 @@ void GuidedOnlySearcher::update(ref<ActionResult> r) {
 void GuidedOnlySearcher::closeProofObligation(ProofObligation *) {}
 
 GuidedOnlySearcher::GuidedOnlySearcher(const SearcherConfig &cfg) {
+  ex = cfg.executor;
   searcher = std::unique_ptr<GuidedSearcher>(
       new GuidedSearcher(constructUserSearcher(*cfg.executor), true));
-  ex = cfg.executor;
 }
 
 GuidedOnlySearcher::~GuidedOnlySearcher() {}

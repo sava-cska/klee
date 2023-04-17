@@ -158,7 +158,7 @@ TargetedSearcher::TargetedSearcher(Target _target)
 
 TargetedSearcher::~TargetedSearcher() {
   for (auto state : states_set) {
-    state->targets.erase(target);
+    state->removeTarget(target);
   }
 }
 
@@ -308,9 +308,11 @@ void TargetedSearcher::update(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates) {
   reachedOnLastUpdate.clear();
+  unreachedOnLastUpdate.clear();
 
   double weight = 0;
   // update current
+  // регать unreachedState
   if (current && std::find(removedStates.begin(), removedStates.end(),
                            current) == removedStates.end()) {
     switch (tryGetWeight(*current, weight)) {
@@ -327,12 +329,13 @@ void TargetedSearcher::update(
         states->insert(current, weight);
         states_set.insert(current);
       }
-      reachedOnLastUpdate.push_back(current);
+      reachedOnLastUpdate.insert(current);
       break;
     case Miss:
-      current->targets.erase(target);
-      states->remove(current);
-      states_set.erase(current);
+      //current->removeTarget(target);
+      //states->remove(current);
+      //states_set.erase(current);
+      unreachedOnLastUpdate.insert(current);
       break;
     }
   }
@@ -347,10 +350,13 @@ void TargetedSearcher::update(
     case Done:
       states->insert(state, weight);
       states_set.insert(state);
-      reachedOnLastUpdate.push_back(state);
+      reachedOnLastUpdate.insert(state);
       break;
     case Miss:
-      state->targets.erase(target);
+      //state->removeTarget(target);
+      states->insert(state, weight);
+      states_set.insert(state);
+      unreachedOnLastUpdate.insert(state);
       break;
     }
   }
@@ -359,11 +365,19 @@ void TargetedSearcher::update(
   for (const auto state : removedStates) {
     if (target.atReturn() &&
         state->prevPC == target.block->getLastInstruction())
-      reachedOnLastUpdate.push_back(state);
+      reachedOnLastUpdate.insert(state);
     else {
-      state->targets.erase(target);
-      states->remove(state);
-      states_set.erase(state);
+      switch (tryGetWeight(*state, weight)) {
+      case Continue:
+        unreachedOnLastUpdate.insert(state);
+        break;
+      case Done:
+        reachedOnLastUpdate.insert(state);
+        break;
+      case Miss:
+        unreachedOnLastUpdate.insert(state);
+        break;
+      }
     }
   }
 }
@@ -374,15 +388,27 @@ void TargetedSearcher::printName(llvm::raw_ostream &os) {
   os << "TargetedSearcher";
 }
 
-std::vector<ExecutionState *> TargetedSearcher::reached() {
+std::set<ExecutionState *> TargetedSearcher::reached() const {
   return reachedOnLastUpdate;
+}
+
+std::set<ExecutionState *> TargetedSearcher::unreached() const {
+  return unreachedOnLastUpdate;
+}
+
+void TargetedSearcher::removeUnreached() {
+  for (auto state : unreachedOnLastUpdate) {
+    states->remove(state);
+    states_set.erase(state);
+    state->removeTarget(target);
+  }
 }
 
 void TargetedSearcher::removeReached() {
   for (auto state : reachedOnLastUpdate) {
     states->remove(state);
     states_set.erase(state);
-    state->targets.erase(target);
+    state->removeTarget(target);
   }
 }
 
@@ -459,9 +485,10 @@ void GuidedSearcher::innerUpdate(
 void GuidedSearcher::update(
     ExecutionState *current, const std::vector<ExecutionState *> &addedStates,
     const std::vector<ExecutionState *> &removedStates,
-    std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates) {
+    std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates,
+    std::map<Target, std::unordered_set<ExecutionState *>> &unreachedStates) {
   innerUpdate(current, addedStates, removedStates);
-  collectReached(reachedStates);
+  collectReachedAndUnreached(reachedStates, unreachedStates);
   clearReached();
 }
 
@@ -472,17 +499,23 @@ void GuidedSearcher::update(
   clearReached();
 }
 
-void GuidedSearcher::collectReached(
-    std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates) {
+void GuidedSearcher::collectReachedAndUnreached(
+    std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates,
+    std::map<Target, std::unordered_set<ExecutionState *>> &unreachedStates)
+    const {
   std::map<Target, std::unordered_set<ExecutionState *>> ret;
   std::vector<Target> targets;
-  for (auto const &targetSearcher : targetedSearchers)
+  for (auto const &targetSearcher : targetedSearchers) {
     targets.push_back(targetSearcher.first);
+  }
   for (auto target : targets) {
-    auto reached = targetedSearchers[target]->reached();
-    if (!reached.empty()) {
-      for (auto state : reached)
-        reachedStates[target].insert(state);
+    auto reached = targetedSearchers.at(target)->reached();
+    for (const auto &state : reached) {
+      reachedStates[target].insert(state);
+    }
+    auto unreached = targetedSearchers.at(target)->unreached();
+    for (const auto &state : unreached) {
+      unreachedStates[target].insert(state);
     }
   }
 }
@@ -493,6 +526,12 @@ void GuidedSearcher::clearReached() {
     targets.push_back(targetSearcher.first);
   for (auto target : targets) {
     auto reached = targetedSearchers[target]->reached();
+    auto unreached = targetedSearchers[target]->unreached();
+    if (!unreached.empty()) {
+      targetedSearchers[target]->removeUnreached();
+      if (targetedSearchers[target]->empty())
+        targetedSearchers.erase(target);
+    }
     if (!reached.empty()) {
       targetedSearchers[target]->removeReached();
       if (reachingEnough || targetedSearchers[target]->empty())
@@ -511,6 +550,10 @@ void GuidedSearcher::printName(llvm::raw_ostream &os) {
 
 void GuidedSearcher::addTarget(Target target) {
   targetedSearchers[target] = std::make_unique<TargetedSearcher>(target);
+}
+
+void GuidedSearcher::removeTarget(const Target &target) {
+  targetedSearchers.erase(target);
 }
 
 ///

@@ -5421,6 +5421,8 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
   unsigned int sfNum = 0;
   bool newCov = false;
 
+  ReachabilityTracker *reachabilityTracker = searcher->getReachabilityTracker();
+
   for (auto sfi = state.stack.rbegin(), sfe = state.stack.rend();
        sfi != sfe; sfi++, sfNum++) {
     kf = sfi->kf;
@@ -5428,12 +5430,19 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
     for (auto &kbd : kf->getSortedDistance(kb)) {
       KBlock *target = kbd.first;
       unsigned distance = kbd.second;
+
+      if (reachabilityTracker != nullptr) {
+        if (reachabilityTracker->checkIsRootTargetUnreachable(Target(target))) {
+          continue;
+        }
+      }
+
       if ((sfNum > 0 || distance > 0)) {
         if (distance >= minDistance)
           break;
         if (history[target->basicBlock].size() != 0) {
           std::vector<BasicBlock *> diff;
-          if (!newCov) {
+          /*if (!newCov) {
             std::set<BasicBlock*> left(state.level.begin(), state.level.end());
             std::set<BasicBlock*> right(
               history[target->basicBlock].begin(),
@@ -5441,7 +5450,7 @@ KBlock *Executor::calculateTargetByBlockHistory(ExecutionState &state) {
             std::set_difference(left.begin(), left.end(),
                                 right.begin(), right.end(),
                                 std::inserter(diff, diff.begin()));
-          }
+          }*/
           if (diff.empty()) {
             continue;
           }
@@ -5477,7 +5486,7 @@ void Executor::replayStateFromPob(ProofObligation *pob) {
     replayState->symbolics.push_back(symbolic);
   }
 
-  replayState->targets.insert(Target(pob->root->location));
+  replayState->addTarget(Target(pob->root->location));
   states.insert(replayState);
   processForest->addRoot(replayState);
   std::vector<ExecutionState *> v = {replayState};
@@ -5580,7 +5589,6 @@ void Executor::run(ExecutionState &state) {
     auto action = searcher->selectAction();
     auto result = executeAction(action);
     updateResult(result);
-
     if (isa<BackwardResult>(result)) {
       auto br = cast<BackwardResult>(result);
       for (auto pob : br->newPobs) {
@@ -5630,7 +5638,7 @@ ref<InitializeResult> Executor::initBranch(ref<InitializeAction> action) {
   isolatedStates.insert(state);
   processForest->addRoot(state);
   for (auto target : targets) {
-    state->targets.insert(target);
+    state->addTarget(target);
   }
   timers.invoke();
   return new InitializeResult(loc, *state);
@@ -5828,7 +5836,6 @@ void Executor::extractSourcedSymbolics(ExecutionState &state,
     }
   }
 }
-
 
 int Executor::resolveLazyInstantiation(ExecutionState &state) {
   return resolveLazyInstantiation(state, state.pointers);

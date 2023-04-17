@@ -138,6 +138,11 @@ ExecutionState::~ExecutionState() {
   }
 
   while (!stack.empty()) popFrame();
+
+  std::vector<Target> targetsCopy(targets.begin(), targets.end());
+  for (const auto &target : targetsCopy) {
+    removeTarget(target);
+  }
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
@@ -170,7 +175,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     coveredNew(state.coveredNew),
     forkDisabled(state.forkDisabled),
     isolated(state.isolated),
-    targets(state.targets),
+    targets(),
     path(state.path),
     symbolicCounter(state.symbolicCounter),
     returnValue(state.returnValue),
@@ -178,6 +183,9 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     failedBackwardStepsCounter(0) {
   for (const auto &cur_mergehandler: openMergeStack)
     cur_mergehandler->addOpenState(this);
+  for (const auto &target : state.targets) {
+    addTarget(target);
+  }
 }
 
 ExecutionState *ExecutionState::branch() {
@@ -484,6 +492,14 @@ BasicBlock *ExecutionState::getPrevPCBlock() const {
 
 BasicBlock *ExecutionState::getPCBlock() const {
   return pc->inst->getParent();
+}
+
+void ExecutionState::addTarget(const Target &target) {
+  targets.insert(target);
+}
+
+void ExecutionState::removeTarget(const Target &target) {
+  targets.erase(target);
 }
 
 void ExecutionState::increaseLevel() {

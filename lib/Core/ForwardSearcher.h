@@ -137,7 +137,8 @@ namespace klee {
 
     Target target;
     std::map<KFunction *, unsigned int> &distanceToTargetFunction;
-    std::vector<ExecutionState *> reachedOnLastUpdate;
+    std::set<ExecutionState *> reachedOnLastUpdate;
+    std::set<ExecutionState *> unreachedOnLastUpdate;
 
     bool distanceInCallGraph(KFunction *kf, KBlock *kb, unsigned int &distance);
     WeightResult tryGetLocalWeight(const ExecutionState &es, double &weight,
@@ -160,8 +161,10 @@ namespace klee {
                 const std::vector<ExecutionState *> &removedStates) override;
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
-    std::vector<ExecutionState *> reached();
+    std::set<ExecutionState *> reached() const;
+    std::set<ExecutionState *> unreached() const;
     void removeReached();
+    void removeUnreached();
   };
 
   class GuidedSearcher final : public ForwardSearcher {
@@ -177,8 +180,9 @@ namespace klee {
                      const std::vector<ExecutionState *> &removedStates);
 
     void clearReached();
-    void collectReached(
-        std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates);
+    void collectReachedAndUnreached(
+        std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates,
+        std::map<Target, std::unordered_set<ExecutionState *>> &unreachedStates) const;
 
   public:
     GuidedSearcher(std::unique_ptr<ForwardSearcher> baseSearcher,
@@ -192,10 +196,13 @@ namespace klee {
         ExecutionState *current,
         const std::vector<ExecutionState *> &addedStates,
         const std::vector<ExecutionState *> &removedStates,
-        std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates);
+        std::map<Target, std::unordered_set<ExecutionState *>> &reachedStates,
+        std::map<Target, std::unordered_set<ExecutionState *>> &unreachedStates);
 
     bool empty() override;
     void printName(llvm::raw_ostream &os) override;
+
+    void removeTarget(const Target &target);
   };
 
   /// The base class for all weighted searchers. Uses DiscretePDF as underlying

@@ -6,8 +6,8 @@
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
 #include "klee/Solver/Solver.h"
-#include <set>
 #include <queue>
+#include <set>
 
 namespace klee {
 struct Conflict;
@@ -20,10 +20,9 @@ public:
   virtual void addPob(ProofObligation *pob) = 0;
   virtual void removePob(ProofObligation *pob) = 0;
   virtual void addConflictInit(const Conflict &, KBlock *) = 0;
-
 };
 
-class ConflictCoreInitializer: public Initializer {
+class ConflictCoreInitializer : public Initializer {
 public:
   std::pair<KInstruction *, std::set<Target>> selectAction() override;
   bool empty() override;
@@ -31,7 +30,8 @@ public:
   void removePob(ProofObligation *pob) override;
   void addConflictInit(const Conflict &, KBlock *) override;
 
-  explicit ConflictCoreInitializer(KInstruction *initInst) : initInst(initInst) {};
+  explicit ConflictCoreInitializer(KInstruction *initInst)
+      : initInst(initInst){};
   ~ConflictCoreInitializer() override {}
 
 private:
@@ -43,4 +43,4 @@ private:
   std::set<KFunction *> dismantledKFunctions;
 };
 
-};
+}; // namespace klee

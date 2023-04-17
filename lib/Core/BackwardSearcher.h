@@ -17,7 +17,7 @@ class BackwardSearcher {
 public:
   virtual ~BackwardSearcher() = default;
   virtual std::pair<ProofObligation *, ExecutionState *> selectAction() = 0;
-  virtual void addState(Target target, ExecutionState *state) = 0;
+  virtual ExecutionState *addState(Target target, ExecutionState *state) = 0;
   virtual void update(ProofObligation *pob) = 0;
   virtual void removePob(ProofObligation *pob) = 0;
   virtual bool empty() = 0;
@@ -37,7 +37,7 @@ private:
 public:
   RecencyRankedSearcher(unsigned _maxPropagations);
   std::pair<ProofObligation *, ExecutionState *> selectAction() override;
-  void addState(Target target, ExecutionState *state) override;
+  ExecutionState *addState(Target target, ExecutionState *state) override;
   void update(ProofObligation *pob) override;
   void removePob(ProofObligation *pob) override;
   bool empty() override;

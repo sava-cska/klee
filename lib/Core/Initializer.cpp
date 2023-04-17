@@ -1,30 +1,20 @@
 #include "Initializer.h"
-#include "ExecutionState.h"
 #include "Path.h"
-#include "ProofObligation.h"
 #include "SearcherUtil.h"
-#include "klee/Module/KInstruction.h"
-#include "klee/Module/KModule.h"
-#include "klee/Solver/Solver.h"
 #include "klee/Support/ModuleUtil.h"
 #include "klee/Support/OptionCategories.h"
 
 #include "llvm/IR/Instructions.h"
 
 #include <algorithm>
-#include <iostream>
-#include <set>
-#include <stack>
 #include <utility>
 
 using namespace llvm;
 
 namespace {
-llvm::cl::opt<bool> DebugInitializer(
-    "debug-initializer",
-    llvm::cl::desc(""),
-    llvm::cl::init(false),
-    llvm::cl::cat(klee::DebugCat));
+llvm::cl::opt<bool> DebugInitializer("debug-initializer", llvm::cl::desc(""),
+                                     llvm::cl::init(false),
+                                     llvm::cl::cat(klee::DebugCat));
 }
 
 namespace klee {
@@ -36,9 +26,7 @@ ConflictCoreInitializer::selectAction() {
   return action;
 }
 
-bool ConflictCoreInitializer::empty() {
-  return conflictCoreInits.empty();
-}
+bool ConflictCoreInitializer::empty() { return conflictCoreInits.empty(); }
 
 void ConflictCoreInitializer::addPob(ProofObligation *pob) {
   Target target(pob->location);
@@ -47,15 +35,15 @@ void ConflictCoreInitializer::addPob(ProofObligation *pob) {
       if (!mapInitLocationToTargets.count(init))
         continue;
 
-      conflictCoreInits.push(std::make_pair(init, mapInitLocationToTargets[init]));
+      conflictCoreInits.push(
+          std::make_pair(init, mapInitLocationToTargets[init]));
       for (auto &sideTarget : mapInitLocationToTargets[init]) {
         if (sideTarget == target)
           continue;
 
-        auto initPos =  std::find(
-          mapTargetToInitLocations[sideTarget].begin(),
-          mapTargetToInitLocations[sideTarget].end(),
-          init);
+        auto initPos =
+            std::find(mapTargetToInitLocations[sideTarget].begin(),
+                      mapTargetToInitLocations[sideTarget].end(), init);
         mapTargetToInitLocations[sideTarget].erase(initPos);
       }
       mapInitLocationToTargets.erase(init);
@@ -66,7 +54,8 @@ void ConflictCoreInitializer::addPob(ProofObligation *pob) {
 
 void ConflictCoreInitializer::removePob(ProofObligation *pob) {}
 
-void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *target) {
+void ConflictCoreInitializer::addConflictInit(const Conflict &conflict,
+                                              KBlock *target) {
   const Conflict::core_ty &core = conflict.core;
   assert(!core.empty());
   Path path = conflict.path;
@@ -76,26 +65,32 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   KInstruction *current = initInst;
   std::set<KFunction *> visited;
   for (size_t pathIndex = 1; pathIndex < path.size(); pathIndex++) {
-    if (path.getBlock(pathIndex)->parent != path.getBlock(pathIndex - 1)->parent) {
+    if (path.getBlock(pathIndex)->parent !=
+        path.getBlock(pathIndex - 1)->parent) {
       if (path.getBlock(pathIndex - 1)->parent == mainKF) {
-        auto dismantled = dismantle(current->parent, {path.getBlock(pathIndex - 1)});
+        auto dismantled =
+            dismantle(current->parent, {path.getBlock(pathIndex - 1)});
         for (auto &blockpair : dismantled) {
-          inits.insert(std::make_pair(blockpair.first == current->parent ? current : blockpair.first->instructions[0],
+          inits.insert(std::make_pair(blockpair.first == current->parent
+                                          ? current
+                                          : blockpair.first->instructions[0],
                                       Target(blockpair.second)));
           if (blockpair.second->getKBlockType() == KBlockType::Call) {
-            KFunction* f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
+            KFunction *f =
+                dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
             if (f) {
               inits.insert(std::make_pair(blockpair.second->instructions[0],
                                           Target(f->entryKBlock)));
             }
           }
         }
-        inits.insert(std::make_pair(path.getBlock(pathIndex - 1)->instructions[0],
-                                    Target(path.getBlock(pathIndex))));
-        current =
-          isa<llvm::CallInst>(path.getBlock(pathIndex - 1)->instructions[0]->inst) ?
-            path.getBlock(pathIndex - 1)->instructions[1] :
-            path.getBlock(pathIndex)->instructions[0];
+        inits.insert(
+            std::make_pair(path.getBlock(pathIndex - 1)->instructions[0],
+                           Target(path.getBlock(pathIndex))));
+        current = isa<llvm::CallInst>(
+                      path.getBlock(pathIndex - 1)->instructions[0]->inst)
+                      ? path.getBlock(pathIndex - 1)->instructions[1]
+                      : path.getBlock(pathIndex)->instructions[0];
       }
       if (path.getBlock(pathIndex)->parent != mainKF &&
           !dismantledKFunctions.count(path.getBlock(pathIndex)->parent)) {
@@ -105,13 +100,16 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
     if (pathIndex == path.size() - 1) {
       if (path.getBlock(pathIndex)->parent == mainKF &&
           path.getBlock(pathIndex) != current->parent) {
-        auto dismantled = dismantle(current->parent, {path.getBlock(pathIndex)});
+        auto dismantled =
+            dismantle(current->parent, {path.getBlock(pathIndex)});
         for (auto &blockpair : dismantled) {
-          inits.insert(std::make_pair(
-            blockpair.first == current->parent ? current : blockpair.first->instructions[0],
-            Target(blockpair.second)));
+          inits.insert(std::make_pair(blockpair.first == current->parent
+                                          ? current
+                                          : blockpair.first->instructions[0],
+                                      Target(blockpair.second)));
           if (blockpair.second->getKBlockType() == KBlockType::Call) {
-            KFunction *f = dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
+            KFunction *f =
+                dyn_cast<KCallBlock>(blockpair.second)->getKFunction();
             if (f) {
               inits.insert(std::make_pair(blockpair.second->instructions[0],
                                           Target(f->entryKBlock)));
@@ -143,7 +141,8 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
       }
     }
   }
-  inits.insert(std::make_pair(path.getFinalBlock()->instructions[0], Target(target)));
+  inits.insert(
+      std::make_pair(path.getFinalBlock()->instructions[0], Target(target)));
 
   std::map<KInstruction *, std::set<Target>> ret;
   if (DebugInitializer) {
@@ -151,15 +150,18 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
   }
   for (auto &init : inits) {
     if (!initialized[init.first].count(init.second) &&
-        !(isa<KReturnBlock>(init.second.block) && init.first->parent == init.second.block)) {
+        !(isa<KReturnBlock>(init.second.block) &&
+          init.first->parent == init.second.block)) {
       if (isa<CallInst>(init.first->inst) &&
           cast<KCallBlock>(init.first->parent)->calledFunction !=
               init.second.block->parent->function) {
         continue;
       }
       if (DebugInitializer) {
-        llvm::errs() << init.first->getIRLocation() << "\n" << init.first->getSourceLocation() << "\n";
-        llvm::errs() << init.second.print() << "\n" << init.second.block->instructions[0]->getSourceLocation();
+        llvm::errs() << init.first->getIRLocation() << "\n"
+                     << init.first->getSourceLocation() << "\n";
+        llvm::errs() << init.second.print() << "\n"
+                     << init.second.block->instructions[0]->getSourceLocation();
         llvm::errs() << "\n";
       }
       ret[init.first].insert(init.second);
@@ -176,6 +178,4 @@ void ConflictCoreInitializer::addConflictInit(const Conflict &conflict, KBlock *
     }
   }
 }
-
-};
- 
+} // namespace klee

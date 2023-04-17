@@ -12,6 +12,7 @@
 #include "ForwardSearcher.h"
 #include "Initializer.h"
 #include "ProofObligation.h"
+#include "ReachabilityTracker.h"
 #include "SearcherUtil.h"
 #include "klee/Module/KModule.h"
 #include <memory>
@@ -25,6 +26,9 @@ public:
   virtual ref<BidirectionalAction> selectAction() = 0;
   virtual void update(ref<ActionResult>) = 0;
   virtual void closeProofObligation(ProofObligation *) = 0;
+  virtual ReachabilityTracker *getReachabilityTracker() const {
+    return nullptr;
+  };
   virtual ~IBidirectionalSearcher() {}
 };
 
@@ -33,6 +37,7 @@ public:
   ref<BidirectionalAction> selectAction() override;
   void update(ref<ActionResult>) override;
   void closeProofObligation(ProofObligation *) override;
+  ReachabilityTracker *getReachabilityTracker() const override;
   explicit BidirectionalSearcher(const SearcherConfig &);
   ~BidirectionalSearcher() override;
 
@@ -45,8 +50,9 @@ private:
   GuidedSearcher *branch;
   RecencyRankedSearcher *backward;
   ConflictCoreInitializer *initializer;
+  ReachabilityTracker *reachabilityTracker;
 
-  std::vector<ProofObligation *> pobs;
+  std::map<KBlock *, std::set<ProofObligation *>> pobs;
 
   Ticker ticker;
 
@@ -63,12 +69,14 @@ private:
                     const std::vector<ExecutionState *> &addedStates,
                     const std::vector<ExecutionState *> &removedStates);
   void updateBackward(std::vector<ProofObligation *> newPobs,
-                      ProofObligation *oldPob);
+                      ProofObligation *oldPob, ExecutionState *state);
   void updateInitialize(KInstruction *location, ExecutionState &state);
 
   void addPob(ProofObligation *);
   void removePob(ProofObligation *);
   void answerPob(ProofObligation *);
+  bool closePobIfNoPathLeft(ProofObligation *pob);
+  void closePobsInTargetIfNeeded(const Target &target);
 };
 
 class ForwardOnlySearcher : public IBidirectionalSearcher {

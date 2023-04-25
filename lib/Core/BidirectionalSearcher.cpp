@@ -313,7 +313,8 @@ void BidirectionalSearcher::updateBranch(
 }
 
 void BidirectionalSearcher::updateBackward(
-    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob, ExecutionState *state) {
+    std::vector<ProofObligation *> newPobs, ProofObligation *oldPob, ExecutionState *state,
+    bool createdPobFromLemma) {
   for (auto pob : newPobs) {
     addPob(pob);
   }
@@ -327,7 +328,7 @@ void BidirectionalSearcher::updateBackward(
     state->initPC->parent->basicBlock->printAsOperand(ss, false);
     klee_message("updateBackward: state %s", ss.str().c_str());
     reachabilityTracker->removeWaitingStateToPob(state, oldPob);
-    if (newPobs.empty()) {
+    if (newPobs.empty() || createdPobFromLemma) {
       klee_message("updateBackward: newPobs is empty\n%s", oldPob->print().c_str());
       closePobIfNoPathLeft(oldPob);
     }
@@ -357,7 +358,7 @@ void BidirectionalSearcher::update(ref<ActionResult> r) {
   }
   case ActionResult::Kind::Backward: {
     auto bckr = cast<BackwardResult>(r);
-    updateBackward(bckr->newPobs, bckr->oldPob, bckr->state);
+    updateBackward(bckr->newPobs, bckr->oldPob, bckr->state, bckr->createdPobFromLemma);
     if (bckr->state->backwardStepsLeftCounter > 0) {
       --bckr->state->backwardStepsLeftCounter;
       if (bckr->newPobs.empty())
@@ -415,6 +416,20 @@ void BidirectionalSearcher::closeProofObligation(ProofObligation *pob) {
   }
 }
 
+ref<Expr> BidirectionalSearcher::buildLemmaFromPob(klee::Constraints condition) const {
+  if (condition.begin() == condition.end()) {
+    return nullptr;
+  }
+  auto it = condition.begin();
+  ref<Expr> invariant = NotExpr::create(*it);
+  it++;
+  while (it != condition.end()) {
+    invariant = OrExpr::create(invariant, NotExpr::create(*it));
+    it++;
+  }
+  return invariant;
+}
+
 bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
   bool deletePob = false;
   while (pob && pob->children.empty()) {
@@ -424,6 +439,10 @@ bool BidirectionalSearcher::closePobIfNoPathLeft(ProofObligation *pob) {
       klee_message("Close POB!!!!!!!\n%s\n", pob->print().c_str());
       ProofObligation *parent = pob->parent;
       if (parent == nullptr) {
+        if (pob->createdFromLemma()) {
+          klee_message("Induktivnost!!!!\n");
+          ex->addInvariantToSummary(pob->location, buildLemmaFromPob(pob->condition));
+        }
         Target rootTarget = Target(pob->location);
         forward->removeTarget(rootTarget);
         reachabilityTracker->addUnreachableRootTarget(rootTarget);
@@ -487,6 +506,7 @@ void BidirectionalSearcher::removePob(ProofObligation *pob) {
   }
   backward->removePob(pob);
   initializer->removePob(pob);
+  reachabilityTracker->removePob(pob);
 }
 
 void BidirectionalSearcher::answerPob(ProofObligation *pob) {

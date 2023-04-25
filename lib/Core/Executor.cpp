@@ -5676,8 +5676,13 @@ ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
   Conflict::core_ty conflictCore;
   ExprHashMap<ref<Expr>> rebuildMap;
 
+  const ProofObligation *ancestorAtStateLocation = nullptr;
+  if (pob->createdFromLemma()) {
+    ancestorAtStateLocation = pob->findAncestorAtLocation(state->initPC->parent);
+  }
+
   ProofObligation *newPob = new ProofObligation(state->initPC->parent, pob);
-  bool success = Composer::tryRebuild(*pob, *state, *newPob, conflictCore, rebuildMap);
+  bool success = Composer::tryRebuild(ancestorAtStateLocation, *pob, *state, *newPob, conflictCore, rebuildMap);
   timers.invoke();
 
   if (success) {
@@ -5729,13 +5734,24 @@ ref<BackwardResult> Executor::goBackward(ref<BackwardAction> action) {
       newPob->parent = pob;
       pob->children.insert(newPob);
     }
-    return new BackwardResult(newPobs, state, pob);
+    return new BackwardResult(newPobs, state, pob, false);
   } else {
     newPob->detachParent();
     delete newPob;
-    if (state->isIsolated() && conflictCore.size())
-      summary->summarize(pob, makeConflict(*state, conflictCore), rebuildMap);
-    return new BackwardResult({}, state, pob);
+
+    std::vector<ProofObligation*> newPobs;
+    if (state->isIsolated() && conflictCore.size() && !pob->createdFromLemma()) {
+      ProofObligation *lemmaPob = summary->summarize(
+          pob, makeConflict(*state, conflictCore), rebuildMap);
+      if (lemmaPob != nullptr) {
+        llvm::errs() << "Lemma pob:\n";
+        llvm::errs() << "Path: " << lemmaPob->path.toString() << "\n";
+        llvm::errs() << "Constraints:\n" << lemmaPob->condition << "\n";
+        llvm::errs() << "\n";
+        newPobs.push_back(lemmaPob);
+      }
+    }
+    return new BackwardResult(newPobs, state, pob, !newPobs.empty());
   }
 }
 
@@ -5839,4 +5855,8 @@ void Executor::extractSourcedSymbolics(ExecutionState &state,
 
 int Executor::resolveLazyInstantiation(ExecutionState &state) {
   return resolveLazyInstantiation(state, state.pointers);
+}
+
+void Executor::addInvariantToSummary(KBlock *location, ref<Expr> invariant) const {
+  summary->addInvariant(location, invariant);
 }

@@ -29,6 +29,8 @@ public:
 
   void updateFinishPob(ProofObligation *pob);
 
+  void removePob(ProofObligation *pob);
+
 private:
   std::map<Target, std::set<const ExecutionState *>> runningStateToTarget;
   std::map<Target, std::set<const ExecutionState *>> waitingStateToTarget;

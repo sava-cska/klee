@@ -43,6 +43,8 @@ private:
   std::map<uint64_t, std::set<uint64_t>> arrayParentMap;
   expr::Parser *parser;
 
+  std::map<KBlock *, ref<Expr>> invariantsByLocation;
+
 public:
   std::map<KBlock *, std::set<Lemma *>> locationMap;
   std::map<Path, std::set<Lemma *>> pathMap;
@@ -62,9 +64,9 @@ public:
     delete db;
   }
 
-  void summarize(const ProofObligation *pob,
-                 const Conflict &conflict,
-                 const ExprHashMap<ref<Expr>> &rebuildMap);
+  ProofObligation *summarize(const ProofObligation *pob,
+                             const Conflict &conflict,
+                             const ExprHashMap<ref<Expr>> &rebuildMap);
 
   void storeLemma(const Lemma *l);
 
@@ -80,6 +82,9 @@ public:
 
   void makeArray(const std::map<uint64_t, std::string> &arrays, uint64_t id);
   void makeExprs(const std::map<uint64_t, std::string> &exprs);
+
+  void addInvariant(KBlock *location, ref<Expr> invariant);
+  ref<Expr> getInvariantByLocation(KBlock *location) const;
 };
 
 }; // namespace klee

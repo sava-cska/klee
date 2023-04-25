@@ -30,9 +30,9 @@ llvm::cl::opt<bool> DebugSummary(
 #define divider(n) std::string(n, '-') + "\n"
 #endif
 
-void Summary::summarize(const ProofObligation *pob,
-                        const Conflict &conflict,
-                        const ExprHashMap<ref<Expr>> &rebuildMap) {
+ProofObligation *Summary::summarize(const ProofObligation *pob,
+                                    const Conflict &conflict,
+                                    const ExprHashMap<ref<Expr>> &rebuildMap) {
   std::string label;
   llvm::raw_string_ostream label_stream(label);
 
@@ -52,11 +52,14 @@ void Summary::summarize(const ProofObligation *pob,
   Lemma *newLemma = new Lemma(path);
   label_stream << "Constraints are:\n";
 
+  ProofObligation *lemmaPob = new ProofObligation(newLemma, pob);
   for (auto &constraint : core) {
     ref<Expr> condition = constraint.first;
     if (rebuildMap.count(condition)) {
       ref<Expr> lemmaExpr = Expr::createIsZero(rebuildMap.at(condition));
       newLemma->constraints.insert(lemmaExpr);
+      //нужно not LemmaExpr
+      lemmaPob->condition.insert(NotExpr::create(lemmaExpr), constraint.second);
       label_stream << lemmaExpr->toString() << "\n";
     }
   }
@@ -103,8 +106,11 @@ void Summary::summarize(const ProofObligation *pob,
       llvm::errs() << divider(30);
       llvm::errs() << "\n";
     }
+    return lemmaPob;
   } else {
+    delete lemmaPob;
     delete newLemma;
+    return nullptr;
   }
 }
 
@@ -249,5 +255,22 @@ void Summary::makeExprs(const std::map<uint64_t, std::string> &exprs) {
     auto expr = parser->ParseSingleExpr();
     exprDBMap[expr] = expr_pair.first;
     exprReverseDBMap[expr_pair.first] = expr;
+  }
+}
+
+void Summary::addInvariant(KBlock *location, ref<Expr> invariant) {
+  if (invariantsByLocation.find(location) == invariantsByLocation.end()) {
+    invariantsByLocation.insert({location, invariant});
+  } else {
+    ref<Expr> oldInvariant = invariantsByLocation[location];
+    invariantsByLocation[location] = AndExpr::create(oldInvariant, invariant);
+  }
+}
+
+ref<Expr> Summary::getInvariantByLocation(KBlock *location) const {
+  if (invariantsByLocation.find(location) == invariantsByLocation.end()) {
+    return nullptr;
+  } else {
+    return invariantsByLocation.at(location);
   }
 }

@@ -767,6 +767,8 @@ public:
   KBlock *calculateTargetByTransitionHistory(ExecutionState &state);
   KBlock *calculateTargetByBlockHistory(ExecutionState &state);
   void initializeRoots(ExecutionState *initialState);
+
+  void addInvariantToSummary(KBlock *location, ref<Expr> invariant) const;
 };
 
 } // namespace klee

@@ -48,11 +48,9 @@ private:
 public:
   static Executor *executor;
   static bool tryRebuild(const ref<Expr>, ExecutionState &, ref<Expr> &);
-  static bool tryRebuild(const ProofObligation &,
-                         ExecutionState &,
-                         ProofObligation &,
-                         Conflict::core_ty &,
-                         ExprHashMap<ref<Expr>> &);
+  static bool tryRebuild(const ProofObligation *, const ProofObligation &,
+                         ExecutionState &, ProofObligation &,
+                         Conflict::core_ty &, ExprHashMap<ref<Expr>> &);
 };
 
 class ComposeVisitor : public ExprVisitor {

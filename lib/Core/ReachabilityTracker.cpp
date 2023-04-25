@@ -2,6 +2,11 @@
 #include "klee/Support/ErrorHandling.h"
 
 namespace klee {
+void ReachabilityTracker::removePob(ProofObligation *pob) {
+  waitingStateToPob.erase(pob);
+  blockedPob.erase(pob);
+}
+
 bool ReachabilityTracker::isPobProcessAllStates(ProofObligation *pob) const {
   return blockedPob.find(pob) != blockedPob.end();
 }
@@ -11,9 +16,9 @@ void ReachabilityTracker::createRunningStateToTarget(
   std::string s;
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
-  klee_message("createRunningStateToTarget: state %s\n", ss.str().c_str());
-  klee_message("Start location: %s",
-               Target(state->initPC->parent).print().c_str());
+  //klee_message("createRunningStateToTarget: state %s\n", ss.str().c_str());
+  //klee_message("Start location: %s",
+  //             Target(state->initPC->parent).print().c_str());
   // assert(runningStateToTarget[target].find(state->initPC->parent) ==
   //        runningStateToTarget[target].end());
   runningStateToTarget[target].insert(state);
@@ -27,9 +32,9 @@ void ReachabilityTracker::addRunningStateToTarget(const ExecutionState *state,
   std::string s;
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
-  klee_message("addRunningStateToTarget: state %s\n", ss.str().c_str());
-  klee_message("Start location: %s",
-               Target(state->initPC->parent).print().c_str());
+  //klee_message("addRunningStateToTarget: state %s\n", ss.str().c_str());
+  //klee_message("Start location: %s",
+  //             Target(state->initPC->parent).print().c_str());
   assert(runningStateToTarget.find(target) != runningStateToTarget.end() &&
          runningStateToTarget[target].find(state) ==
              runningStateToTarget[target].end());
@@ -41,9 +46,9 @@ void ReachabilityTracker::removeRunningStateToTarget(
   std::string s;
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
-  klee_message("removeRunningStateToTarget: state %s\n", ss.str().c_str());
-  klee_message("Start location: %s",
-               Target(state->initPC->parent).print().c_str());
+  //klee_message("removeRunningStateToTarget: state %s\n", ss.str().c_str());
+  //klee_message("Start location: %s",
+  //             Target(state->initPC->parent).print().c_str());
   assert(runningStateToTarget[target].find(state) !=
          runningStateToTarget[target].end());
   runningStateToTarget[target].erase(state);
@@ -59,9 +64,9 @@ void ReachabilityTracker::addWaitingStateToTarget(const ExecutionState *state,
   std::string s;
   llvm::raw_string_ostream ss(s);
   target.block->basicBlock->printAsOperand(ss, false);
-  klee_message("addWaitingStateToTarget: state %s\n", ss.str().c_str());
-  klee_message("Start location: %s",
-               Target(state->initPC->parent).print().c_str());
+  //klee_message("addWaitingStateToTarget: state %s\n", ss.str().c_str());
+  //klee_message("Start location: %s",
+  //             Target(state->initPC->parent).print().c_str());
   assert(waitingStateToTarget[target].find(state) ==
          waitingStateToTarget[target].end());
   waitingStateToTarget[target].insert(state);
@@ -69,9 +74,9 @@ void ReachabilityTracker::addWaitingStateToTarget(const ExecutionState *state,
 
 void ReachabilityTracker::removeWaitingStateToPob(const ExecutionState *state,
                                                   ProofObligation *pob) {
-  klee_message("removeWaitingStateToPob: pob %s\n", pob->print().c_str());
-  klee_message("Start location: %s",
-               Target(state->initPC->parent).print().c_str());
+  //klee_message("removeWaitingStateToPob: pob %s\n", pob->print().c_str());
+  //klee_message("Start location: %s",
+  //             Target(state->initPC->parent).print().c_str());
   assert(waitingStateToPob[pob].find(state) == waitingStateToPob[pob].end());
   waitingStateToPob[pob].insert(state);
 }
